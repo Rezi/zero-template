@@ -11,7 +11,11 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "zero-cache":"ZERO_QUERY_URL='http://localhost:3000/api/query' ZERO_MUTATE_URL='http://localhost:3000/api/mutate' npx zero-cache-dev"
+    "zero-cache": "ZERO_QUERY_URL='http://localhost:3000/api/query' ZERO_MUTATE_URL='http://localhost:3000/api/mutate' pnpm exec zero-cache-dev",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "generate-zero-schema": "drizzle-zero generate -f -o src/zero/schema.ts"
   },
   "dependencies": {
     "@rocicorp/zero": "^1.6.2",
@@ -22,6 +26,7 @@
     "@tanstack/react-router-ssr-query": "latest",
     "@tanstack/react-start": "latest",
     "@tanstack/router-plugin": "^1.132.0",
+    "drizzle-orm": "^0.45.2",
     "lucide-react": "^0.545.0",
     "pg": "^8.21.0",
     "react": "^19.2.0",
@@ -40,6 +45,8 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^6.0.1",
+    "drizzle-kit": "^0.31.10",
+    "drizzle-zero": "^0.18.0",
     "jsdom": "^28.1.0",
     "typescript": "^6.0.2",
     "vite": "^8.0.0",
@@ -47,6 +54,7 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
+      "@rocicorp/zero-sqlite3",
       "esbuild",
       "lightningcss"
     ]
