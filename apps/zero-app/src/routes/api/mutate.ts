@@ -1,9 +1,9 @@
 import {createFileRoute} from '@tanstack/react-router'
 import {handleMutateRequest} from '@rocicorp/zero/server'
 import {mustGetMutator} from '@rocicorp/zero'
-import {mutators} from '@zero-music/zero'
-import {dbProvider} from '@zero-music/zero/server'
-import {auth} from '@zero-music/auth/server'
+import {mutators} from '@zero-app/zero'
+import {dbProvider} from '@zero-app/zero/server'
+import {auth} from '@zero-app/auth/server'
 
 export const Route = createFileRoute('/api/mutate')({
   server: {

@@ -1,5 +1,5 @@
 import {Outlet, createFileRoute} from '@tanstack/react-router'
-import {ZeroInit, SiteLayout} from '@zero-music/zero-app-components'
+import {ZeroInit, SiteLayout} from '@zero-app/zero-app-components'
 
 export const Route = createFileRoute('/_layout')({
   component: RouteComponent,

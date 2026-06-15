@@ -2,8 +2,8 @@ import type {Zero} from '@rocicorp/zero'
 import {ZeroProvider} from '@rocicorp/zero/react'
 import {useRouter} from '@tanstack/react-router'
 import {useCallback} from 'react'
-import {authClient} from '@zero-music/auth'
-import {schema, mutators} from '@zero-music/zero'
+import {authClient} from '@zero-app/auth'
+import {schema, mutators} from '@zero-app/zero'
 
 const cacheURL = import.meta.env.VITE_PUBLIC_ZERO_CACHE_URL
 if (!cacheURL) {

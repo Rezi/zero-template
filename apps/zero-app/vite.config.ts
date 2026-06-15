@@ -16,13 +16,13 @@ const config = defineConfig({
     alias: {
       // Order matters: more specific '/server' subpaths must precede the
       // base package aliases so they are matched first.
-      '@zero-music/auth/server': r('../../libs/auth/src/server.ts'),
-      '@zero-music/zero/server': r('../../libs/zero/src/server.ts'),
-      '@zero-music/auth': r('../../libs/auth/src/index.ts'),
-      '@zero-music/db': r('../../libs/db/src/index.ts'),
-      '@zero-music/zero': r('../../libs/zero/src/index.ts'),
-      '@zero-music/ui-library': r('../../libs/ui-library/src/index.ts'),
-      '@zero-music/zero-app-components': r(
+      '@zero-app/auth/server': r('../../libs/auth/src/server.ts'),
+      '@zero-app/zero/server': r('../../libs/zero/src/server.ts'),
+      '@zero-app/auth': r('../../libs/auth/src/index.ts'),
+      '@zero-app/db': r('../../libs/db/src/index.ts'),
+      '@zero-app/zero': r('../../libs/zero/src/index.ts'),
+      '@zero-app/ui-library': r('../../libs/ui-library/src/index.ts'),
+      '@zero-app/zero-app-components': r(
         '../../libs/zero-app-components/src/index.ts',
       ),
     },

@@ -1,5 +1,5 @@
 {
-  "projectName": "zero-music",
+  "projectName": "zero-app",
   "mode": "file-router",
   "typescript": true,
   "tailwind": true,

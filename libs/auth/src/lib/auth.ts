@@ -1,6 +1,6 @@
 import {betterAuth} from 'better-auth'
 import {drizzleAdapter} from 'better-auth/adapters/drizzle'
-import {db, authSchema} from '@zero-music/db'
+import {db, authSchema} from '@zero-app/db'
 
 const clientId = process.env.GITHUB_CLIENT_ID
 const clientSecret = process.env.GITHUB_CLIENT_SECRET

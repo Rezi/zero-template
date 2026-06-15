@@ -1,8 +1,8 @@
 import {createFileRoute} from '@tanstack/react-router'
 import {useQuery, useZero} from '@rocicorp/zero/react'
 import {useState} from 'react'
-import {authClient} from '@zero-music/auth'
-import {mutators, queries} from '@zero-music/zero'
+import {authClient} from '@zero-app/auth'
+import {mutators, queries} from '@zero-app/zero'
 
 export const Route = createFileRoute('/_layout/')({
   component: Home,

@@ -1,9 +1,9 @@
 {
-  "name": "zero-music",
+  "name": "zero-app",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "projectType": "application",
-  "sourceRoot": "apps/zero-music/src",
-  "tags": ["type:app", "scope:music"],
+  "sourceRoot": "apps/zero-app/src",
+  "tags": ["type:app", "scope:zero-app"],
   "targets": {
     "build": {
       "executor": "nx:run-commands",
@@ -13,28 +13,28 @@
         "{projectRoot}/.nitro"
       ],
       "options": {
-        "cwd": "apps/zero-music",
+        "cwd": "apps/zero-app",
         "command": "vite build"
       }
     },
     "serve": {
       "executor": "nx:run-commands",
       "options": {
-        "cwd": "apps/zero-music",
+        "cwd": "apps/zero-app",
         "command": "vite dev --port 3000"
       }
     },
     "preview": {
       "executor": "nx:run-commands",
       "options": {
-        "cwd": "apps/zero-music",
+        "cwd": "apps/zero-app",
         "command": "vite preview"
       }
     },
     "test": {
       "executor": "nx:run-commands",
       "options": {
-        "cwd": "apps/zero-music",
+        "cwd": "apps/zero-app",
         "command": "vitest run --passWithNoTests"
       }
     },
@@ -42,8 +42,8 @@
       "executor": "@nx/eslint:lint",
       "options": {
         "lintFilePatterns": [
-          "apps/zero-music/src/**/*.ts",
-          "apps/zero-music/src/**/*.tsx"
+          "apps/zero-app/src/**/*.ts",
+          "apps/zero-app/src/**/*.tsx"
         ]
       }
     }

@@ -1,5 +1,5 @@
 import {createFileRoute} from '@tanstack/react-router'
-import {auth} from '@zero-music/auth/server'
+import {auth} from '@zero-app/auth/server'
 
 export const Route = createFileRoute('/api/auth/$')({
   server: {

@@ -5,7 +5,7 @@ import {
   loginWithGithub,
   logout,
   signUpWithEmail,
-} from '@zero-music/auth'
+} from '@zero-app/auth'
 import { useZero } from '@rocicorp/zero/react'
 
 export function LoginButton() {
