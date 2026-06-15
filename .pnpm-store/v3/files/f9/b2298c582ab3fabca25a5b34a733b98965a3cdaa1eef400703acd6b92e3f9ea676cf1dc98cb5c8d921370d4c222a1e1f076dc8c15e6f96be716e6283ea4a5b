@@ -1,0 +1,12 @@
+/**
+ * This error is thrown when you try to call methods on a closed transaction.
+ */
+export declare class TransactionClosedError extends Error {
+    constructor();
+}
+export type Closed = {
+    closed: boolean;
+};
+export declare function throwIfClosed(tx: Closed): void;
+export declare function rejectIfClosed(tx: Closed): undefined | Promise<never>;
+//# sourceMappingURL=transaction-closed-error.d.ts.map

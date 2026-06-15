@@ -1,0 +1,195 @@
+import { promiseVoid } from "../../../shared/src/resolved-promises.js";
+import { Unauthorized } from "../../../zero-protocol/src/error-kind-enum.js";
+import { ZeroCache } from "../../../zero-protocol/src/error-origin-enum.js";
+import { ProtocolError, isProtocolError } from "../../../zero-protocol/src/error.js";
+import "../config/zero-config.js";
+import { getOrCreateGauge } from "../observability/metrics.js";
+import { installWebSocketReceiver } from "../types/websocket-handoff.js";
+import { createNotifierFrom, subscribeTo } from "./replicator.js";
+import { recordConnectionAttempted, recordConnectionSuccess, setActiveClientGroupsGetter } from "../server/anonymous-otel-start.js";
+import { tokenConfigOptions } from "../auth/jwt.js";
+import { resolveAuth } from "../auth/auth.js";
+import { ServiceRunner } from "../services/runner.js";
+import { DrainCoordinator } from "../services/view-syncer/drain-coordinator.js";
+import { Connection, sendError } from "./connection.js";
+import { SyncerWsMessageHandler } from "./syncer-ws-message-handler.js";
+import { resolver } from "@rocicorp/resolver";
+import { WebSocketServer } from "ws";
+import { pid } from "node:process";
+//#region ../zero-cache/src/workers/syncer.ts
+function getWebSocketServerOptions(config) {
+	const options = {
+		noServer: true,
+		maxPayload: config.websocketMaxPayloadBytes
+	};
+	if (config.websocketCompression) {
+		options.perMessageDeflate = true;
+		if (config.websocketCompressionOptions) try {
+			options.perMessageDeflate = JSON.parse(config.websocketCompressionOptions);
+		} catch (e) {
+			throw new Error(`Failed to parse ZERO_WEBSOCKET_COMPRESSION_OPTIONS: ${String(e)}. Expected valid JSON.`);
+		}
+	}
+	return options;
+}
+/**
+* The Syncer worker receives websocket handoffs for "/sync" connections
+* from the Dispatcher in the main thread, and creates websocket
+* {@link Connection}s with a corresponding {@link ViewSyncer}, {@link Mutagen},
+* and {@link Subscription} to version notifications from the Replicator
+* worker.
+*/
+var Syncer = class {
+	id = `syncer-${pid}`;
+	#lc;
+	#viewSyncers;
+	#mutagens;
+	#pushers;
+	#connections = /* @__PURE__ */ new Map();
+	#drainCoordinator = new DrainCoordinator();
+	#parent;
+	#wss;
+	#stopped = resolver();
+	#config;
+	#validateLegacyJWT;
+	constructor(lc, config, viewSyncerFactory, mutagenFactory, pusherFactory, parent, validateLegacyJWT) {
+		this.#config = config;
+		this.#validateLegacyJWT = validateLegacyJWT;
+		const notifier = createNotifierFrom(lc, parent);
+		subscribeTo(lc, parent);
+		this.#lc = lc;
+		this.#viewSyncers = new ServiceRunner(lc, (id) => viewSyncerFactory(id, notifier.subscribe(), this.#drainCoordinator), (v) => v.keepalive());
+		if (mutagenFactory) this.#mutagens = new ServiceRunner(lc, mutagenFactory, (m) => m.hasRefs());
+		if (pusherFactory) this.#pushers = new ServiceRunner(lc, (id) => pusherFactory(id, this.#viewSyncers.getService(id).connContextManager), (p) => p.hasRefs());
+		this.#parent = parent;
+		this.#wss = new WebSocketServer(getWebSocketServerOptions(config));
+		installWebSocketReceiver(lc, this.#wss, this.#createConnection, this.#parent);
+		setActiveClientGroupsGetter(() => this.#viewSyncers.size);
+		getOrCreateGauge("sync", "active-client-groups", "Number of active client groups").addCallback((result) => result.observe(this.#viewSyncers.size));
+		getOrCreateGauge("sync", "queries", "Active queries (pipelines) across all client groups").addCallback((result) => {
+			let total = 0;
+			for (const vs of this.#viewSyncers.getServices()) total += vs.queryCount;
+			result.observe(total);
+		});
+		getOrCreateGauge("sync", "rows", "Tracked rows across all client groups").addCallback((result) => {
+			let total = 0;
+			for (const vs of this.#viewSyncers.getServices()) total += vs.rowCount;
+			result.observe(total);
+		});
+	}
+	#createConnection = async (ws, params) => {
+		this.#lc.debug?.("creating connection", params.clientGroupID, params.clientID);
+		recordConnectionAttempted();
+		const { clientID, clientGroupID, auth, userID } = params;
+		const hasProvidedAuth = auth !== void 0 && auth !== "";
+		const incomingUserID = userID ?? null;
+		if (hasProvidedAuth) {
+			const tokenOptions = tokenConfigOptions(this.#config.auth ?? {});
+			const hasPushOrMutate = this.#config?.push?.url !== void 0 || this.#config?.mutate?.url !== void 0;
+			const hasQueries = this.#config?.query?.url !== void 0 || this.#config?.getQueries?.url !== void 0;
+			if (!(tokenOptions.length === 1) && !(hasPushOrMutate && hasQueries)) throw new Error("Exactly one of jwk, secret, or jwksUrl must be set in order to verify tokens but actually the following were set: " + JSON.stringify(tokenOptions) + ". You may also set both ZERO_MUTATE_URL and ZERO_QUERY_URL to enable custom mutations and queries without passing token verification options.");
+		}
+		let initialAuth;
+		try {
+			initialAuth = await resolveAuth(this.#lc.withContext("clientGroupID", clientGroupID).withContext("clientID", clientID), void 0, incomingUserID, auth, this.#validateLegacyJWT);
+		} catch (e) {
+			if (isProtocolError(e)) {
+				this.#lc.warn?.("Rejecting sync connection during initial auth resolution", {
+					clientGroupID,
+					clientID,
+					incomingUserID,
+					hasProvidedAuth,
+					errorKind: e.message
+				});
+				sendError(this.#lc, ws, e.errorBody);
+				ws.close(3e3, e.errorBody.message);
+				return;
+			}
+			throw e;
+		}
+		const viewSyncer = this.#viewSyncers.getService(clientGroupID);
+		const connContextManager = viewSyncer.connContextManager;
+		const group = connContextManager.getGroupState();
+		if (group.pinnedUser !== void 0 && group.pinnedUser.id !== incomingUserID) {
+			const error = new ProtocolError({
+				kind: Unauthorized,
+				message: "Client groups are pinned to a single userID. Connection userID does not match existing client group userID.",
+				origin: ZeroCache
+			});
+			sendError(this.#lc, ws, error.errorBody);
+			ws.close(3e3, error.message);
+			return;
+		}
+		const existing = this.#connections.get(clientID);
+		if (existing) {
+			this.#lc.debug?.(`client ${clientID} already connected, closing existing connection`);
+			existing.close(`replaced by ${params.wsID}`);
+		}
+		connContextManager.registerConnection({
+			clientID,
+			wsID: params.wsID
+		}, params, initialAuth);
+		const mutagen = this.#mutagens?.getService(clientGroupID);
+		const pusher = this.#pushers?.getService(clientGroupID);
+		mutagen?.ref();
+		pusher?.ref();
+		let connection;
+		try {
+			connection = new Connection(this.#lc, params, ws, new SyncerWsMessageHandler(this.#lc, params, connContextManager, viewSyncer, mutagen, pusher), () => {
+				connContextManager.closeConnection({
+					clientID,
+					wsID: params.wsID
+				});
+				if (this.#connections.get(clientID) === connection) this.#connections.delete(clientID);
+				mutagen?.unref();
+				pusher?.unref();
+			});
+		} catch (e) {
+			connContextManager.closeConnection({
+				clientID,
+				wsID: params.wsID
+			});
+			mutagen?.unref();
+			pusher?.unref();
+			throw e;
+		}
+		this.#connections.set(clientID, connection);
+		connection.init() && recordConnectionSuccess();
+		if (params.initConnectionMsg) {
+			this.#lc.debug?.("handling init connection message from sec header", params.clientGroupID, params.clientID);
+			await connection.handleInitConnection(JSON.stringify(params.initConnectionMsg));
+		}
+	};
+	run() {
+		return this.#stopped.promise;
+	}
+	/**
+	* Graceful shutdown involves shutting down view syncers one at a time, pausing
+	* for the duration of view syncer's hydration between each one. This paces the
+	* disconnects to avoid creating a backlog of hydrations in the receiving server
+	* when the clients reconnect.
+	*/
+	async drain() {
+		const start = Date.now();
+		this.#lc.info?.(`draining ${this.#viewSyncers.size} view-syncers`);
+		this.#drainCoordinator.drainNextIn(0);
+		while (this.#viewSyncers.size) {
+			await this.#drainCoordinator.forceDrainTimeout;
+			for (const vs of this.#viewSyncers.getServices()) {
+				this.#lc.debug?.(`draining view-syncer ${vs.id} (forced)`);
+				vs.stop();
+				break;
+			}
+		}
+		this.#lc.info?.(`finished draining (${Date.now() - start} ms)`);
+	}
+	stop() {
+		this.#wss.close();
+		this.#stopped.resolve();
+		return promiseVoid;
+	}
+};
+//#endregion
+export { Syncer };
+
+//# sourceMappingURL=syncer.js.map

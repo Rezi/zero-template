@@ -1,0 +1,15 @@
+import type { ReadonlyJSONValue } from '../../../shared/src/json.ts';
+export type ScanOptions = {
+    prefix?: string | undefined;
+    startSecondaryKey?: string | undefined;
+    startKey?: string | undefined;
+    startExclusive?: boolean | undefined;
+    limit?: number | undefined;
+    indexName?: string | undefined;
+};
+export type ScanItem = {
+    primaryKey: string;
+    secondaryKey: string;
+    val: ReadonlyJSONValue;
+};
+//# sourceMappingURL=scan.d.ts.map

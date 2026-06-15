@@ -1,0 +1,70 @@
+import { assert } from "../../../shared/src/asserts.js";
+import "./processes.js";
+import { serializableSubset } from "./http.js";
+import { PROTOCOL_ERROR, closeWithError } from "./ws.js";
+import { WebSocketServer } from "ws";
+import { Server } from "node:http";
+//#region ../zero-cache/src/types/websocket-handoff.ts
+/**
+* Installs websocket handoff logic from either an http.Server
+* receiving requests, or a parent Worker process
+* that is handing off requests to this process.
+*/
+function createWebSocketHandoffHandler(lc, handoff, serverOptions) {
+	const wss = new WebSocketServer(serverOptions ?? { noServer: true });
+	return (message, socket, head) => {
+		let sent = false;
+		function send({ payload, sender }) {
+			assert(!sent, "Handoff callback already invoked");
+			sent = true;
+			const data = ["handoff", {
+				message: serializableSubset(message),
+				head,
+				payload
+			}];
+			sender.send(data, socket);
+		}
+		function onError(error) {
+			wss.handleUpgrade(message, socket, Buffer.from(head), (ws) => closeWithError(lc, ws, error, PROTOCOL_ERROR));
+		}
+		try {
+			const spec = handoff(message, send, onError);
+			if (spec) send(spec);
+		} catch (error) {
+			onError(error);
+		}
+	};
+}
+/**
+* Installs websocket handoff logic from either an http.Server
+* receiving requests, or a parent Worker process
+* that is handing off requests to this process.
+*/
+function installWebSocketHandoff(lc, handoff, source, serverOptions) {
+	const handle = createWebSocketHandoffHandler(lc, handoff, serverOptions);
+	if (source instanceof Server) source.on("upgrade", handle);
+	else source.onMessageType("handoff", (msg, socket) => {
+		const { message, head } = msg;
+		handle(message, socket, head);
+	});
+}
+function installWebSocketReceiver(lc, server, receive, receiver) {
+	receiver.onMessageType("handoff", (msg, socket) => {
+		if (!socket) {
+			lc.warn?.("websocket closed during handoff");
+			return;
+		}
+		const { message, head, payload } = msg;
+		server.handleUpgrade(message, socket, Buffer.from(head), (ws) => {
+			if (ws.readyState === ws.CLOSED || ws.readyState === ws.CLOSING) {
+				lc.warn?.("websocket closed during upgrade, skipping receive");
+				return;
+			}
+			receive(ws, payload, message);
+		});
+	});
+}
+//#endregion
+export { installWebSocketHandoff, installWebSocketReceiver };
+
+//# sourceMappingURL=websocket-handoff.js.map

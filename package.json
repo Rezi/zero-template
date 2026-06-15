@@ -2,20 +2,20 @@
   "name": "zero-music",
   "private": true,
   "type": "module",
-  "imports": {
-    "#/*": "./src/*"
-  },
+  "packageManager": "pnpm@9.15.9",
   "scripts": {
-    "dev": "vite dev --port 3000",
-    "generate-routes": "tsr generate",
-    "build": "vite build",
-    "preview": "vite preview",
-    "test": "vitest run",
-    "zero-cache": "ZERO_QUERY_URL='http://localhost:3000/api/query' ZERO_MUTATE_URL='http://localhost:3000/api/mutate' pnpm exec zero-cache-dev",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push",
-    "generate-zero-schema": "drizzle-zero generate -f -o src/zero/schema.ts"
+    "dev": "nx serve zero-music",
+    "build": "nx build zero-music",
+    "preview": "nx preview zero-music",
+    "test": "nx run-many --target=test",
+    "lint": "nx run-many --target=lint",
+    "e2e": "nx e2e zero-music-e2e",
+    "graph": "nx graph",
+    "zero-cache": "ZERO_QUERY_URL='http://localhost:3000/api/query' ZERO_MUTATE_URL='http://localhost:3000/api/mutate' npx zero-cache-dev",
+    "db:generate": "drizzle-kit generate --config libs/db/drizzle.config.ts",
+    "db:migrate": "drizzle-kit migrate --config libs/db/drizzle.config.ts",
+    "db:push": "drizzle-kit push --config libs/db/drizzle.config.ts",
+    "generate-zero-schema": "drizzle-zero generate -c libs/db/drizzle-zero.config.ts -f -o libs/zero/src/lib/schema.ts"
   },
   "dependencies": {
     "@rocicorp/zero": "^1.6.2",
@@ -36,6 +36,11 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@nx/eslint": "^22.7.5",
+    "@nx/eslint-plugin": "^22.7.5",
+    "@nx/playwright": "^22.7.5",
+    "@playwright/test": "^1.60.0",
     "@tailwindcss/typography": "^0.5.16",
     "@tanstack/devtools-vite": "latest",
     "@tanstack/router-cli": "^1.132.0",
@@ -48,8 +53,13 @@
     "@vitejs/plugin-react": "^6.0.1",
     "drizzle-kit": "^0.31.10",
     "drizzle-zero": "^0.18.0",
+    "eslint": "^10.5.0",
+    "eslint-config-prettier": "^10.1.8",
     "jsdom": "^28.1.0",
+    "jsonc-eslint-parser": "^3.1.0",
+    "nx": "^22.7.5",
     "typescript": "^6.0.2",
+    "typescript-eslint": "^8.61.0",
     "vite": "^8.0.0",
     "vitest": "^4.1.5"
   },

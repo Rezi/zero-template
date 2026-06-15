@@ -1,0 +1,797 @@
+/* eslint-disable unicorn/filename-case */
+export var OID;
+(function (OID) {
+    //* Array
+    /**
+     * `Array<abstime>`
+     */
+    OID[OID["_abstime"] = 1023] = "_abstime";
+    /**
+     * `Array<aclitem>`
+     */
+    OID[OID["_aclitem"] = 1034] = "_aclitem";
+    /**
+     * `Array<bit>`
+     */
+    OID[OID["_bit"] = 1561] = "_bit";
+    /**
+     * `Array<bool>`
+     */
+    OID[OID["_bool"] = 1000] = "_bool";
+    /**
+     * `Array<box>`
+     */
+    OID[OID["_box"] = 1020] = "_box";
+    /**
+     * `Array<bpchar>`
+     */
+    OID[OID["_bpchar"] = 1014] = "_bpchar";
+    /**
+     * `Array<bytea>`
+     */
+    OID[OID["_bytea"] = 1001] = "_bytea";
+    /**
+     * `Array<char>`
+     */
+    OID[OID["_char"] = 1002] = "_char";
+    /**
+     * `Array<cid>`
+     */
+    OID[OID["_cid"] = 1012] = "_cid";
+    /**
+     * `Array<cidr>`
+     */
+    OID[OID["_cidr"] = 651] = "_cidr";
+    /**
+     * `Array<circle>`
+     */
+    OID[OID["_circle"] = 719] = "_circle";
+    /**
+     * `Array<cstring>`
+     */
+    OID[OID["_cstring"] = 1263] = "_cstring";
+    /**
+     * `Array<date>`
+     */
+    OID[OID["_date"] = 1182] = "_date";
+    /**
+     * `Array<datemultirange>`
+     */
+    OID[OID["_datemultirange"] = 6155] = "_datemultirange";
+    /**
+     * `Array<daterange>`
+     */
+    OID[OID["_daterange"] = 3913] = "_daterange";
+    /**
+     * `Array<float4>`
+     */
+    OID[OID["_float4"] = 1021] = "_float4";
+    /**
+     * `Array<float8>`
+     */
+    OID[OID["_float8"] = 1022] = "_float8";
+    /**
+     * `Array<gtsvector>`
+     */
+    OID[OID["_gtsvector"] = 3644] = "_gtsvector";
+    /**
+     * `Array<inet>`
+     */
+    OID[OID["_inet"] = 1041] = "_inet";
+    /**
+     * `Array<int2>`
+     */
+    OID[OID["_int2"] = 1005] = "_int2";
+    /**
+     * `Array<int2vector>`
+     */
+    OID[OID["_int2vector"] = 1006] = "_int2vector";
+    /**
+     * `Array<int4>`
+     */
+    OID[OID["_int4"] = 1007] = "_int4";
+    /**
+     * `Array<int4multirange>`
+     */
+    OID[OID["_int4multirange"] = 6150] = "_int4multirange";
+    /**
+     * `Array<int4range>`
+     */
+    OID[OID["_int4range"] = 3905] = "_int4range";
+    /**
+     * `Array<int8>`
+     */
+    OID[OID["_int8"] = 1016] = "_int8";
+    /**
+     * `Array<int8multirange>`
+     */
+    OID[OID["_int8multirange"] = 6157] = "_int8multirange";
+    /**
+     * `Array<int8range>`
+     */
+    OID[OID["_int8range"] = 3927] = "_int8range";
+    /**
+     * `Array<interval>`
+     */
+    OID[OID["_interval"] = 1187] = "_interval";
+    /**
+     * `Array<json>`
+     */
+    OID[OID["_json"] = 199] = "_json";
+    /**
+     * `Array<jsonb>`
+     */
+    OID[OID["_jsonb"] = 3807] = "_jsonb";
+    /**
+     * `Array<jsonpath>`
+     */
+    OID[OID["_jsonpath"] = 4073] = "_jsonpath";
+    /**
+     * `Array<line>`
+     */
+    OID[OID["_line"] = 629] = "_line";
+    /**
+     * `Array<lseg>`
+     */
+    OID[OID["_lseg"] = 1018] = "_lseg";
+    /**
+     * `Array<macaddr>`
+     */
+    OID[OID["_macaddr"] = 1040] = "_macaddr";
+    /**
+     * `Array<macaddr8>`
+     */
+    OID[OID["_macaddr8"] = 775] = "_macaddr8";
+    /**
+     * `Array<money>`
+     */
+    OID[OID["_money"] = 791] = "_money";
+    /**
+     * `Array<name>`
+     */
+    OID[OID["_name"] = 1003] = "_name";
+    /**
+     * `Array<numeric>`
+     */
+    OID[OID["_numeric"] = 1231] = "_numeric";
+    /**
+     * `Array<nummultirange>`
+     */
+    OID[OID["_nummultirange"] = 6151] = "_nummultirange";
+    /**
+     * `Array<numrange>`
+     */
+    OID[OID["_numrange"] = 3907] = "_numrange";
+    /**
+     * `Array<oid>`
+     */
+    OID[OID["_oid"] = 1028] = "_oid";
+    /**
+     * `Array<oidvector>`
+     */
+    OID[OID["_oidvector"] = 1013] = "_oidvector";
+    /**
+     * `Array<path>`
+     */
+    OID[OID["_path"] = 1019] = "_path";
+    /**
+     * `Array<pg_lsn>`
+     */
+    OID[OID["_pg_lsn"] = 3221] = "_pg_lsn";
+    /**
+     * `Array<pg_snapshot>`
+     */
+    OID[OID["_pg_snapshot"] = 5039] = "_pg_snapshot";
+    /**
+     * `Array<point>`
+     */
+    OID[OID["_point"] = 1017] = "_point";
+    /**
+     * `Array<polygon>`
+     */
+    OID[OID["_polygon"] = 1027] = "_polygon";
+    /**
+     * `Array<refcursor>`
+     */
+    OID[OID["_refcursor"] = 2201] = "_refcursor";
+    /**
+     * `Array<regclass>`
+     */
+    OID[OID["_regclass"] = 2210] = "_regclass";
+    /**
+     * `Array<regcollation>`
+     */
+    OID[OID["_regcollation"] = 4192] = "_regcollation";
+    /**
+     * `Array<regconfig>`
+     */
+    OID[OID["_regconfig"] = 3735] = "_regconfig";
+    /**
+     * `Array<regdictionary>`
+     */
+    OID[OID["_regdictionary"] = 3770] = "_regdictionary";
+    /**
+     * `Array<regnamespace>`
+     */
+    OID[OID["_regnamespace"] = 4090] = "_regnamespace";
+    /**
+     * `Array<regoper>`
+     */
+    OID[OID["_regoper"] = 2208] = "_regoper";
+    /**
+     * `Array<regoperator>`
+     */
+    OID[OID["_regoperator"] = 2209] = "_regoperator";
+    /**
+     * `Array<regproc>`
+     */
+    OID[OID["_regproc"] = 1008] = "_regproc";
+    /**
+     * `Array<regprocedure>`
+     */
+    OID[OID["_regprocedure"] = 2207] = "_regprocedure";
+    /**
+     * `Array<regrole>`
+     */
+    OID[OID["_regrole"] = 4097] = "_regrole";
+    /**
+     * `Array<regtype>`
+     */
+    OID[OID["_regtype"] = 2211] = "_regtype";
+    /**
+     * `Array<reltime>`
+     */
+    OID[OID["_reltime"] = 1024] = "_reltime";
+    /**
+     * `Array<text>`
+     */
+    OID[OID["_text"] = 1009] = "_text";
+    /**
+     * `Array<tid>`
+     */
+    OID[OID["_tid"] = 1010] = "_tid";
+    /**
+     * `Array<time>`
+     */
+    OID[OID["_time"] = 1183] = "_time";
+    /**
+     * `Array<timestamp>`
+     */
+    OID[OID["_timestamp"] = 1115] = "_timestamp";
+    /**
+     * `Array<timestamptz>`
+     */
+    OID[OID["_timestamptz"] = 1185] = "_timestamptz";
+    /**
+     * `Array<timetz>`
+     */
+    OID[OID["_timetz"] = 1270] = "_timetz";
+    /**
+     * `Array<tinterval>`
+     */
+    OID[OID["_tinterval"] = 1025] = "_tinterval";
+    /**
+     * `Array<tsquery>`
+     */
+    OID[OID["_tsquery"] = 3645] = "_tsquery";
+    /**
+     * `Array<tstzmultirange>`
+     */
+    OID[OID["_tsmultirange"] = 6152] = "_tsmultirange";
+    /**
+     * `Array<tsrange>`
+     */
+    OID[OID["_tsrange"] = 3909] = "_tsrange";
+    /**
+     * `Array<tstzmultirange>`
+     */
+    OID[OID["_tstzmultirange"] = 6153] = "_tstzmultirange";
+    /**
+     * `Array<tstzrange>`
+     */
+    OID[OID["_tstzrange"] = 3911] = "_tstzrange";
+    /**
+     * `Array<tsvector>`
+     */
+    OID[OID["_tsvector"] = 3643] = "_tsvector";
+    /**
+     * `Array<txid_snapshot>`
+     */
+    OID[OID["_txid_snapshot"] = 2949] = "_txid_snapshot";
+    /**
+     * `Array<uuid>`
+     */
+    OID[OID["_uuid"] = 2951] = "_uuid";
+    /**
+     * `Array<varbit>`
+     */
+    OID[OID["_varbit"] = 1563] = "_varbit";
+    /**
+     * `Array<varchar>`
+     */
+    OID[OID["_varchar"] = 1015] = "_varchar";
+    /**
+     * `Array<xid>`
+     */
+    OID[OID["_xid"] = 1011] = "_xid";
+    /**
+     * `Array<xid8>`
+     */
+    OID[OID["_xid8"] = 271] = "_xid8";
+    /**
+     * `Array<xml>`
+     */
+    OID[OID["_xml"] = 143] = "_xml";
+    /**
+     * Array of int2, used in system tables
+     *
+     * `Array<int2>`
+     */
+    OID[OID["int2vector"] = 22] = "int2vector";
+    /**
+     * Array of oid's, used in system tables
+     *
+     * `Array<oid>`
+     */
+    OID[OID["oidvector"] = 30] = "oidvector";
+    //* PseudoTypes
+    OID[OID["_record"] = 2287] = "_record";
+    /**
+     * Pseudo-type representing any type
+     */
+    OID[OID["any"] = 2276] = "any";
+    /**
+     * Pseudo-type representing a polymorphic array type
+     */
+    OID[OID["anyarray"] = 2277] = "anyarray";
+    /**
+     * Pseudo-type representing a polymorphic common type
+     */
+    OID[OID["anycompatible"] = 5077] = "anycompatible";
+    /**
+     * Pseudo-type representing a multirange over a polymorphic common type
+     */
+    OID[OID["anymultirange"] = 4537] = "anymultirange";
+    /**
+     * Pseudo-type representing a multirange over a polymorphic common type
+     */
+    OID[OID["anycompatiblemultirange"] = 4538] = "anycompatiblemultirange";
+    /**
+     * Pseudo-type representing an array of polymorphic common type elements
+     */
+    OID[OID["anycompatiblearray"] = 5078] = "anycompatiblearray";
+    /**
+     * Pseudo-type representing a polymorphic common type that is not an array
+     */
+    OID[OID["anycompatiblenonarray"] = 5079] = "anycompatiblenonarray";
+    /**
+     * Pseudo-type representing a range over a polymorphic common type
+     */
+    OID[OID["anycompatiblerange"] = 5080] = "anycompatiblerange";
+    /**
+     * Pseudo-type representing a polymorphic base type
+     */
+    OID[OID["anyelement"] = 2283] = "anyelement";
+    /**
+     * Pseudo-type representing a polymorphic base type that is an enum
+     */
+    OID[OID["anyenum"] = 3500] = "anyenum";
+    /**
+     * Pseudo-type representing a polymorphic base type that is not an array
+     */
+    OID[OID["anynonarray"] = 2776] = "anynonarray";
+    /**
+     * Pseudo-type representing a range over a polymorphic base type
+     */
+    OID[OID["anyrange"] = 3831] = "anyrange";
+    /**
+     * C-style string
+     */
+    OID[OID["cstring"] = 2275] = "cstring";
+    /**
+     * Pseudo-type for the result of an event trigger function
+     */
+    OID[OID["event_trigger"] = 3838] = "event_trigger";
+    /**
+     * Pseudo-type for the result of an FDW handler function
+     */
+    OID[OID["fdw_handler"] = 3115] = "fdw_handler";
+    /**
+     * Pseudo-type for the result of an index AM handler function
+     */
+    OID[OID["index_am_handler"] = 325] = "index_am_handler";
+    /**
+     * Pseudo-type representing an internal data structure
+     */
+    OID[OID["internal"] = 2281] = "internal";
+    /**
+     * Pseudo-type for the result of a language handler function
+     */
+    OID[OID["language_handler"] = 2280] = "language_handler";
+    /**
+     * Obsolete, deprecated Pseudo-type
+     */
+    OID[OID["opaque"] = 2282] = "opaque";
+    /**
+     * Internal type for passing CollectedCommand
+     */
+    OID[OID["pg_ddl_command"] = 32] = "pg_ddl_command";
+    /**
+     * Pseudo-type representing any composite type
+     */
+    OID[OID["record"] = 2249] = "record";
+    OID[OID["table_am_handler"] = 269] = "table_am_handler";
+    /**
+     * Pseudo-type for the result of a trigger function
+     */
+    OID[OID["trigger"] = 2279] = "trigger";
+    /**
+     * Pseudo-type for the result of a tablesample method function
+     */
+    OID[OID["tsm_handler"] = 3310] = "tsm_handler";
+    /**
+     * Pseudo-type for the result of a function with no real result
+     */
+    OID[OID["void"] = 2278] = "void";
+    //* DateTime
+    /**
+     * Absolute, limited-range date and time (Unix system time)
+     */
+    OID[OID["abstime"] = 702] = "abstime";
+    /**
+     * Date
+     */
+    OID[OID["date"] = 1082] = "date";
+    /**
+     * Time of day
+     */
+    OID[OID["time"] = 1083] = "time";
+    /**
+     * Date and time
+     */
+    OID[OID["timestamp"] = 1114] = "timestamp";
+    /**
+     * Date and time with time zone
+     */
+    OID[OID["timestamptz"] = 1184] = "timestamptz";
+    /**
+     * Time of day with time zone
+     */
+    OID[OID["timetz"] = 1266] = "timetz";
+    //* UserDefined
+    /**
+     * Access control list
+     */
+    OID[OID["aclitem"] = 1033] = "aclitem";
+    /**
+     * Variable-length string, binary values escaped
+     */
+    OID[OID["bytea"] = 17] = "bytea";
+    /**
+     * Command identifier type, sequence in transaction id
+     */
+    OID[OID["cid"] = 29] = "cid";
+    /**
+     * GiST index internal text representation for text search
+     */
+    OID[OID["gtsvector"] = 3642] = "gtsvector";
+    /**
+     * JSON stored as text
+     */
+    OID[OID["json"] = 114] = "json";
+    /**
+     * Binary JSON
+     */
+    OID[OID["jsonb"] = 3802] = "jsonb";
+    /**
+     * JSON path
+     */
+    OID[OID["jsonpath"] = 4072] = "jsonpath";
+    /**
+     * XX:XX:XX:XX:XX:XX, MAC address
+     */
+    OID[OID["macaddr"] = 829] = "macaddr";
+    /**
+     * XX:XX:XX:XX:XX:XX:XX:XX, MAC address
+     */
+    OID[OID["macaddr8"] = 774] = "macaddr8";
+    /**
+     * PostgreSQL LSN datatype
+     */
+    OID[OID["pg_lsn"] = 3220] = "pg_lsn";
+    /**
+     * Snapshot
+     */
+    OID[OID["pg_snapshot"] = 5038] = "pg_snapshot";
+    /**
+     * Reference to cursor (portal name)
+     */
+    OID[OID["refcursor"] = 1790] = "refcursor";
+    /**
+     * Storage manager
+     */
+    OID[OID["smgr"] = 210] = "smgr";
+    /**
+     * (block, offset), physical location of tuple
+     */
+    OID[OID["tid"] = 27] = "tid";
+    /**
+     * Query representation for text search
+     */
+    OID[OID["tsquery"] = 3615] = "tsquery";
+    /**
+     * Text representation for text search
+     */
+    OID[OID["tsvector"] = 3614] = "tsvector";
+    /**
+     * txid snapshot
+     */
+    OID[OID["txid_snapshot"] = 2970] = "txid_snapshot";
+    /**
+     * UUID datatype
+     */
+    OID[OID["uuid"] = 2950] = "uuid";
+    /**
+     * Transaction id
+     */
+    OID[OID["xid"] = 28] = "xid";
+    /**
+     * Full transaction id
+     */
+    OID[OID["xid8"] = 5069] = "xid8";
+    /**
+     * XML content
+     */
+    OID[OID["xml"] = 142] = "xml";
+    //* BitString
+    /**
+     * Fixed-length bit string
+     */
+    OID[OID["bit"] = 1560] = "bit";
+    /**
+     * Variable-length bit string
+     */
+    OID[OID["varbit"] = 1562] = "varbit";
+    //* Boolean
+    /**
+     * boolean, `true`/`false`
+     */
+    OID[OID["bool"] = 16] = "bool";
+    //* Geometric
+    /**
+     * Geometric box '(lower left,upper right)'
+     */
+    OID[OID["box"] = 603] = "box";
+    /**
+     * Geometric circle '(center,radius)'
+     */
+    OID[OID["circle"] = 718] = "circle";
+    /**
+     * Geometric line
+     */
+    OID[OID["line"] = 628] = "line";
+    /**
+     * Geometric line segment '(pt1,pt2)'
+     */
+    OID[OID["lseg"] = 601] = "lseg";
+    /**
+     * Geometric path '(pt1,...)'
+     */
+    OID[OID["path"] = 602] = "path";
+    /**
+     * Geometric point '(x, y)'
+     */
+    OID[OID["point"] = 600] = "point";
+    /**
+     * Geometric polygon '(pt1,...)'
+     */
+    OID[OID["polygon"] = 604] = "polygon";
+    //* String
+    /**
+     * char(length), blank-padded string, fixed storage length
+     */
+    OID[OID["bpchar"] = 1042] = "bpchar";
+    /**
+     * Single character
+     */
+    OID[OID["char"] = 18] = "char";
+    /**
+     * information_schema.character_data
+     */
+    OID[OID["character_data"] = 13408] = "character_data";
+    /**
+     * 63-byte type for storing system identifiers
+     */
+    OID[OID["name"] = 19] = "name";
+    /**
+     * Multivariate dependencies
+     */
+    OID[OID["pg_dependencies"] = 3402] = "pg_dependencies";
+    /**
+     * Multivariate MCV list
+     */
+    OID[OID["pg_mcv_list"] = 5017] = "pg_mcv_list";
+    /**
+     * Multivariate ndistinct coefficients
+     */
+    OID[OID["pg_ndistinct"] = 3361] = "pg_ndistinct";
+    /**
+     * String representing an internal node tree
+     */
+    OID[OID["pg_node_tree"] = 194] = "pg_node_tree";
+    /**
+     * Variable-length string, no limit specified
+     */
+    OID[OID["text"] = 25] = "text";
+    /**
+     * varchar(length), non-blank-padded string, variable storage length
+     */
+    OID[OID["varchar"] = 1043] = "varchar";
+    //* NetworkAddress
+    /**
+     * Network IP address/netmask, network address
+     */
+    OID[OID["cidr"] = 650] = "cidr";
+    /**
+     * IP address/netmask, host address, netmask optional
+     */
+    OID[OID["inet"] = 869] = "inet";
+    //* Range
+    /**
+     * Multivariate range of dates
+     */
+    OID[OID["datemultirange"] = 4535] = "datemultirange";
+    /**
+     * Range of dates
+     */
+    OID[OID["daterange"] = 3912] = "daterange";
+    /**
+     * Multivariate range of integers
+     */
+    OID[OID["int4multirange"] = 4451] = "int4multirange";
+    /**
+     * Range of integers
+     */
+    OID[OID["int4range"] = 3904] = "int4range";
+    /**
+     * Multivariate range of bigints
+     */
+    OID[OID["int8multirange"] = 4536] = "int8multirange";
+    /**
+     * Range of bigints
+     */
+    OID[OID["int8range"] = 3926] = "int8range";
+    /**
+     * Range of numerics
+     */
+    OID[OID["numrange"] = 3906] = "numrange";
+    /**
+     * Multirange of numerics
+     */
+    OID[OID["nummultirange"] = 4532] = "nummultirange";
+    /**
+     * Range of timestamps without time zone
+     */
+    OID[OID["tsrange"] = 3908] = "tsrange";
+    /**
+     * Multirange of timestamps without time zone
+     */
+    OID[OID["tsmultirange"] = 4533] = "tsmultirange";
+    /**
+     * Range of timestamps with time zone
+     */
+    OID[OID["tstzrange"] = 3910] = "tstzrange";
+    /**
+     * Multirange of timestamps with time zone
+     */
+    OID[OID["tstzmultirange"] = 4534] = "tstzmultirange";
+    //* Numeric
+    /**
+     * information_schema.cardinal_number
+     */
+    OID[OID["cardinal_number"] = 13405] = "cardinal_number";
+    /**
+     * Single-precision floating point number, 4-byte storage
+     */
+    OID[OID["float4"] = 700] = "float4";
+    /**
+     * Double-precision floating point number, 8-byte storage
+     */
+    OID[OID["float8"] = 701] = "float8";
+    /**
+     * -32 thousand to 32 thousand, 2-byte storage
+     */
+    OID[OID["int2"] = 21] = "int2";
+    /**
+     * -2 billion to 2 billion integer, 4-byte storage
+     */
+    OID[OID["int4"] = 23] = "int4";
+    /**
+     * ~18 digit integer, 8-byte storage
+     */
+    OID[OID["int8"] = 20] = "int8";
+    /**
+     * Monetary amounts, $d,ddd.cc
+     */
+    OID[OID["money"] = 790] = "money";
+    /**
+     * numeric(precision, decimal), arbitrary precision number
+     */
+    OID[OID["numeric"] = 1700] = "numeric";
+    /**
+     * Object identifier(oid), maximum 4 billion
+     */
+    OID[OID["oid"] = 26] = "oid";
+    /**
+     * Registered class
+     */
+    OID[OID["regclass"] = 2205] = "regclass";
+    /**
+     * Registered collation
+     */
+    OID[OID["regcollation"] = 4191] = "regcollation";
+    /**
+     * Registered text search configuration
+     */
+    OID[OID["regconfig"] = 3734] = "regconfig";
+    /**
+     * Registered text search dictionary
+     */
+    OID[OID["regdictionary"] = 3769] = "regdictionary";
+    /**
+     * Registered namespace
+     */
+    OID[OID["regnamespace"] = 4089] = "regnamespace";
+    /**
+     * Registered operator
+     */
+    OID[OID["regoper"] = 2203] = "regoper";
+    /**
+     * Registered operator (with args)
+     */
+    OID[OID["regoperator"] = 2204] = "regoperator";
+    /**
+     * Registered procedure
+     */
+    OID[OID["regproc"] = 24] = "regproc";
+    /**
+     * Registered procedure (with args)
+     */
+    OID[OID["regprocedure"] = 2202] = "regprocedure";
+    /**
+     * Registered role
+     */
+    OID[OID["regrole"] = 4096] = "regrole";
+    /**
+     * Registered type
+     */
+    OID[OID["regtype"] = 2206] = "regtype";
+    //* Timespan
+    /**
+     * @ <number> <units>, time interval
+     */
+    OID[OID["interval"] = 1186] = "interval";
+    /**
+     * Relative, limited-range time interval (Unix delta time)
+     */
+    OID[OID["reltime"] = 703] = "reltime";
+    /**
+     * (abstime,abstime), time interval
+     */
+    OID[OID["tinterval"] = 704] = "tinterval";
+    //* BRIN
+    /**
+     * BRIN bloom summary
+     */
+    OID[OID["pg_brin_bloom_summary"] = 4600] = "pg_brin_bloom_summary";
+    /**
+     * BRIN minmax-multi summary
+     */
+    OID[OID["pg_brin_minmax_multi_summary"] = 4601] = "pg_brin_minmax_multi_summary";
+    //* Unknown
+    /**
+     * Pseudo-type representing an undetermined type
+     */
+    OID[OID["unknown"] = 705] = "unknown";
+})(OID || (OID = {}));
+//# sourceMappingURL=OIDs.js.map

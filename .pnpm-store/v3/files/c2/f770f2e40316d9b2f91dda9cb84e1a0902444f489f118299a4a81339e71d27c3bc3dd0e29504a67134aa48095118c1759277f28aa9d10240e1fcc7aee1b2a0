@@ -1,0 +1,65 @@
+import { formatPg, sql } from "../../z2s/src/sql.js";
+import { CRUDMutatorFactory } from "./custom.js";
+//#region ../zero-server/src/zql-database.ts
+/**
+* Implements a Database for use with PushProcessor that is backed by Postgres.
+*
+* This implementation also implements the same ZQL interfaces for reading and
+* writing data that the Zero client does, so that mutator functions can be
+* shared across client and server.
+*/
+var ZQLDatabase = class {
+	connection;
+	#crudFactory;
+	constructor(connection, schema) {
+		this.connection = connection;
+		this.#crudFactory = new CRUDMutatorFactory(schema);
+	}
+	transaction(callback, transactionInput) {
+		const { upstreamSchema = "", clientGroupID = "", clientID = "", mutationID = 0 } = transactionInput ?? {};
+		return this.connection.transaction(async (dbTx) => {
+			return callback(await this.#makeServerTransaction(dbTx, clientID, mutationID), {
+				async updateClientMutationID() {
+					const formatted = formatPg(sql`INSERT INTO ${sql.ident(upstreamSchema)}.clients 
+                    as current ("clientGroupID", "clientID", "lastMutationID")
+                        VALUES (${clientGroupID}, ${clientID}, ${1})
+                    ON CONFLICT ("clientGroupID", "clientID")
+                    DO UPDATE SET "lastMutationID" = current."lastMutationID" + 1
+                    RETURNING "lastMutationID"`);
+					const [{ lastMutationID }] = await dbTx.query(formatted.text, formatted.values);
+					return { lastMutationID };
+				},
+				async writeMutationResult(result) {
+					const formatted = formatPg(sql`INSERT INTO ${sql.ident(upstreamSchema)}.mutations
+                    ("clientGroupID", "clientID", "mutationID", "result")
+                VALUES (${clientGroupID}, ${result.id.clientID}, ${result.id.id}, ${JSON.stringify(result.result)}::text::json)`);
+					await dbTx.query(formatted.text, formatted.values);
+				},
+				async deleteMutationResults(args) {
+					if ("type" in args && args.type === "bulk") {
+						const formatted = formatPg(sql`DELETE FROM ${sql.ident(upstreamSchema)}."mutations"
+                  WHERE "clientGroupID" = ${args.clientGroupID}
+                    AND "clientID" = ANY(${args.clientIDs})`);
+						await dbTx.query(formatted.text, formatted.values);
+					} else {
+						const formatted = formatPg(sql`DELETE FROM ${sql.ident(upstreamSchema)}."mutations"
+                  WHERE "clientGroupID" = ${args.clientGroupID}
+                    AND "clientID" = ${args.clientID}
+                    AND "mutationID" <= ${args.upToMutationID}`);
+						await dbTx.query(formatted.text, formatted.values);
+					}
+				}
+			});
+		});
+	}
+	#makeServerTransaction(dbTx, clientID, mutationID) {
+		return this.#crudFactory.createTransaction(dbTx, clientID, mutationID);
+	}
+	run(query, options) {
+		return this.transaction((tx) => tx.run(query, options));
+	}
+};
+//#endregion
+export { ZQLDatabase };
+
+//# sourceMappingURL=zql-database.js.map

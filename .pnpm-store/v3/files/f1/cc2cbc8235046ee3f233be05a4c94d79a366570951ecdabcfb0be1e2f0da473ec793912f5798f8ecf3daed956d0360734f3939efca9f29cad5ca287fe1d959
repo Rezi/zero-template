@@ -1,0 +1,40 @@
+import { getErrorDetails, getErrorMessage } from "../../shared/src/error.js";
+//#region ../zero-protocol/src/application-error.ts
+/**
+* Error type that application code can throw to surface structured metadata back to
+* the client.
+*
+* Use this when you want to return a descriptive message along with the
+* JSON-serializable `details`.
+*/
+var ApplicationError = class extends Error {
+	/**
+	* This maps onto errors for transform and push app-level failures.
+	*/
+	#details;
+	constructor(message, options) {
+		super(message, { cause: options?.cause });
+		this.name = "ApplicationError";
+		this.#details = options?.details ?? void 0;
+	}
+	get details() {
+		return this.#details;
+	}
+	get kind() {
+		return "Application";
+	}
+};
+function isApplicationError(error) {
+	return error instanceof ApplicationError;
+}
+function wrapWithApplicationError(error) {
+	if (isApplicationError(error)) return error;
+	return new ApplicationError(getErrorMessage(error), {
+		cause: error,
+		details: getErrorDetails(error)
+	});
+}
+//#endregion
+export { ApplicationError, isApplicationError, wrapWithApplicationError };
+
+//# sourceMappingURL=application-error.js.map

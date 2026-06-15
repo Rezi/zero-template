@@ -1,0 +1,23 @@
+//#region ../replicache/src/kv/throw-if-closed.ts
+function storeError() {
+	return /* @__PURE__ */ new Error("Store is closed");
+}
+function transactionError() {
+	return /* @__PURE__ */ new Error("Transaction is closed");
+}
+function throwIfStoreClosed(store) {
+	if (store.closed) throw storeError();
+}
+function transactionIsClosedRejection() {
+	return Promise.reject(transactionError());
+}
+function maybeTransactionIsClosedRejection(transaction) {
+	return transaction.closed ? transactionIsClosedRejection() : void 0;
+}
+function storeIsClosedRejection() {
+	return Promise.reject(storeError());
+}
+//#endregion
+export { maybeTransactionIsClosedRejection, storeIsClosedRejection, throwIfStoreClosed, transactionError, transactionIsClosedRejection };
+
+//# sourceMappingURL=throw-if-closed.js.map

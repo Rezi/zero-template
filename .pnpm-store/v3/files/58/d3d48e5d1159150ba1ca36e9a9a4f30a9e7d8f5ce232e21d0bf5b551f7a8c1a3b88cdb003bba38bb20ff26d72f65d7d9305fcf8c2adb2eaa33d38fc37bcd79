@@ -1,0 +1,51 @@
+/**
+ * A Queue allows the consumers to await (possibly future) values,
+ * and producers to await the consumption of their values.
+ */
+export declare class Queue<T> {
+    #private;
+    enqueue(value: T): void;
+    enqueueRejection(reason?: unknown): void;
+    /**
+     * Deletes all unconsumed entries matching the specified `value` based on identity equality.
+     * The consumed callback(s) are resolved as if the values were dequeued.
+     *
+     * Note: deletion of `undefined` values is not supported. This method will assert
+     * if `value` is undefined.
+     *
+     * @returns The number of entries deleted.
+     */
+    delete(value: T): number;
+    /**
+     * @param timeoutValue An optional value to resolve if `timeoutMs` is reached.
+     * @param timeoutMs The milliseconds after which the `timeoutValue` is resolved
+     *                  if nothing is produced for the consumer.
+     * @returns A Promise that resolves to the next enqueued value.
+     */
+    dequeue(timeoutValue?: T, timeoutMs?: number): Promise<T> | T;
+    /**
+     * Drains the entire queue.
+     *
+     * Usage example:
+     * ```ts
+     * // A consumer that, when awoken, drains
+     * // all entries in the queue in order to
+     * // process them in a batch.
+     * for (;;) {
+     *   const value = await queue.dequeue();
+     *   const rest = queue.drain();
+     * }
+     * ```
+     */
+    drain(): (T | undefined)[];
+    /**
+     * @returns The instantaneous number of outstanding values waiting to be
+     *          dequeued. Note that if a value was enqueued while a consumer
+     *          was waiting (with `await dequeue()`), the value is immediately
+     *          handed to the consumer and the Queue's size remains 0.
+     */
+    size(): number;
+    asAsyncIterable(cleanup?: () => void): AsyncIterable<T>;
+    asAsyncIterator(cleanup?: () => void): AsyncIterator<T>;
+}
+//# sourceMappingURL=queue.d.ts.map

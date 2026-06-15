@@ -1,0 +1,33 @@
+import { assertArray, assertObject, assertString } from "../../shared/src/asserts.js";
+import { assertJSONObject, assertJSONValue } from "../../shared/src/json.js";
+//#region ../replicache/src/patch-operation.ts
+function assertPatchOperations(p) {
+	assertArray(p);
+	for (const item of p) assertPatchOperation(item);
+}
+function assertPatchOperation(p) {
+	assertObject(p);
+	switch (p.op) {
+		case "put":
+			assertString(p.key);
+			assertJSONValue(p.value);
+			break;
+		case "update":
+			assertString(p.key);
+			if (p.merge !== void 0) assertJSONObject(p.merge);
+			if (p.constrain !== void 0) {
+				assertArray(p.constrain);
+				for (const key of p.constrain) assertString(key);
+			}
+			break;
+		case "del":
+			assertString(p.key);
+			break;
+		case "clear": break;
+		default: throw new Error(`unknown patch op \`${p.op}\`, expected one of \`put\`, \`del\`, \`clear\``);
+	}
+}
+//#endregion
+export { assertPatchOperations };
+
+//# sourceMappingURL=patch-operation.js.map

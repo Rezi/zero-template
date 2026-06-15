@@ -1,0 +1,2 @@
+export declare const httpStatusUnauthorized = 401;
+//# sourceMappingURL=http-status-unauthorized.d.ts.map

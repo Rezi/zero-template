@@ -1,0 +1,23 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { Enum } from '../../../shared/src/enum.ts';
+import type { LazyStore } from '../dag/lazy-store.ts';
+import type { Store } from '../dag/store.ts';
+import type * as FormatVersion from '../format-version-enum.ts';
+import type { Hash } from '../hash.ts';
+import type { ZeroOption } from '../replicache-options.ts';
+import type { DiffsMap } from '../sync/diff.ts';
+import { type DiffComputationConfig } from '../sync/diff.ts';
+import type { ClientID } from '../sync/ids.ts';
+import type { MutatorDefs } from '../types.ts';
+type FormatVersion = Enum<typeof FormatVersion>;
+/**
+ * This returns the diff between the state of the btree before and after
+ * refresh. It returns `undefined` if the refresh was aborted.
+ */
+export declare function refresh(lc: LogContext, memdag: LazyStore, perdag: Store, clientID: ClientID, mutators: MutatorDefs, diffConfig: DiffComputationConfig, closed: () => boolean, formatVersion: FormatVersion, zero: ZeroOption | undefined): Promise<{
+    oldHead: Hash;
+    newHead: Hash;
+    diffs: DiffsMap;
+} | undefined>;
+export {};
+//# sourceMappingURL=refresh.d.ts.map

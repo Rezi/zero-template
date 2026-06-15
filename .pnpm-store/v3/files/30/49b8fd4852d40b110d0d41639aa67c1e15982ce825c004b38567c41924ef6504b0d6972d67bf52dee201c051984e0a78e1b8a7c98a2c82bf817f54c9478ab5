@@ -1,0 +1,17 @@
+import type { LogContext } from '@rocicorp/logger';
+import { type PermissionsConfig } from '../../../zero-schema/src/compiled-permissions.ts';
+import type { Schema } from '../../../zero-types/src/schema.ts';
+import type { Database } from '../../../zqlite/src/db.ts';
+import type { ZeroConfig } from '../config/zero-config.ts';
+import type { StatementRunner } from '../db/statements.ts';
+export type LoadedPermissions = {
+    permissions: PermissionsConfig | null;
+    hash: string | null;
+};
+export declare function loadPermissions(lc: LogContext, replica: StatementRunner, appID: string, config?: ZeroConfig): LoadedPermissions;
+export declare function reloadPermissionsIfChanged(lc: LogContext, replica: StatementRunner, appID: string, current: LoadedPermissions | null, config?: ZeroConfig): {
+    permissions: LoadedPermissions;
+    changed: boolean;
+};
+export declare function getSchema(lc: LogContext, replica: Database): Schema;
+//# sourceMappingURL=load-permissions.d.ts.map

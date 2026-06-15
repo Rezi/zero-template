@@ -1,0 +1,109 @@
+import * as v from '../../shared/src/valita.ts';
+/**
+ * After opening a websocket the client waits for a `connected` message
+ * from the server.  It then sends an `initConnection` message to the
+ * server.  The server waits for the `initConnection` message before
+ * beginning to send pokes to the newly connected client, so as to avoid
+ * syncing lots of queries which are no longer desired by the client.
+ */
+export declare const connectedBodySchema: v.ObjectType<{
+    wsid: v.Type<string>;
+    timestamp: v.Optional<number>;
+}, undefined>;
+export declare const connectedMessageSchema: v.TupleType<[v.Type<"connected">, v.ObjectType<{
+    wsid: v.Type<string>;
+    timestamp: v.Optional<number>;
+}, undefined>]>;
+declare const initConnectionBodySchema: v.ObjectType<{
+    desiredQueriesPatch: v.ArrayType<v.UnionType<[v.ObjectType<Omit<{
+        op: v.Type<"put">;
+        hash: v.Type<string>;
+        ttl: v.Optional<number>;
+    }, "name" | "ast" | "args"> & {
+        ast: v.Optional<import("./ast.ts").AST>;
+        name: v.Optional<string>;
+        args: v.Optional<readonly import("../../shared/src/json.ts").ReadonlyJSONValue[]>;
+    }, undefined>, v.ObjectType<{
+        op: v.Type<"del">;
+        hash: v.Type<string>;
+    }, undefined>, v.ObjectType<{
+        op: v.Type<"clear">;
+    }, undefined>]>>;
+    clientSchema: v.Optional<{
+        tables: Record<string, {
+            columns: Record<string, {
+                type: import("./client-schema.ts").ValueType;
+            }>;
+            primaryKey: string[];
+        }>;
+    }>;
+    deleted: v.Optional<{
+        readonly clientIDs?: readonly string[] | undefined;
+        readonly clientGroupIDs?: readonly string[] | undefined;
+    }>;
+    userPushURL: v.Optional<string>;
+    userPushHeaders: v.Optional<Record<string, string>>;
+    userQueryURL: v.Optional<string>;
+    userQueryHeaders: v.Optional<Record<string, string>>;
+    /**
+     * `activeClients` is an optional array of client IDs that are currently active
+     * in the client group. This is used to inform the server about the clients
+     * that are currently active (aka running, aka alive), so it can inactive
+     * queries from inactive clients.
+     */
+    activeClients: v.Optional<string[]>;
+    /** W3C traceparent header for distributed tracing. */
+    traceparent: v.Optional<string>;
+}, undefined>;
+export declare const initConnectionMessageSchema: v.TupleType<[v.Type<"initConnection">, v.ObjectType<{
+    desiredQueriesPatch: v.ArrayType<v.UnionType<[v.ObjectType<Omit<{
+        op: v.Type<"put">;
+        hash: v.Type<string>;
+        ttl: v.Optional<number>;
+    }, "name" | "ast" | "args"> & {
+        ast: v.Optional<import("./ast.ts").AST>;
+        name: v.Optional<string>;
+        args: v.Optional<readonly import("../../shared/src/json.ts").ReadonlyJSONValue[]>;
+    }, undefined>, v.ObjectType<{
+        op: v.Type<"del">;
+        hash: v.Type<string>;
+    }, undefined>, v.ObjectType<{
+        op: v.Type<"clear">;
+    }, undefined>]>>;
+    clientSchema: v.Optional<{
+        tables: Record<string, {
+            columns: Record<string, {
+                type: import("./client-schema.ts").ValueType;
+            }>;
+            primaryKey: string[];
+        }>;
+    }>;
+    deleted: v.Optional<{
+        readonly clientIDs?: readonly string[] | undefined;
+        readonly clientGroupIDs?: readonly string[] | undefined;
+    }>;
+    userPushURL: v.Optional<string>;
+    userPushHeaders: v.Optional<Record<string, string>>;
+    userQueryURL: v.Optional<string>;
+    userQueryHeaders: v.Optional<Record<string, string>>;
+    /**
+     * `activeClients` is an optional array of client IDs that are currently active
+     * in the client group. This is used to inform the server about the clients
+     * that are currently active (aka running, aka alive), so it can inactive
+     * queries from inactive clients.
+     */
+    activeClients: v.Optional<string[]>;
+    /** W3C traceparent header for distributed tracing. */
+    traceparent: v.Optional<string>;
+}, undefined>]>;
+export type ConnectedBody = v.Infer<typeof connectedBodySchema>;
+export type ConnectedMessage = v.Infer<typeof connectedMessageSchema>;
+export type InitConnectionBody = v.Infer<typeof initConnectionBodySchema>;
+export type InitConnectionMessage = v.Infer<typeof initConnectionMessageSchema>;
+export declare function encodeSecProtocols(initConnectionMessage: InitConnectionMessage | undefined, authToken: string | undefined): string;
+export declare function decodeSecProtocols(secProtocol: string): {
+    initConnectionMessage: InitConnectionMessage | undefined;
+    authToken: string | undefined;
+};
+export {};
+//# sourceMappingURL=connect.d.ts.map

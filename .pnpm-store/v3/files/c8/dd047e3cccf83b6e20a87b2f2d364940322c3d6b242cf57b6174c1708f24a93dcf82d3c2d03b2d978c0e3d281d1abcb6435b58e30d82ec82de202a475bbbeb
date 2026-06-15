@@ -1,0 +1,29 @@
+/**
+ * Identifies the version of the data on the replica, corresponding to the
+ * stream of changes produced by the change-source and change-streamer.
+ *
+ * The `major` version directly tracks the watermark of the replication
+ * stream (e.g. the Postgres LSN).
+ *
+ * The `minor` version is optional and used to auxiliary state changes,
+ * such as writes from pending backfills.
+ *
+ * StateVersions are persisted and passed as lexicographically ordered
+ * strings, using the LexiVersion format for major and minor versions,
+ * separated by a dot. If there is no minor version, the StateVersion
+ * is represented by a single LexiVersion.
+ */
+export type StateVersion = {
+    major: bigint;
+    minor?: bigint | undefined;
+};
+type StateVersionInput = {
+    major: bigint | number;
+    minor?: bigint | number | undefined;
+};
+export declare function stateVersionFromString(ver: string): StateVersion;
+export declare function stateVersionToString(ver: StateVersionInput): string;
+export declare function majorVersionFromString(ver: string): bigint;
+export declare function majorVersionToString(major: number | bigint): string;
+export {};
+//# sourceMappingURL=state-version.d.ts.map

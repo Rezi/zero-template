@@ -1,0 +1,47 @@
+import type { OptionalLogger } from '@rocicorp/logger';
+import type { Config, Group, Option, Options, WrappedOptionType } from './options-types.ts';
+import * as v from './valita.ts';
+export type { Config, Group, Option, Options, WrappedOptionType };
+/**
+ * Converts an Options instance into an "env schema", which is an object with
+ * ENV names as its keys, mapped to optional or required string values
+ * (corresponding to the optionality of the corresponding options).
+ *
+ * This is used as a format for encoding options for a multi-tenant version
+ * of an app, with an envSchema for each tenant.
+ */
+export declare function envSchema<T extends Options>(options: T, envNamePrefix?: string): v.ObjectType<{
+    [k: string]: v.Type<string> | v.Optional<string>;
+}, undefined>;
+export type ParseOptions = {
+    /** Defaults to process.argv.slice(2) */
+    argv?: string[];
+    envNamePrefix?: string;
+    description?: {
+        header: string;
+        content: string;
+    }[];
+    /** Defaults to `false` */
+    allowUnknown?: boolean;
+    /** Defaults to `false` */
+    allowPartial?: boolean;
+    /** Defaults to `process.env`. */
+    env?: NodeJS.ProcessEnv;
+    /** Defaults to `true`. */
+    emitDeprecationWarnings?: boolean;
+    /** Defaults to `true`. When false, excludes default values from both config and env return values. */
+    includeDefaults?: boolean;
+    /** Defaults to `console` */
+    logger?: OptionalLogger;
+    /** Defaults to `process.exit` */
+    exit?: (code?: number | string | null) => never;
+};
+export declare function parseOptions<T extends Options>(appOptions: T, opts?: ParseOptions): Config<T>;
+export declare function parseOptionsAdvanced<T extends Options>(appOptions: T, opts?: ParseOptions): {
+    config: Config<T>;
+    env: Record<string, string>;
+    unknown?: string[];
+};
+export declare function flagToEnv(prefix: string, flag: string): string;
+export declare function parseBoolean(optionName: string, input: string): boolean;
+//# sourceMappingURL=options.d.ts.map

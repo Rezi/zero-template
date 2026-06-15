@@ -1,0 +1,112 @@
+import { pid } from "node:process";
+import { fork } from "node:child_process";
+import EventEmitter from "node:events";
+import { platform } from "node:os";
+//#region ../zero-cache/src/types/processes.ts
+function getMessage(type, data) {
+	if (Array.isArray(data) && data.length === 2 && data[0] === type) return data[1];
+	return null;
+}
+function onMessageType(e, type, handler) {
+	return e.on("message", (data, sendHandle) => {
+		const msg = getMessage(type, data);
+		if (msg) handler(msg, sendHandle);
+	});
+}
+function onceMessageType(e, type, handler) {
+	const listener = (data, sendHandle) => {
+		const msg = getMessage(type, data);
+		if (msg) {
+			e.off("message", listener);
+			handler(msg, sendHandle);
+		}
+	};
+	return e.on("message", listener);
+}
+/**
+* Adds the {@link Receiver.onMessageType()} and {@link Receiver.onceMessageType()}
+* methods to convert the given `EventEmitter` to a `Receiver`.
+*/
+function wrap(proc) {
+	return new Proxy(proc, { get(target, prop, receiver) {
+		switch (prop) {
+			case "onMessageType": return (type, handler) => {
+				onMessageType(target, type, handler);
+				return receiver;
+			};
+			case "onceMessageType": return (type, handler) => {
+				onceMessageType(target, type, handler);
+				return receiver;
+			};
+		}
+		return Reflect.get(target, prop, receiver);
+	} });
+}
+/**
+* The parentWorker for forked processes, or `null` if the process was not forked.
+* (Analogous to the `parentPort: MessagePort | null` of the `"workers"` library).
+*/
+var parentWorker = process.send ? wrap(process) : null;
+var SINGLE_PROCESS = "SINGLE_PROCESS";
+var singleProcessOverride = false;
+function singleProcessMode() {
+	return singleProcessOverride || (process.env[SINGLE_PROCESS] ?? "0") !== "0";
+}
+/**
+*
+* @param modulePath Path to the module file, relative to zero-cache/src/, or an absolute file:// URL
+*/
+function childWorker(moduleUrl, env, ...args) {
+	args.push(...process.argv.slice(2));
+	if (singleProcessMode()) {
+		const [parent, child] = inProcChannel();
+		import(moduleUrl.href).then(async ({ default: runWorker }) => {
+			try {
+				await runWorker(parent, env ?? process.env, ...args);
+				child.emit("close", 0);
+				return;
+			} catch (err) {
+				child.emit("error", err);
+				child.emit("close", -1);
+			}
+		}).catch((err) => child.emit("error", err));
+		return child;
+	}
+	return wrap(fork(moduleUrl, args, {
+		detached: platform() !== "win32",
+		serialization: "advanced",
+		env
+	}));
+}
+/**
+* Creates two connected `Worker` instances such that messages sent to one
+* via the {@link Worker.send()} method are received by the other's
+* `on('message', ...)` handler.
+*
+* This is analogous to the two `MessagePort`s of a `MessageChannel`, and
+* is useful for executing code written for inter-process communication
+* in a single process.
+*/
+function inProcChannel() {
+	const worker1 = new EventEmitter();
+	const worker2 = new EventEmitter();
+	const sendTo = (dest) => (message, sendHandle, callback) => {
+		dest.emit("message", message, sendHandle);
+		if (callback) callback(null);
+		return true;
+	};
+	const kill = (dest) => (signal = "SIGTERM") => dest.emit(signal, signal);
+	return [wrap(Object.assign(worker1, {
+		send: sendTo(worker2),
+		kill: kill(worker2),
+		pid
+	})), wrap(Object.assign(worker2, {
+		send: sendTo(worker1),
+		kill: kill(worker1),
+		pid
+	}))];
+}
+//#endregion
+export { childWorker, parentWorker, singleProcessMode };
+
+//# sourceMappingURL=processes.js.map

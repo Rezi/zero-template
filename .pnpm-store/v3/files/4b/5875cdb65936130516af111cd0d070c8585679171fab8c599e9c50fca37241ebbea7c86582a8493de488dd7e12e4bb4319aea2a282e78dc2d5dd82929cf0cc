@@ -1,0 +1,1 @@
+{"version":3,"file":"update-auth.d.ts","sourceRoot":"","sources":["../../../../zero-protocol/src/update-auth.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,CAAC,MAAM,4BAA4B,CAAC;AAEhD,QAAA,MAAM,oBAAoB;;aAExB,CAAC;AAEH,eAAO,MAAM,uBAAuB;;eAGlC,CAAC;AAEH,MAAM,MAAM,cAAc,GAAG,CAAC,CAAC,KAAK,CAAC,OAAO,oBAAoB,CAAC,CAAC;AAClE,MAAM,MAAM,iBAAiB,GAAG,CAAC,CAAC,KAAK,CAAC,OAAO,uBAAuB,CAAC,CAAC"}

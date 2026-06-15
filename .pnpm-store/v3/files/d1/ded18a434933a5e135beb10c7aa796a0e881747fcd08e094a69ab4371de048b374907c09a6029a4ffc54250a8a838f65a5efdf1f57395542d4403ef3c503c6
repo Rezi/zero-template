@@ -1,0 +1,10 @@
+import * as v from '../../../../shared/src/valita.ts';
+declare const ttlClockTag: unique symbol;
+export type TTLClock = {
+    [ttlClockTag]: true;
+};
+export declare const ttlClockSchema: v.Type<TTLClock>;
+export declare function ttlClockAsNumber(ttlClock: TTLClock): number;
+export declare function ttlClockFromNumber(ttlClock: number): TTLClock;
+export {};
+//# sourceMappingURL=ttl-clock.d.ts.map

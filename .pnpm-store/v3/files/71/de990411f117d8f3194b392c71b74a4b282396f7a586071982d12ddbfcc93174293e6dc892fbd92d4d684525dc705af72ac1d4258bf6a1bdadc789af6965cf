@@ -1,0 +1,14 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { PostgresDB } from '../../../../types/pg.ts';
+import { type ShardConfig } from '../../../../types/shards.ts';
+/**
+ * Ensures that a shard is set up for initial sync.
+ */
+export declare function ensureShardSchema(lc: LogContext, db: PostgresDB, shard: ShardConfig): Promise<void>;
+/**
+ * Updates the schema for an existing shard.
+ */
+export declare function updateShardSchema(lc: LogContext, db: PostgresDB, shard: ShardConfig, replicaVersion: string): Promise<void>;
+export declare const CURRENT_SCHEMA_VERSION: number;
+export declare function decommissionLegacyShard(lc: LogContext, db: PostgresDB, shard: ShardConfig): Promise<void>;
+//# sourceMappingURL=init.d.ts.map

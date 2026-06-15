@@ -1,0 +1,19 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { JSONObject } from '../../../../zero-events/src/json.ts';
+import type { ReplicationStage, ReplicationState, ReplicationStatusEvent, Status } from '../../../../zero-events/src/status.ts';
+import { Database } from '../../../../zqlite/src/db.ts';
+import { publishCriticalEvent } from '../../observability/events.ts';
+export declare class ReplicationStatusPublisher {
+    #private;
+    static forTesting(): ReplicationStatusPublisher;
+    static forRunningTransaction(tx: Database, publishFn?: typeof publishCriticalEvent): ReplicationStatusPublisher;
+    static forReplicaFile(file: string, publishFn?: typeof publishCriticalEvent): ReplicationStatusPublisher;
+    constructor(dbRunner: <T>(lc: LogContext, fn: (db: Database) => T) => T, publishFn?: typeof publishCriticalEvent);
+    publish(lc: LogContext, stage: ReplicationStage, description?: string, interval?: number, extraState?: () => Partial<ReplicationState>, now?: Date): this;
+    publishAndThrowError(lc: LogContext, stage: ReplicationStage, e: unknown): Promise<never>;
+    stop(): this;
+}
+export declare function publishReplicationError(lc: LogContext, stage: ReplicationStage, description: string, errorDetails?: JSONObject, now?: Date): Promise<void>;
+export declare function replicationStatusError(lc: LogContext, stage: ReplicationStage, e: unknown, db?: Database, now?: Date): ReplicationStatusEvent;
+export declare function replicationStatusEvent(lc: LogContext, db: Database | undefined, stage: ReplicationStage, status: Status, description?: string, now?: Date): ReplicationStatusEvent;
+//# sourceMappingURL=replication-status.d.ts.map

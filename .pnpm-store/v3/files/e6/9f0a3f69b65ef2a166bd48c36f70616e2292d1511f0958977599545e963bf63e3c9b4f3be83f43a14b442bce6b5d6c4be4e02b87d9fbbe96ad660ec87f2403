@@ -1,0 +1,53 @@
+import { Centroid, type CentroidList } from './centroid.ts';
+import type { TDigestJSON } from './tdigest-schema.ts';
+export interface ReadonlyTDigest {
+    readonly count: () => number;
+    readonly quantile: (q: number) => number;
+    readonly cdf: (x: number) => number;
+}
+export declare class TDigest {
+    #private;
+    readonly compression: number;
+    constructor(compression?: number);
+    /**
+     * fromJSON creates a TDigest from a JSON-serializable representation.
+     * The data should be an object with compression and centroids array.
+     */
+    static fromJSON(data: Readonly<TDigestJSON>): TDigest;
+    reset(): void;
+    add(mean: number, weight?: number): void;
+    /** AddCentroidList can quickly add multiple centroids. */
+    addCentroidList(centroidList: CentroidList): void;
+    /**
+     * AddCentroid adds a single centroid.
+     * Weights which are not a number or are <= 0 are ignored, as are NaN means.
+     */
+    addCentroid(c: Centroid): void;
+    /**
+     *  Merges the supplied digest into this digest. Functionally equivalent to
+     * calling t.AddCentroidList(t2.Centroids(nil)), but avoids making an extra
+     * copy of the CentroidList.
+     **/
+    merge(t2: TDigest): void;
+    /**
+     * Centroids returns a copy of processed centroids.
+     * Useful when aggregating multiple t-digests.
+     *
+     * Centroids are appended to the passed CentroidList; if you're re-using a
+     * buffer, be sure to pass cl[:0].
+     */
+    centroids(cl?: CentroidList): CentroidList;
+    count(): number;
+    /**
+     * toJSON returns a JSON-serializable representation of the digest.
+     * This processes the digest and returns an object with compression and centroid data.
+     */
+    toJSON(): TDigestJSON;
+    quantile(q: number): number;
+    /**
+     * CDF returns the cumulative distribution function for a given value x.
+     */
+    cdf(x: number): number;
+}
+export declare function byteSizeForCompression(comp: number): number;
+//# sourceMappingURL=tdigest.d.ts.map

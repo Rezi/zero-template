@@ -1,0 +1,35 @@
+import * as v from '../../../../../shared/src/valita.ts';
+export declare const changeSourceTimingsSchema: v.ObjectType<{
+    sendTimeMs: v.Type<number>;
+    commitTimeMs: v.Type<number>;
+    receiveTimeMs: v.Type<number>;
+}, undefined>;
+export declare const changeSourceReportSchema: v.ObjectType<{
+    lastTimings: v.ObjectType<{
+        sendTimeMs: v.Type<number>;
+        commitTimeMs: v.Type<number>;
+        receiveTimeMs: v.Type<number>;
+    }, undefined>;
+    nextSendTimeMs: v.Type<number>;
+}, undefined>;
+export declare const replicationTimingsSchema: v.ObjectType<Omit<{
+    sendTimeMs: v.Type<number>;
+    commitTimeMs: v.Type<number>;
+    receiveTimeMs: v.Type<number>;
+}, "replicateTimeMs"> & {
+    replicateTimeMs: v.Type<number>;
+}, undefined>;
+export declare const replicationReportSchema: v.ObjectType<{
+    lastTimings: v.Optional<{
+        sendTimeMs: number;
+        commitTimeMs: number;
+        receiveTimeMs: number;
+        replicateTimeMs: number;
+    }>;
+    nextSendTimeMs: v.Type<number>;
+}, undefined>;
+export type ChangeSourceTimings = v.Infer<typeof changeSourceTimingsSchema>;
+export type ChangeSourceReport = v.Infer<typeof changeSourceReportSchema>;
+export type ReplicationTimings = v.Infer<typeof replicationTimingsSchema>;
+export type ReplicationReport = v.Infer<typeof replicationReportSchema>;
+//# sourceMappingURL=report-schema.d.ts.map

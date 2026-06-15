@@ -1,0 +1,2 @@
+export declare function lazy<T>(factory: () => T): () => T;
+//# sourceMappingURL=lazy.d.ts.map

@@ -1,0 +1,112 @@
+import { valita_exports } from "../../shared/src/valita.js";
+import { jsonSchema } from "../../shared/src/json-schema.js";
+import { rowSchema } from "./data.js";
+import { mutationIDSchema } from "./mutation-id.js";
+import { CRUD, Custom } from "./mutation-type-enum.js";
+import { primaryKeySchema, primaryKeyValueRecordSchema } from "./primary-key.js";
+//#region ../zero-protocol/src/mutation.ts
+var CRUD_MUTATION_NAME = "_zero_crud";
+var CLEANUP_RESULTS_MUTATION_NAME = "_zero_cleanupResults";
+var cleanupResultsArgSchema = valita_exports.union(valita_exports.object({
+	clientGroupID: valita_exports.string(),
+	clientID: valita_exports.string(),
+	upToMutationID: valita_exports.number()
+}), valita_exports.object({
+	type: valita_exports.literal("single"),
+	clientGroupID: valita_exports.string(),
+	clientID: valita_exports.string(),
+	upToMutationID: valita_exports.number()
+}), valita_exports.object({
+	type: valita_exports.literal("bulk"),
+	clientGroupID: valita_exports.string(),
+	clientIDs: valita_exports.tuple([valita_exports.string()]).concat(valita_exports.array(valita_exports.string()))
+}));
+/**
+* Inserts if entity with id does not already exist.
+*/
+var insertOpSchema = valita_exports.object({
+	op: valita_exports.literal("insert"),
+	tableName: valita_exports.string(),
+	primaryKey: primaryKeySchema,
+	value: rowSchema
+});
+/**
+* Upsert semantics. Inserts if entity with id does not already exist,
+* otherwise updates existing entity with id.
+*/
+var upsertOpSchema = valita_exports.object({
+	op: valita_exports.literal("upsert"),
+	tableName: valita_exports.string(),
+	primaryKey: primaryKeySchema,
+	value: rowSchema
+});
+/**
+* Updates if entity with id exists, otherwise does nothing.
+*/
+var updateOpSchema = valita_exports.object({
+	op: valita_exports.literal("update"),
+	tableName: valita_exports.string(),
+	primaryKey: primaryKeySchema,
+	value: rowSchema
+});
+/**
+* Deletes entity with id if it exists, otherwise does nothing.
+*/
+var deleteOpSchema = valita_exports.object({
+	op: valita_exports.literal("delete"),
+	tableName: valita_exports.string(),
+	primaryKey: primaryKeySchema,
+	value: primaryKeyValueRecordSchema
+});
+var crudOpSchema = valita_exports.union(insertOpSchema, upsertOpSchema, updateOpSchema, deleteOpSchema);
+var crudArgSchema = valita_exports.object({ ops: valita_exports.array(crudOpSchema) });
+var crudArgsSchema = valita_exports.tuple([crudArgSchema]);
+var crudMutationSchema = valita_exports.object({
+	type: valita_exports.literal(CRUD),
+	id: valita_exports.number(),
+	clientID: valita_exports.string(),
+	name: valita_exports.literal(CRUD_MUTATION_NAME),
+	args: crudArgsSchema,
+	timestamp: valita_exports.number()
+});
+var customMutationSchema = valita_exports.object({
+	type: valita_exports.literal(Custom),
+	id: valita_exports.number(),
+	clientID: valita_exports.string(),
+	name: valita_exports.string(),
+	args: valita_exports.array(jsonSchema),
+	timestamp: valita_exports.number()
+});
+var mutationSchema = valita_exports.union(crudMutationSchema, customMutationSchema);
+var appErrorSchema = valita_exports.object({
+	error: valita_exports.literal("app"),
+	message: valita_exports.string().optional(),
+	details: jsonSchema.optional()
+});
+var zeroErrorSchema = valita_exports.object({
+	error: valita_exports.union(
+		/** @deprecated push oooMutation errors are now represented as ['error', { ... }] messages */
+		valita_exports.literal("oooMutation"),
+		valita_exports.literal("alreadyProcessed")
+	),
+	details: jsonSchema.optional()
+});
+var mutationOkSchema = valita_exports.object({ data: jsonSchema.optional() });
+var mutationErrorSchema = valita_exports.union(appErrorSchema, zeroErrorSchema);
+var mutationResultSchema = valita_exports.union(mutationOkSchema, mutationErrorSchema);
+var mutationResponseSchema = valita_exports.object({
+	id: mutationIDSchema,
+	result: mutationResultSchema
+});
+function mapCRUD(arg, map) {
+	return { ops: arg.ops.map(({ op, tableName, primaryKey, value }) => ({
+		op,
+		tableName: map.tableName(tableName),
+		primaryKey: map.columns(tableName, primaryKey),
+		value: map.row(tableName, value)
+	})) };
+}
+//#endregion
+export { CLEANUP_RESULTS_MUTATION_NAME, CRUD_MUTATION_NAME, cleanupResultsArgSchema, mapCRUD, mutationResponseSchema, mutationResultSchema, mutationSchema };
+
+//# sourceMappingURL=mutation.js.map

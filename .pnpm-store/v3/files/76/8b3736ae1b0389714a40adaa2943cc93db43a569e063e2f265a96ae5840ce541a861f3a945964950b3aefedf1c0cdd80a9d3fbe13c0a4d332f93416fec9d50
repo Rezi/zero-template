@@ -1,0 +1,17 @@
+import { PlannerConnection } from "./planner-connection.js";
+//#region ../zql/src/planner/planner-source.ts
+var PlannerSource = class {
+	name;
+	#model;
+	constructor(name, model) {
+		this.name = name;
+		this.#model = model;
+	}
+	connect(sort, filters, isRoot, baseConstraints, limit) {
+		return new PlannerConnection(this.name, this.#model, sort, filters, isRoot, baseConstraints, limit);
+	}
+};
+//#endregion
+export { PlannerSource };
+
+//# sourceMappingURL=planner-source.js.map

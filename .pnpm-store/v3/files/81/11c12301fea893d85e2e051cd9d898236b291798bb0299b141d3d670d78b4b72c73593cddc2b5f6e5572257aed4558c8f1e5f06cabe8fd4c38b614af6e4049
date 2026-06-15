@@ -1,0 +1,24 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { AST } from '../../../zero-protocol/src/ast.ts';
+import type { PermissionsConfig } from '../../../zero-schema/src/compiled-permissions.ts';
+import type { JWTAuth } from './auth.ts';
+export type TransformedAndHashed = {
+    id: string;
+    transformedAst: AST;
+    transformationHash: string;
+};
+/**
+ * Adds permission rules to the given query so it only returns rows that the
+ * user is allowed to read.
+ *
+ * If the returned query is `undefined` that means that user cannot run
+ * the query at all. This is only the case if we can infer that all rows
+ * would be excluded without running the query.
+ * E.g., the user is trying to query a table that is not readable.
+ */
+export declare function transformAndHashQuery(lc: LogContext, id: string, query: AST, permissionRules: PermissionsConfig, auth: JWTAuth | undefined, internalQuery: boolean | null | undefined): TransformedAndHashed;
+/**
+ * For a given AST, apply the read-auth rules and bind static auth data.
+ */
+export declare function transformQuery(lc: LogContext, query: AST, permissionRules: PermissionsConfig, auth: JWTAuth | undefined): AST;
+//# sourceMappingURL=read-authorizer.d.ts.map

@@ -1,0 +1,12 @@
+//#region ../zero-protocol/src/error-reason-enum.ts
+var Database = "database";
+var Parse = "parse";
+var OutOfOrderMutation = "oooMutation";
+var UnsupportedPushVersion = "unsupportedPushVersion";
+var Internal = "internal";
+var HTTP = "http";
+var Timeout = "timeout";
+//#endregion
+export { Database, HTTP, Internal, OutOfOrderMutation, Parse, Timeout, UnsupportedPushVersion };
+
+//# sourceMappingURL=error-reason-enum.js.map

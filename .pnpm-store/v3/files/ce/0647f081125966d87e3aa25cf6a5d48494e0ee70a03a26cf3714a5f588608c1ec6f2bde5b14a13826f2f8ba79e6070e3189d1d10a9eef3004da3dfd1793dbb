@@ -1,0 +1,33 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { Enum } from '../../../shared/src/enum.ts';
+import type { BTreeRead } from '../btree/read.ts';
+import type { BTreeWrite } from '../btree/write.ts';
+import type { FrozenJSONValue } from '../frozen-json.ts';
+import type { Hash } from '../hash.ts';
+import type { IndexRecord } from './commit.ts';
+import * as IndexOperation from './index-operation-enum.ts';
+type IndexOperation = Enum<typeof IndexOperation>;
+export declare class IndexRead<BTree = BTreeRead> {
+    readonly meta: IndexRecord;
+    readonly map: BTree;
+    constructor(meta: IndexRecord, map: BTree);
+}
+export declare class IndexWrite extends IndexRead<BTreeWrite> {
+    flush(): Promise<Hash>;
+    clear(): Promise<void>;
+}
+export declare function indexValue(lc: LogContext, index: BTreeWrite, op: IndexOperation, key: string, val: FrozenJSONValue, jsonPointer: string, allowEmpty: boolean): Promise<void>;
+export declare function getIndexKeys(primary: string, value: FrozenJSONValue, jsonPointer: string, allowEmpty: boolean): string[];
+export declare const KEY_VERSION_0 = "\0";
+export declare const KEY_SEPARATOR = "\0";
+/**
+ * When using indexes the key is a tuple of the secondary key and the primary
+ * key.
+ */
+export type IndexKey = readonly [secondary: string, primary: string];
+export declare function encodeIndexKey(indexKey: IndexKey): string;
+export declare function encodeIndexScanKey(secondary: string, primary: string | undefined): string;
+export declare function decodeIndexKey(encodedIndexKey: string): IndexKey;
+export declare function evaluateJSONPointer(value: FrozenJSONValue, pointer: string): FrozenJSONValue | undefined;
+export {};
+//# sourceMappingURL=index.d.ts.map

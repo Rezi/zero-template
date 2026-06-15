@@ -1,0 +1,19 @@
+import type { CompoundKey } from '../../../zero-protocol/src/ast.ts';
+import type { Row, Value } from '../../../zero-protocol/src/data.ts';
+import type { Change } from './change.ts';
+import { type Node } from './data.ts';
+import type { SourceSchema } from './schema.ts';
+import type { Stream } from './stream.ts';
+export declare function generateWithOverlayNoYield(stream: Stream<Node>, overlay: Change, schema: SourceSchema): Stream<Node>;
+export declare function generateWithOverlay(stream: Stream<Node | 'yield'>, overlay: Change, schema: SourceSchema): Stream<Node | 'yield'>;
+export declare function generateWithOverlayNoYieldUnordered(stream: Stream<Node>, overlay: Change, schema: SourceSchema): Stream<Node>;
+export declare function generateWithOverlayUnordered(stream: Stream<Node | 'yield'>, overlay: Change, schema: SourceSchema): Stream<Node | 'yield'>;
+export declare function rowEqualsForCompoundKey(a: Row, b: Row, key: CompoundKey): boolean;
+export declare function isJoinMatch(parent: Row, parentKey: CompoundKey, child: Row, childKey: CompoundKey): boolean;
+/**
+ * Builds a constraint object by mapping values from `sourceRow` using `sourceKey`
+ * to keys specified by `targetKey`. Returns `undefined` if any source value is `null`,
+ * since null foreign keys cannot match any rows.
+ */
+export declare function buildJoinConstraint(sourceRow: Row, sourceKey: CompoundKey, targetKey: CompoundKey): Record<string, Value> | undefined;
+//# sourceMappingURL=join-utils.d.ts.map

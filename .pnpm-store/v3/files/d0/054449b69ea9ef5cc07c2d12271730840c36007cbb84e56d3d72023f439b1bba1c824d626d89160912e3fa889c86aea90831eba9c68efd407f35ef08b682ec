@@ -1,0 +1,110 @@
+import { assert, assertObject } from "../../../shared/src/asserts.js";
+import { deepFreeze } from "../frozen-json.js";
+import { assert as assert$1, readonlyArray, readonlyObject, readonlyRecord, valita_exports } from "../../../shared/src/valita.js";
+import { hashSchema } from "../hash.js";
+import { toRefs } from "../dag/chunk.js";
+import { indexDefinitionsEqual, indexDefinitionsSchema } from "../index-defs.js";
+//#region ../replicache/src/persist/client-groups.ts
+var clientGroupSchema = readonlyObject({
+	headHash: hashSchema,
+	mutatorNames: readonlyArray(valita_exports.string()),
+	indexes: indexDefinitionsSchema,
+	mutationIDs: readonlyRecord(valita_exports.number()),
+	lastServerAckdMutationIDs: valita_exports.record(valita_exports.number()),
+	disabled: valita_exports.boolean()
+});
+var CLIENT_GROUPS_HEAD_NAME = "client-groups";
+function assertClientGroup(value) {
+	assert$1(value, clientGroupSchema);
+}
+function chunkDataToClientGroupMap(chunkData) {
+	assertObject(chunkData);
+	const clientGroups = /* @__PURE__ */ new Map();
+	for (const [key, value] of Object.entries(chunkData)) if (value !== void 0) {
+		assertClientGroup(value);
+		clientGroups.set(key, value);
+	}
+	return clientGroups;
+}
+function clientGroupMapToChunkData(clientGroups, dagWrite) {
+	const chunkData = {};
+	for (const [clientGroupID, clientGroup] of clientGroups.entries()) {
+		dagWrite.assertValidHash(clientGroup.headHash);
+		chunkData[clientGroupID] = {
+			...clientGroup,
+			mutatorNames: [...clientGroup.mutatorNames.values()]
+		};
+	}
+	return deepFreeze(chunkData);
+}
+async function getClientGroupsAtHash(hash, dagRead) {
+	return chunkDataToClientGroupMap((await dagRead.getChunk(hash))?.data);
+}
+async function getClientGroups(dagRead) {
+	const hash = await dagRead.getHead(CLIENT_GROUPS_HEAD_NAME);
+	if (!hash) return /* @__PURE__ */ new Map();
+	return getClientGroupsAtHash(hash, dagRead);
+}
+async function setClientGroups(clientGroups, dagWrite) {
+	const currClientGroups = await getClientGroups(dagWrite);
+	for (const [clientGroupID, clientGroup] of clientGroups) validateClientGroupUpdate(clientGroup, currClientGroups.get(clientGroupID));
+	return setValidatedClientGroups(clientGroups, dagWrite);
+}
+async function setClientGroup(clientGroupID, clientGroup, dagWrite) {
+	const currClientGroups = await getClientGroups(dagWrite);
+	validateClientGroupUpdate(clientGroup, currClientGroups.get(clientGroupID));
+	const newClientGroups = new Map(currClientGroups);
+	newClientGroups.set(clientGroupID, clientGroup);
+	return setValidatedClientGroups(newClientGroups, dagWrite);
+}
+function validateClientGroupUpdate(clientGroup, currClientGroup) {
+	const mutatorNamesSet = new Set(clientGroup.mutatorNames);
+	assert(mutatorNamesSet.size === clientGroup.mutatorNames.length, "A client group's mutatorNames must be a set.");
+	if (currClientGroup !== void 0) {
+		assert(indexDefinitionsEqual(currClientGroup.indexes, clientGroup.indexes), "A client group's index definitions must never change.");
+		assert(mutatorNamesEqual(mutatorNamesSet, currClientGroup.mutatorNames), "A client group's mutatorNames must never change.");
+	}
+}
+async function setValidatedClientGroups(clientGroups, dagWrite) {
+	const chunkData = clientGroupMapToChunkData(clientGroups, dagWrite);
+	const refs = /* @__PURE__ */ new Set();
+	for (const clientGroup of clientGroups.values()) refs.add(clientGroup.headHash);
+	const chunk = dagWrite.createChunk(chunkData, toRefs(refs));
+	await dagWrite.putChunk(chunk);
+	await dagWrite.setHead(CLIENT_GROUPS_HEAD_NAME, chunk.hash);
+	return clientGroups;
+}
+function mutatorNamesEqual(mutatorNamesSet, mutatorNames) {
+	if (mutatorNames.length !== mutatorNamesSet.size) return false;
+	for (const mutatorName of mutatorNames) if (!mutatorNamesSet.has(mutatorName)) return false;
+	return true;
+}
+async function getClientGroup(id, dagRead) {
+	return (await getClientGroups(dagRead)).get(id);
+}
+function clientGroupHasPendingMutations(clientGroup) {
+	for (const [clientID, mutationID] of Object.entries(clientGroup.mutationIDs)) {
+		const lastServerAckdMutationID = clientGroup.lastServerAckdMutationIDs[clientID];
+		if (lastServerAckdMutationID === void 0 && mutationID !== 0 || lastServerAckdMutationID < mutationID) return true;
+	}
+	return false;
+}
+/**
+* Marks a client group as disabled. This can happen if the server deletes the
+* client group (servers should not delete clients or client groups but it often
+* happens in practice when developing).
+*
+* A disabled client group prevents pulls and pushes from happening.
+*/
+async function disableClientGroup(clientGroupID, dagWrite) {
+	const clientGroup = await getClientGroup(clientGroupID, dagWrite);
+	if (!clientGroup) return;
+	await setClientGroup(clientGroupID, {
+		...clientGroup,
+		disabled: true
+	}, dagWrite);
+}
+//#endregion
+export { clientGroupHasPendingMutations, disableClientGroup, getClientGroup, getClientGroups, mutatorNamesEqual, setClientGroup, setClientGroups };
+
+//# sourceMappingURL=client-groups.js.map

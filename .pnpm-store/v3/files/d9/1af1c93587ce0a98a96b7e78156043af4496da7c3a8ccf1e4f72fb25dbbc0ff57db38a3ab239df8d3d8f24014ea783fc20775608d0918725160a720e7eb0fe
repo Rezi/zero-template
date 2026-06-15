@@ -1,0 +1,147 @@
+import { assert } from "../../../shared/src/asserts.js";
+import { valita_exports } from "../../../shared/src/valita.js";
+import { Database } from "../../../zqlite/src/db.js";
+import { randInt } from "../../../shared/src/rand.js";
+//#region ../zero-cache/src/db/migration-lite.ts
+/**
+* Ensures that the schema is compatible with the current code, updating and
+* migrating the schema if necessary.
+*/
+async function runSchemaMigrations(log, debugName, dbPath, setupMigration, incrementalMigrationMap) {
+	const start = Date.now();
+	log = log.withContext("initSchema", randInt(0, Number.MAX_SAFE_INTEGER).toString(36));
+	const db = new Database(log, dbPath);
+	try {
+		const versionMigrations = sorted(incrementalMigrationMap);
+		assert(versionMigrations.length, `Must specify a at least one version migration`);
+		assert(versionMigrations[0][0] > 0, `Versions must be non-zero positive numbers`);
+		const codeVersion = versionMigrations.at(-1)[0];
+		log.info?.(`Checking schema for compatibility with ${debugName} at schema v${codeVersion}`);
+		let versions = await runTransaction(log, db, (tx) => {
+			const versions = getVersionHistory(tx);
+			if (codeVersion < versions.minSafeVersion) throw new Error(`Cannot run ${debugName} at schema v${codeVersion} because rollback limit is v${versions.minSafeVersion}`);
+			if (versions.dataVersion > codeVersion) {
+				log.info?.(`Data is at v${versions.dataVersion}. Resetting to v${codeVersion}`);
+				return updateVersionHistory(log, tx, versions, codeVersion);
+			}
+			return versions;
+		});
+		if (versions.dataVersion < codeVersion) {
+			db.unsafeMode(true);
+			db.pragma("locking_mode = EXCLUSIVE");
+			db.pragma("foreign_keys = OFF");
+			db.pragma("journal_mode = OFF");
+			db.pragma("synchronous = OFF");
+			const migrations = versions.dataVersion === 0 ? [[codeVersion, setupMigration]] : versionMigrations;
+			for (const [dest, migration] of migrations) if (versions.dataVersion < dest) {
+				log.info?.(`Migrating schema from v${versions.dataVersion} to v${dest}`);
+				log.flush();
+				versions = await runTransaction(log, db, async (tx) => {
+					let versions = getVersionHistory(tx);
+					if (versions.dataVersion < dest) {
+						versions = await runMigration(log, tx, versions, dest, migration);
+						assert(versions.dataVersion === dest, () => `Migration did not reach target version: expected ${dest}, got ${versions.dataVersion}`);
+					}
+					return versions;
+				});
+			}
+			db.exec("ANALYZE main");
+			log.info?.("ANALYZE completed");
+		} else db.pragma("optimize = 0x10002");
+		db.pragma("synchronous = NORMAL");
+		db.unsafeMode(false);
+		assert(versions.dataVersion === codeVersion, () => `Final dataVersion (${versions.dataVersion}) does not match codeVersion (${codeVersion})`);
+		log.info?.(`Running ${debugName} at schema v${codeVersion} (${Date.now() - start} ms)`);
+	} catch (e) {
+		log.error?.("Error in ensureSchemaMigrated", e);
+		throw e;
+	} finally {
+		db.close();
+		log.flush();
+	}
+}
+function sorted(incrementalMigrationMap) {
+	const versionMigrations = [];
+	for (const [v, m] of Object.entries(incrementalMigrationMap)) versionMigrations.push([Number(v), m]);
+	return versionMigrations.sort(([a], [b]) => a - b);
+}
+valita_exports.object({
+	schemaVersion: valita_exports.number(),
+	dataVersion: valita_exports.number(),
+	minSafeVersion: valita_exports.number()
+});
+function getVersionHistory(db) {
+	db.prepare(`
+    CREATE TABLE IF NOT EXISTS "_zero.versionHistory" (
+      dataVersion INTEGER NOT NULL,
+      schemaVersion INTEGER NOT NULL,
+      minSafeVersion INTEGER NOT NULL,
+
+      lock INTEGER PRIMARY KEY DEFAULT 1 CHECK (lock=1)
+    );
+  `).run();
+	return db.prepare("SELECT dataVersion, schemaVersion, minSafeVersion FROM \"_zero.versionHistory\"").get() ?? {
+		dataVersion: 0,
+		schemaVersion: 0,
+		minSafeVersion: 0
+	};
+}
+function updateVersionHistory(log, db, prev, newVersion, minSafeVersion) {
+	assert(newVersion > 0, "newVersion must be positive");
+	const meta = {
+		...prev,
+		dataVersion: newVersion,
+		schemaVersion: Math.max(newVersion, prev.schemaVersion),
+		minSafeVersion: getMinSafeVersion(log, prev, minSafeVersion)
+	};
+	db.prepare(`
+    INSERT INTO "_zero.versionHistory" (dataVersion, schemaVersion, minSafeVersion, lock)
+    VALUES (@dataVersion, @schemaVersion, @minSafeVersion, 1)
+    ON CONFLICT (lock) DO UPDATE
+    SET dataVersion=@dataVersion,
+        schemaVersion=@schemaVersion,
+        minSafeVersion=@minSafeVersion
+  `).run(meta);
+	return meta;
+}
+async function runMigration(log, tx, versions, destinationVersion, migration) {
+	if (versions.schemaVersion < destinationVersion) await migration.migrateSchema?.(log, tx);
+	if (versions.dataVersion < destinationVersion) await migration.migrateData?.(log, tx);
+	return updateVersionHistory(log, tx, versions, destinationVersion, migration.minSafeVersion);
+}
+/**
+* Bumps the rollback limit [[toAtLeast]] the specified version.
+* Leaves the rollback limit unchanged if it is equal or greater.
+*/
+function getMinSafeVersion(log, current, proposedSafeVersion) {
+	if (proposedSafeVersion === void 0) return current.minSafeVersion;
+	if (current.minSafeVersion >= proposedSafeVersion) {
+		log.debug?.(`rollback limit is already at ${current.minSafeVersion}, don't need to bump to ${proposedSafeVersion}`);
+		return current.minSafeVersion;
+	}
+	log.info?.(`bumping rollback limit from ${current.minSafeVersion} to ${proposedSafeVersion}`);
+	return proposedSafeVersion;
+}
+async function runTransaction(log, db, tx) {
+	db.prepare("BEGIN EXCLUSIVE").run();
+	try {
+		const result = await tx(db);
+		db.prepare("COMMIT").run();
+		return result;
+	} catch (e) {
+		log.error?.("Aborted transaction due to error", e);
+		try {
+			db.prepare("ROLLBACK").run();
+		} catch (rollbackError) {
+			log.error?.("Unable to rollback transaction", rollbackError);
+			const combinedError = /* @__PURE__ */ new Error(`Transaction failed and rollback also failed: operation error = ${String(e)}; rollback error = ${String(rollbackError)}`);
+			combinedError.cause = e;
+			throw combinedError;
+		}
+		throw e;
+	}
+}
+//#endregion
+export { runSchemaMigrations };
+
+//# sourceMappingURL=migration-lite.js.map

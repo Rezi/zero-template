@@ -1,0 +1,155 @@
+import { assert } from "../../../../../../shared/src/asserts.js";
+import { parse, valita_exports } from "../../../../../../shared/src/valita.js";
+import { upstreamSchema } from "../../../../types/shards.js";
+import { id } from "../../../../types/sql.js";
+import { publishedSchema } from "./published.js";
+import { getMutationsTableDefinition, legacyReplicationSlot, metadataPublicationName, setupTablesAndReplication, setupTriggers } from "./shard.js";
+import { decommissionShard } from "../decommission.js";
+import { AutoResetSignal } from "../../../change-streamer/schema/tables.js";
+import { getVersionHistory, runSchemaMigrations } from "../../../../db/migration.js";
+//#region ../zero-cache/src/services/change-source/pg/schema/init.ts
+/**
+* Ensures that a shard is set up for initial sync.
+*/
+async function ensureShardSchema(lc, db, shard) {
+	await runSchemaMigrations(lc, `upstream-shard-${shard.appID}`, upstreamSchema(shard), db, {
+		migrateSchema: (lc, tx) => setupTablesAndReplication(lc, tx, shard),
+		minSafeVersion: 1
+	}, getIncrementalMigrations(shard, "obsolete"));
+}
+/**
+* Updates the schema for an existing shard.
+*/
+async function updateShardSchema(lc, db, shard, replicaVersion) {
+	await runSchemaMigrations(lc, `upstream-shard-${shard.appID}`, upstreamSchema(shard), db, { migrateSchema: () => {
+		throw new AutoResetSignal(`upstream shard ${upstreamSchema(shard)} is not initialized`);
+	} }, getIncrementalMigrations(shard, replicaVersion));
+	await decommissionLegacyShard(lc, db, shard);
+}
+function getIncrementalMigrations(shard, replicaVersion) {
+	const shardConfigTable = `${upstreamSchema(shard)}.shardConfig`;
+	return {
+		4: {
+			migrateSchema: () => {
+				throw new AutoResetSignal("resetting to upgrade shard schema");
+			},
+			minSafeVersion: 3
+		},
+		6: { migrateSchema: async (lc, sql) => {
+			assert(replicaVersion, `replicaVersion is always passed for incremental migrations`);
+			await Promise.all([sql`
+          ALTER TABLE ${sql(shardConfigTable)} ADD "replicaVersion" TEXT`, sql`
+          UPDATE ${sql(shardConfigTable)} SET ${sql({ replicaVersion })}`]);
+			lc.info?.(`Recorded replicaVersion ${replicaVersion} in upstream shardConfig`);
+		} },
+		7: { migrateSchema: async (lc, sql) => {
+			const [{ publications }] = await sql`
+          SELECT publications FROM ${sql(shardConfigTable)}`;
+			await setupTriggers(lc, sql, {
+				...shard,
+				publications
+			});
+			lc.info?.(`Upgraded to v2 event triggers`);
+		} },
+		8: { migrateSchema: async (lc, sql) => {
+			const legacyShardConfigSchema = valita_exports.object({
+				replicaVersion: valita_exports.string().nullable(),
+				initialSchema: publishedSchema.nullable()
+			});
+			const result = await sql`
+          SELECT "replicaVersion", "initialSchema" FROM ${sql(shardConfigTable)}`;
+			assert(result.length === 1, () => `Expected exactly one shardConfig row, got ${result.length}`);
+			const { replicaVersion, initialSchema } = parse(result[0], legacyShardConfigSchema, "passthrough");
+			await Promise.all([
+				sql`
+          CREATE TABLE ${sql(upstreamSchema(shard))}.replicas (
+            "slot"          TEXT PRIMARY KEY,
+            "version"       TEXT NOT NULL,
+            "initialSchema" JSON NOT NULL
+          );
+          `,
+				sql`
+          INSERT INTO ${sql(upstreamSchema(shard))}.replicas ${sql({
+					slot: legacyReplicationSlot(shard),
+					version: replicaVersion,
+					initialSchema
+				})}
+          `,
+				sql`
+          ALTER TABLE ${sql(shardConfigTable)} DROP "replicaVersion", DROP "initialSchema"
+          `
+			]);
+			lc.info?.(`Upgraded schema to support non-disruptive resyncs`);
+		} },
+		10: { migrateSchema: async (lc, sql) => {
+			await sql.unsafe(`
+          ${getMutationsTableDefinition(upstreamSchema(shard))}
+          ALTER PUBLICATION ${id(metadataPublicationName(shard.appID, shard.shardNum))} ADD TABLE ${id(upstreamSchema(shard))}."mutations";
+        `);
+			lc.info?.("Upgraded schema with new mutations table");
+		} },
+		13: { migrateSchema: async (_, sql) => {
+			await sql`
+          CREATE TABLE IF NOT EXISTS ${sql(upstreamSchema(shard))}."schemaVersions" (
+            "minSupportedVersion" INT4,
+            "maxSupportedVersion" INT4,
+            "lock" BOOL PRIMARY KEY DEFAULT true CHECK (lock)
+        );`;
+			await sql`
+          INSERT INTO ${sql(upstreamSchema(shard))}."schemaVersions" 
+            ("lock", "minSupportedVersion", "maxSupportedVersion")
+            VALUES (true, 1, 1)
+            ON CONFLICT DO NOTHING;
+        `;
+		} },
+		15: { migrateSchema: async (_, sql) => {
+			await sql`
+          ALTER TABLE ${sql(upstreamSchema(shard))}.replicas
+            ADD COLUMN "initialSyncContext" JSON,
+            ADD COLUMN "subscriberContext" JSON
+        `;
+		} },
+		22: { migrateSchema: async (_, sql) => {
+			await sql`
+          ALTER TABLE ${sql(upstreamSchema(shard))}.replicas 
+            ALTER "initialSchema" DROP NOT NULL;
+        `;
+			await sql`
+          ALTER TABLE ${sql(upstreamSchema(shard))}.replicas 
+            DROP CONSTRAINT replicas_pkey;
+        `;
+			await sql`
+          ALTER TABLE ${sql(upstreamSchema(shard))}.replicas 
+            ADD COLUMN id TEXT PRIMARY KEY DEFAULT replace(gen_random_uuid()::text, '-', '');
+        `;
+			await sql`
+          ALTER TABLE ${sql(upstreamSchema(shard))}.replicas 
+            ADD COLUMN rank BIGSERIAL;
+        `;
+		} },
+		23: { migrateSchema: async (lc, sql) => {
+			const [{ publications }] = await sql`
+          SELECT publications FROM ${sql(shardConfigTable)}`;
+			await setupTriggers(lc, sql, {
+				...shard,
+				publications
+			});
+			lc.info?.(`Upgraded DDL event triggers`);
+		} }
+	};
+}
+Object.keys(getIncrementalMigrations({
+	appID: "unused",
+	shardNum: 0,
+	publications: ["foo"]
+})).reduce((prev, curr) => Math.max(prev, parseInt(curr)), 0);
+async function decommissionLegacyShard(lc, db, shard) {
+	if (shard.appID !== "zero") {
+		const versionHistory = await getVersionHistory(db, `zero_${shard.appID}`);
+		if (versionHistory !== null && versionHistory.schemaVersion < 5) await decommissionShard(lc, db, "zero", shard.appID);
+	}
+}
+//#endregion
+export { ensureShardSchema, updateShardSchema };
+
+//# sourceMappingURL=init.js.map

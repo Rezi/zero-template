@@ -1,0 +1,26 @@
+import { literalUnion, valita_exports } from "../../shared/src/valita.js";
+import { must } from "../../shared/src/must.js";
+import { mapAllEntries } from "../../shared/src/objects.js";
+//#region ../zero-protocol/src/client-schema.ts
+var valueTypeSchema = literalUnion("string", "number", "boolean", "null", "json");
+var columnSchemaSchema = valita_exports.object({ type: valueTypeSchema });
+var tableSchemaSchema = valita_exports.object({
+	columns: valita_exports.record(columnSchemaSchema),
+	primaryKey: valita_exports.array(valita_exports.string())
+});
+var clientSchemaSchema = valita_exports.object({ tables: valita_exports.record(tableSchemaSchema) });
+var keyCmp = ([a], [b]) => a < b ? -1 : a > b ? 1 : 0;
+/**
+* Returns a normalized schema (with the tables and columns sorted)
+* suitable for hashing.
+*/
+function normalizeClientSchema(schema) {
+	return { tables: mapAllEntries(schema.tables, (tables) => tables.sort(keyCmp).map(([name, table]) => [name, {
+		columns: mapAllEntries(table.columns, (e) => e.sort(keyCmp)),
+		primaryKey: must(table.primaryKey, `new clients always specify a primaryKey`).sort()
+	}])) };
+}
+//#endregion
+export { clientSchemaSchema, normalizeClientSchema, valueTypeSchema };
+
+//# sourceMappingURL=client-schema.js.map

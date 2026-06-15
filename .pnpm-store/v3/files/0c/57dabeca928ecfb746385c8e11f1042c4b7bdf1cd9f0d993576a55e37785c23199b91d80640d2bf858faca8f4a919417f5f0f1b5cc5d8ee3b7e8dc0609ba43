@@ -1,0 +1,65 @@
+import { readFromHash } from "../../../replicache/src/db/read.js";
+import { withRead } from "../../../replicache/src/with-transactions.js";
+import { must } from "../../../shared/src/must.js";
+import "./keys.js";
+//#region ../zero-client/src/client/zero-rep.ts
+var REPLICACHE_NO_AUTH_TOKEN = "";
+var toReplicacheAuthToken = (auth) => auth ?? REPLICACHE_NO_AUTH_TOKEN;
+var fromReplicacheAuthToken = (auth) => !auth ? void 0 : auth;
+var ZeroRep = class {
+	#context;
+	#ivmMain;
+	#customMutatorsEnabled;
+	#mutationTracker;
+	#store;
+	#auth = REPLICACHE_NO_AUTH_TOKEN;
+	constructor(context, ivmMain, customMutatorsEnabled, mutationTracker) {
+		this.#context = context;
+		this.#ivmMain = ivmMain;
+		this.#customMutatorsEnabled = customMutatorsEnabled;
+		this.#mutationTracker = mutationTracker;
+	}
+	set auth(auth) {
+		this.#auth = auth;
+	}
+	async init(hash, store) {
+		const diffs = [];
+		await withRead(store, async (dagRead) => {
+			const read = await readFromHash(hash, dagRead, 7);
+			for await (const entry of read.map.scan("e/")) {
+				if (!entry[0].startsWith("e/")) break;
+				diffs.push({
+					op: "add",
+					key: entry[0],
+					newValue: entry[1]
+				});
+			}
+		});
+		this.#store = store;
+		this.#context.processChanges(void 0, hash, diffs);
+	}
+	getTxData = (desiredHead, readOptions) => {
+		if (!this.#customMutatorsEnabled) return;
+		return this.#ivmMain.forkToHead(must(this.#store), desiredHead, readOptions).then((branch) => ({
+			ivmSources: branch,
+			token: fromReplicacheAuthToken(this.#auth),
+			context: this.#context
+		}));
+	};
+	advance = (expectedHash, newHash, diffs) => {
+		this.#context.processChanges(expectedHash, newHash, diffs);
+	};
+	trackMutation() {
+		return this.#mutationTracker.trackMutation();
+	}
+	mutationIDAssigned(ephemeralID, mutationID) {
+		this.#mutationTracker.mutationIDAssigned(ephemeralID, mutationID);
+	}
+	rejectMutation(ephemeralID, ex) {
+		this.#mutationTracker.rejectMutation(ephemeralID, ex);
+	}
+};
+//#endregion
+export { ZeroRep, fromReplicacheAuthToken, toReplicacheAuthToken };
+
+//# sourceMappingURL=zero-rep.js.map

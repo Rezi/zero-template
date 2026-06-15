@@ -1,0 +1,72 @@
+import * as valita from '../../../shared/src/valita.ts';
+import type { Read, Write } from '../dag/store.ts';
+import { type Hash } from '../hash.ts';
+import type { ClientGroupID } from '../sync/ids.ts';
+export type ClientGroupMap = ReadonlyMap<ClientGroupID, ClientGroup>;
+declare const clientGroupSchema: valita.ObjectType<Readonly<{
+    /**
+     * The hash of the commit in the perdag last persisted to this client group.
+     * Should only be updated by clients assigned to this client group.
+     */
+    headHash: valita.Type<Hash>;
+    /**
+     * Set of mutator names common to all clients assigned to this client group.
+     */
+    mutatorNames: valita.Type<readonly string[]>;
+    /**
+     * Index definitions common to all clients assigned to this client group.
+     */
+    indexes: valita.Type<Readonly<Record<string, import("../index-defs.ts").IndexDefinition>>>;
+    /**
+     * The highest mutation ID of every client assigned to this client group.
+     * Should only be updated by clients assigned to this client group. Read by
+     * other clients to determine if there are unacknowledged pending mutations
+     * for them to try to recover. This is redundant with information in the
+     * commit graph at `headHash`, but allows other clients to determine if there
+     * are unacknowledged pending mutations without having to load the commit
+     * graph.
+     */
+    mutationIDs: valita.Type<Readonly<Record<string, number>>>;
+    /**
+     * The highest lastMutationID received from the server for every client
+     * assigned to this client group.
+     *
+     * Should be updated by the clients assigned to this client group whenever
+     * they persist to this client group. Read by other clients to determine if
+     * there are unacknowledged pending mutations for them to recover and
+     * *updated* by other clients upon successfully recovering pending mutations
+     * to avoid redundant pushes of pending mutations.
+     *
+     * Note: This will be the same as the `lastMutationIDs` of the base snapshot
+     * of the client group's commit graph when written by clients assigned to this
+     * client group.  However, when written by another client recovering mutations
+     * it may be different because the other client does not update the commit
+     * graph.
+     */
+    lastServerAckdMutationIDs: valita.Type<Record<string, number>>;
+    /**
+     * If the server deletes this client group it can signal that the client group
+     * was deleted. If that happens we mark this client group as disabled so that
+     * we do not use it again when creating new clients.
+     */
+    disabled: valita.Type<boolean>;
+}>, undefined>;
+export type ClientGroup = valita.Infer<typeof clientGroupSchema>;
+export declare const CLIENT_GROUPS_HEAD_NAME = "client-groups";
+export declare function getClientGroups(dagRead: Read): Promise<ClientGroupMap>;
+export declare function setClientGroups(clientGroups: ClientGroupMap, dagWrite: Write): Promise<ClientGroupMap>;
+export declare function setClientGroup(clientGroupID: ClientGroupID, clientGroup: ClientGroup, dagWrite: Write): Promise<ClientGroupMap>;
+export declare function deleteClientGroup(clientGroupID: ClientGroupID, dagWrite: Write): Promise<ClientGroupMap>;
+export declare function mutatorNamesEqual(mutatorNamesSet: ReadonlySet<string>, mutatorNames: readonly string[]): boolean;
+export declare function getClientGroup(id: ClientGroupID, dagRead: Read): Promise<ClientGroup | undefined>;
+export declare function clientGroupHasPendingMutations(clientGroup: ClientGroup): boolean;
+/**
+ * Marks a client group as disabled. This can happen if the server deletes the
+ * client group (servers should not delete clients or client groups but it often
+ * happens in practice when developing).
+ *
+ * A disabled client group prevents pulls and pushes from happening.
+ */
+export declare function disableClientGroup(clientGroupID: string, dagWrite: Write): Promise<void>;
+export {};
+//# sourceMappingURL=client-groups.d.ts.map

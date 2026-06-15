@@ -1,0 +1,309 @@
+import * as v from '../../shared/src/valita.ts';
+export declare const downstreamSchema: v.UnionType<[v.TupleType<[v.Type<"connected">, v.ObjectType<{
+    wsid: v.Type<string>;
+    timestamp: v.Optional<number>;
+}, undefined>]>, v.Type<import("./error.ts").ErrorMessage>, v.TupleType<[v.Type<"pong">, v.ObjectType<{}, undefined>]>, v.TupleType<[v.Type<"pokeStart">, v.ObjectType<{
+    pokeID: v.Type<string>;
+    baseCookie: v.UnionType<[v.Type<string>, v.Type<null>]>;
+    schemaVersions: v.Optional<{
+        minSupportedVersion: number;
+        maxSupportedVersion: number;
+    }>;
+    timestamp: v.Optional<number>;
+}, undefined>]>, v.TupleType<[v.Type<"pokePart">, v.ObjectType<{
+    pokeID: v.Type<string>;
+    lastMutationIDChanges: v.Optional<Record<string, number>>;
+    desiredQueriesPatches: v.Optional<Record<string, ({
+        ttl?: number | undefined;
+        op: "put";
+        hash: string;
+    } | {
+        op: "del";
+        hash: string;
+    } | {
+        op: "clear";
+    })[]>>;
+    gotQueriesPatch: v.Optional<({
+        ttl?: number | undefined;
+        op: "put";
+        hash: string;
+    } | {
+        op: "del";
+        hash: string;
+    } | {
+        op: "clear";
+    })[]>;
+    rowsPatch: v.Optional<({
+        op: "put";
+        tableName: string;
+        value: Readonly<Record<string, import("../../shared/src/json.ts").ReadonlyJSONValue | undefined>>;
+    } | {
+        merge?: import("../../shared/src/json.ts").ReadonlyJSONObject | undefined;
+        constrain?: string[] | undefined;
+        op: "update";
+        tableName: string;
+        id: Readonly<Record<string, string | number | boolean>>;
+    } | {
+        op: "del";
+        tableName: string;
+        id: Readonly<Record<string, string | number | boolean>>;
+    } | {
+        op: "clear";
+    })[]>;
+    mutationsPatch: v.Optional<({
+        op: "put";
+        mutation: {
+            id: {
+                id: number;
+                clientID: string;
+            };
+            result: {
+                message?: string | undefined;
+                details?: import("../../shared/src/json.ts").ReadonlyJSONValue | undefined;
+                error: "app";
+            } | {
+                details?: import("../../shared/src/json.ts").ReadonlyJSONValue | undefined;
+                error: "oooMutation" | "alreadyProcessed";
+            } | {
+                data?: import("../../shared/src/json.ts").ReadonlyJSONValue | undefined;
+            };
+        };
+    } | {
+        op: "del";
+        id: {
+            id: number;
+            clientID: string;
+        };
+    })[]>;
+}, undefined>]>, v.TupleType<[v.Type<"pokeEnd">, v.ObjectType<{
+    pokeID: v.Type<string>;
+    cookie: v.Type<string>;
+    cancel: v.Optional<boolean>;
+}, undefined>]>, v.TupleType<[v.Type<"pull">, v.ObjectType<{
+    cookie: v.Type<string>;
+    requestID: v.Type<string>;
+    lastMutationIDChanges: v.Type<Record<string, number>>;
+}, undefined>]>, v.TupleType<[v.Type<"deleteClients">, v.UnionType<[v.ObjectType<Readonly<{
+    clientIDs: v.Optional<readonly string[]>;
+    clientGroupIDs: v.Optional<readonly string[]>;
+}>, undefined>]>]>, v.TupleType<[v.Type<"pushResponse">, v.UnionType<[v.ObjectType<{
+    mutations: v.ArrayType<v.ObjectType<{
+        id: v.ObjectType<{
+            id: v.Type<number>;
+            clientID: v.Type<string>;
+        }, undefined>;
+        result: v.UnionType<[v.ObjectType<{
+            data: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>, v.UnionType<[v.ObjectType<{
+            error: v.Type<"app">;
+            message: v.Optional<string>;
+            details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>, v.ObjectType<{
+            error: v.UnionType<[v.Type<"oooMutation">, v.Type<"alreadyProcessed">]>;
+            details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>]>]>;
+    }, undefined>>;
+}, undefined>, v.UnionType<[v.ObjectType<{
+    error: v.Type<"unsupportedPushVersion">;
+    mutationIDs: v.Optional<{
+        id: number;
+        clientID: string;
+    }[]>;
+}, undefined>, v.ObjectType<{
+    error: v.Type<"unsupportedSchemaVersion">;
+    mutationIDs: v.Optional<{
+        id: number;
+        clientID: string;
+    }[]>;
+}, undefined>, v.ObjectType<{
+    error: v.Type<"http">;
+    status: v.Type<number>;
+    details: v.Type<string>;
+    mutationIDs: v.Optional<{
+        id: number;
+        clientID: string;
+    }[]>;
+}, undefined>, v.ObjectType<{
+    error: v.Type<"zeroPusher">;
+    details: v.Type<string>;
+    mutationIDs: v.Optional<{
+        id: number;
+        clientID: string;
+    }[]>;
+}, undefined>]>]>]>, v.TupleType<[v.Type<"inspect">, v.UnionType<[v.ObjectType<Omit<{
+    id: v.Type<string>;
+}, "value" | "op"> & {
+    op: v.Type<"queries">;
+    value: v.ArrayType<v.ObjectType<{
+        clientID: v.Type<string>;
+        queryID: v.Type<string>;
+        ast: v.Type<import("./ast.ts").AST | null>;
+        name: v.Type<string | null>;
+        args: v.Type<readonly import("../../shared/src/json.ts").ReadonlyJSONValue[] | null>;
+        got: v.Type<boolean>;
+        deleted: v.Type<boolean>;
+        ttl: v.Type<number>;
+        inactivatedAt: v.Type<number | null>;
+        rowCount: v.Type<number>;
+        metrics: v.Optional<{
+            'query-hydration-server-ms'?: number | undefined;
+            'query-update-server': [number, ...number[]];
+        } | null>;
+    }, undefined>>;
+}, undefined>, v.ObjectType<Omit<{
+    id: v.Type<string>;
+}, "value" | "op"> & {
+    op: v.Type<"metrics">;
+    value: v.ObjectType<{
+        'query-materialization-server': v.VariadicTupleType<[v.Type<number>], v.Type<number>, []>;
+        'query-update-server': v.VariadicTupleType<[v.Type<number>], v.Type<number>, []>;
+    }, undefined>;
+}, undefined>, v.ObjectType<Omit<{
+    id: v.Type<string>;
+}, "value" | "op"> & {
+    op: v.Type<"version">;
+    value: v.Type<string>;
+}, undefined>, v.ObjectType<Omit<{
+    id: v.Type<string>;
+}, "value" | "op"> & {
+    op: v.Type<"authenticated">;
+    value: v.Type<boolean>;
+}, undefined>, v.ObjectType<Omit<{
+    id: v.Type<string>;
+}, "value" | "op"> & {
+    op: v.Type<"analyze-query">;
+    value: v.ObjectType<{
+        warnings: v.ArrayType<v.Type<string>>;
+        syncedRows: v.Optional<Record<string, Readonly<Record<string, import("../../shared/src/json.ts").ReadonlyJSONValue | undefined>>[]>>;
+        syncedRowCount: v.Type<number>;
+        start: v.Type<number>;
+        end: v.Type<number>;
+        elapsed: v.Optional<number>;
+        afterPermissions: v.Optional<string>;
+        vendedRowCounts: v.Optional<Record<string, Record<string, number>>>;
+        vendedRows: v.Optional<Record<string, Record<string, Readonly<Record<string, import("../../shared/src/json.ts").ReadonlyJSONValue | undefined>>[]>>>;
+        sqlitePlans: v.Optional<Record<string, string[]>>;
+        readRows: v.Optional<Record<string, Record<string, Readonly<Record<string, import("../../shared/src/json.ts").ReadonlyJSONValue | undefined>>[]>>>;
+        readRowCountsByQuery: v.Optional<Record<string, Record<string, number>>>;
+        readRowCount: v.Optional<number>;
+        dbScansByQuery: v.Optional<Record<string, Record<string, number>>>;
+        joinPlans: v.Optional<({
+            type: "attempt-start";
+            attemptNumber: number;
+            totalAttempts: number;
+        } | {
+            type: "connection-costs";
+            attemptNumber: number;
+            costs: {
+                connection: string;
+                cost: number;
+                costEstimate: {
+                    limit?: number | undefined;
+                    startupCost: number;
+                    scanEst: number;
+                    cost: number;
+                    returnedRows: number;
+                    selectivity: number;
+                };
+                pinned: boolean;
+                constraints: Record<string, Record<string, unknown> | null>;
+                constraintCosts: Record<string, {
+                    limit?: number | undefined;
+                    startupCost: number;
+                    scanEst: number;
+                    cost: number;
+                    returnedRows: number;
+                    selectivity: number;
+                }>;
+            }[];
+        } | {
+            type: "connection-selected";
+            attemptNumber: number;
+            connection: string;
+            cost: number;
+            isRoot: boolean;
+        } | {
+            type: "constraints-propagated";
+            attemptNumber: number;
+            connectionConstraints: {
+                connection: string;
+                constraints: Record<string, Record<string, unknown> | null>;
+                constraintCosts: Record<string, {
+                    limit?: number | undefined;
+                    startupCost: number;
+                    scanEst: number;
+                    cost: number;
+                    returnedRows: number;
+                    selectivity: number;
+                }>;
+            }[];
+        } | {
+            type: "plan-complete";
+            attemptNumber: number;
+            totalCost: number;
+            flipPattern: number;
+            joinStates: {
+                join: string;
+                type: "semi" | "flipped" | "unflippable";
+            }[];
+        } | {
+            type: "plan-failed";
+            attemptNumber: number;
+            reason: string;
+        } | {
+            type: "best-plan-selected";
+            bestAttemptNumber: number;
+            totalCost: number;
+            flipPattern: number;
+            joinStates: {
+                join: string;
+                type: "semi" | "flipped" | "unflippable";
+            }[];
+        } | {
+            attemptNumber?: number | undefined;
+            filters?: import("./ast.ts").Condition | undefined;
+            ordering?: readonly (readonly [string, "desc" | "asc"])[] | undefined;
+            joinType?: "semi" | "flipped" | "unflippable" | undefined;
+            type: "node-cost";
+            nodeType: "join" | "connection" | "fan-out" | "fan-in" | "terminus";
+            node: string;
+            branchPattern: number[];
+            downstreamChildSelectivity: number;
+            costEstimate: {
+                limit?: number | undefined;
+                startupCost: number;
+                scanEst: number;
+                cost: number;
+                returnedRows: number;
+                selectivity: number;
+            };
+        } | {
+            attemptNumber?: number | undefined;
+            constraint?: Record<string, unknown> | null | undefined;
+            type: "node-constraint";
+            nodeType: "join" | "connection" | "fan-out" | "fan-in" | "terminus";
+            node: string;
+            branchPattern: number[];
+            from: string;
+        })[]>;
+    }, undefined>;
+}, undefined>, v.ObjectType<Omit<{
+    id: v.Type<string>;
+}, "value" | "op"> & {
+    op: v.Type<"error">;
+    value: v.Type<string>;
+}, undefined>]>]>, v.TupleType<[v.Type<"transformError">, v.ArrayType<v.UnionType<[v.ObjectType<{
+    error: v.Type<"app">;
+    id: v.Type<string>;
+    name: v.Type<string>;
+    message: v.Optional<string>;
+    details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+}, undefined>, v.ObjectType<{
+    error: v.Type<"parse">;
+    id: v.Type<string>;
+    name: v.Type<string>;
+    message: v.Type<string>;
+    details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+}, undefined>]>>]>]>;
+export type Downstream = v.Infer<typeof downstreamSchema>;
+//# sourceMappingURL=down.d.ts.map

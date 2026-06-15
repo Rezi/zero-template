@@ -1,0 +1,30 @@
+import { assert } from "../../../shared/src/asserts.js";
+import { assertLocalMetaDD31, commitFromHash, isLocalMetaDD31 } from "./commit.js";
+import { newWriteLocal } from "./write.js";
+import { WriteTransactionImpl } from "../transactions.js";
+//#region ../replicache/src/db/rebase.ts
+async function rebaseMutation(mutation, dagWrite, basisHash, mutators, lc, mutationClientID, formatVersion, zeroData) {
+	const localMeta = mutation.meta;
+	const name = localMeta.mutatorName;
+	if (isLocalMetaDD31(localMeta)) assert(localMeta.clientID === mutationClientID, "mutationClientID must match clientID of LocalMeta");
+	const maybeMutatorImpl = mutators[name];
+	if (!maybeMutatorImpl) lc.error?.(`Cannot rebase unknown mutator ${name}`);
+	const mutatorImpl = maybeMutatorImpl || (async () => {});
+	const args = localMeta.mutatorArgsJSON;
+	const nextMutationID = await (await commitFromHash(basisHash, dagWrite)).getNextMutationID(mutationClientID, dagWrite);
+	if (nextMutationID !== localMeta.mutationID) throw new Error(`Inconsistent mutation ID: original: ${localMeta.mutationID}, next: ${nextMutationID} - mutationClientID: ${mutationClientID} mutatorName: ${name}`);
+	if (formatVersion >= 5) assertLocalMetaDD31(localMeta);
+	const dbWrite = await newWriteLocal(basisHash, name, args, mutation.chunk.hash, dagWrite, localMeta.timestamp, mutationClientID, formatVersion);
+	await mutatorImpl(new WriteTransactionImpl(mutationClientID, await dbWrite.getMutationID(), "rebase", zeroData, dbWrite, lc), args);
+	return dbWrite;
+}
+async function rebaseMutationAndPutCommit(mutation, dagWrite, basis, mutators, lc, mutationClientID, formatVersion, zeroData) {
+	return (await rebaseMutation(mutation, dagWrite, basis, mutators, lc, mutationClientID, formatVersion, zeroData)).putCommit();
+}
+async function rebaseMutationAndCommit(mutation, dagWrite, basis, headName, mutators, lc, mutationClientID, formatVersion, zeroData) {
+	return (await rebaseMutation(mutation, dagWrite, basis, mutators, lc, mutationClientID, formatVersion, zeroData)).commit(headName);
+}
+//#endregion
+export { rebaseMutationAndCommit, rebaseMutationAndPutCommit };
+
+//# sourceMappingURL=rebase.js.map

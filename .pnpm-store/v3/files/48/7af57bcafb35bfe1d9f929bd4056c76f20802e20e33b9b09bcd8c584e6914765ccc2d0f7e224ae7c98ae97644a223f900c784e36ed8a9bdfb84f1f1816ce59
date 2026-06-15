@@ -1,0 +1,5 @@
+import type { ClientSchema } from '../../../../zero-protocol/src/client-schema.ts';
+import type { LiteAndZqlSpec, LiteTableSpec } from '../../db/specs.ts';
+import { type ShardID } from '../../types/shards.ts';
+export declare function checkClientSchema(shardID: ShardID, clientSchema: ClientSchema, tableSpecs: Map<string, LiteAndZqlSpec>, fullTables: Map<string, LiteTableSpec>): void;
+//# sourceMappingURL=client-schema.d.ts.map

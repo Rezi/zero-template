@@ -1,0 +1,1443 @@
+import { assert, unreachable } from "../../../shared/src/asserts.js";
+import { getBrowserGlobal, mustGetBrowserGlobal } from "../../../shared/src/browser-env.js";
+import { AbortError } from "../../../shared/src/abort-error.js";
+import { sleep, sleepWithAbort } from "../../../shared/src/sleep.js";
+import { parse } from "../../../shared/src/valita.js";
+import "../../../replicache/src/deleted-clients.js";
+import { localNavigator } from "../../../shared/src/navigator.js";
+import { getKVStoreProvider } from "../../../replicache/src/get-kv-store-provider.js";
+import { IDBDatabasesStore } from "../../../replicache/src/persist/idb-databases-store.js";
+import { dropDatabase } from "../../../replicache/src/persist/collect-idb-databases.js";
+import { getErrorMessage } from "../../../shared/src/error.js";
+import { must } from "../../../shared/src/must.js";
+import { ClientNotFound } from "../../../zero-protocol/src/error-kind-enum.js";
+import { ProtocolError } from "../../../zero-protocol/src/error.js";
+import { h64 } from "../../../shared/src/hash.js";
+import "../../../zero-protocol/src/client-schema.js";
+import { clientSchemaFrom } from "../../../zero-schema/src/builder/schema-builder.js";
+import { clientToServer } from "../../../zero-schema/src/name-mapper.js";
+import { isMutatorRegistry, iterateMutators } from "../../../zql/src/mutate/mutator-registry.js";
+import { createRunnableBuilder } from "../../../zql/src/query/create-builder.js";
+import "../../../zql/src/query/query.js";
+import { addContextToQuery } from "../../../zql/src/query/query-registry.js";
+import { Closed, Connected, Connecting, Disconnected, Error as Error$1, NeedsAuth } from "./connection-status-enum.js";
+import { getDocumentVisibilityWatcher } from "../../../shared/src/document-visible.js";
+import { ReplicacheImpl } from "../../../replicache/src/replicache-impl.js";
+import "../../../replicache/src/impl.js";
+import { promiseRace } from "../../../shared/src/promise-race.js";
+import { emptyFunction } from "../../../shared/src/sentinels.js";
+import { Subscribable } from "../../../shared/src/subscribable.js";
+import { encodeSecProtocols } from "../../../zero-protocol/src/connect.js";
+import { CRUD, Custom } from "../../../zero-protocol/src/mutation-type-enum.js";
+import { mapCRUD } from "../../../zero-protocol/src/mutation.js";
+import { nullableVersionSchema } from "../../../zero-protocol/src/version.js";
+import { downstreamSchema } from "../../../zero-protocol/src/down.js";
+import "../../../zero-protocol/src/protocol-version.js";
+import { isClientMetric } from "../../../zql/src/query/metrics-delegate.js";
+import { nanoid } from "../util/nanoid.js";
+import { send } from "../util/socket.js";
+import { ActiveClientsManager } from "./active-clients-manager.js";
+import { AbruptClose, CleanClose, ClientClosed, ConnectTimeout, Hidden, Internal, InvalidMessage, NoSocketOrigin, PingTimeout, PullTimeout, UnexpectedBaseCookie } from "./client-error-kind-enum.js";
+import { ClientError, NO_STATUS_TRANSITION, getBackoffParams, getErrorConnectionTransition, isAuthError, isClientError, isServerError } from "./error.js";
+import { ConnectionManager, throwIfConnectionError } from "./connection-manager.js";
+import { ConnectionImpl } from "./connection.js";
+import { IVMSourceBranch } from "./ivm-branch.js";
+import { ZeroContext } from "./context.js";
+import { addTableCRUDProperties, makeCRUDMutateBatch } from "./crud.js";
+import { DeleteClientsManager } from "./delete-clients-manager.js";
+import { shouldEnableAnalytics } from "./enable-analytics.js";
+import { appendPath, toWSString } from "./http-string.js";
+import { Inspector } from "./inspector/inspector.js";
+import { version } from "./version.js";
+import { createLogOptions } from "./log-options.js";
+import { addCustomMutatorsProperties } from "./make-mutate-property.js";
+import { makeReplicacheMutators } from "./make-replicache-mutators.js";
+import { DID_NOT_CONNECT_VALUE, MetricManager, REPORT_INTERVAL_MS, getLastConnectErrorValue, shouldReportConnectError } from "./metrics.js";
+import { MutationTracker } from "./mutation-tracker.js";
+import { MutatorProxy } from "./mutator-proxy.js";
+import { QueryManager } from "./query-manager.js";
+import { reloadScheduled, reloadWithReason, reportReloadReason, resetBackoff } from "./reload-error-handler.js";
+import { getServer } from "./server-option.js";
+import { PokeHandler } from "./zero-poke-handler.js";
+import { ZeroRep, fromReplicacheAuthToken, toReplicacheAuthToken } from "./zero-rep.js";
+import { resolver } from "@rocicorp/resolver";
+import { LogContext } from "@rocicorp/logger";
+var RUN_LOOP_INTERVAL_MS = 5e3;
+/**
+* Default timeout for ping operations. Controls both:
+* - How long to wait in idle before sending a ping
+* - How long to wait for a pong response
+*/
+var DEFAULT_PING_TIMEOUT_MS = 5e3;
+/**
+* The amount of time we wait for a pull response before we consider a pull
+* request timed out.
+*/
+var PULL_TIMEOUT_MS = 5e3;
+var DEFAULT_DISCONNECT_HIDDEN_DELAY_MS = 300 * 1e3;
+/**
+* The amount of time we allow for continuous connecting attempts before
+* transitioning to disconnected state.
+*/
+var DEFAULT_DISCONNECT_TIMEOUT_MS = 60 * 1e3;
+/**
+* The amount of time we wait for a connection to be established before we
+* consider it timed out.
+*/
+var CONNECT_TIMEOUT_MS = 1e4;
+var CHECK_CONNECTIVITY_ON_ERROR_FREQUENCY = 6;
+var NULL_LAST_MUTATION_ID_SENT = {
+	clientID: "",
+	id: -1
+};
+var DEFAULT_QUERY_CHANGE_THROTTLE_MS = 10;
+function convertOnUpdateNeededReason(reason) {
+	return { type: reason.type };
+}
+function updateNeededReloadReasonMessage(reason) {
+	const { type } = reason;
+	let reasonMsg = "";
+	switch (type) {
+		case "NewClientGroup":
+			reasonMsg = "This client could not sync with a newer client. This is probably due to another tab loading a newer incompatible version of the app's code.";
+			break;
+		case "VersionNotSupported":
+			reasonMsg = "The server no longer supports this client's protocol version.";
+			break;
+		case "SchemaVersionNotSupported":
+			reasonMsg = "Client and server schemas incompatible.";
+			break;
+		default: unreachable(type);
+	}
+	if (reason.message) reasonMsg += " " + reason.message;
+	return reasonMsg;
+}
+var serverAheadReloadReason = `Server reported that client is ahead of server. This probably happened because the server is in development mode and restarted. Currently when this happens, the dev server loses its state and on reconnect sees the client as ahead. If you see this in other cases, it may be a bug in Zero.`;
+function onClientStateNotFoundServerReason(serverErrMsg) {
+	return `Server could not find state needed to synchronize this client. ${serverErrMsg}`;
+}
+var ON_CLIENT_STATE_NOT_FOUND_REASON_CLIENT = "The local persistent state needed to synchronize this client has been garbage collected.";
+var CLOSE_CODE_NORMAL = 1e3;
+var Zero = class Zero {
+	version = version;
+	#rep;
+	#server;
+	userID;
+	storageKey;
+	#lc;
+	#logOptions;
+	#enableAnalytics;
+	#clientSchema;
+	#pokeHandler;
+	#queryManager;
+	#ivmMain;
+	#clientToServer;
+	#deleteClientsManager;
+	#mutationTracker;
+	/**
+	* The queries we sent when inside the sec-protocol header when establishing a connection.
+	* More queries could be registered while we're waiting for the 'connected' message
+	* to come back from the server. To understand what queries we need to send
+	* to the server, we diff the `initConnectionQueries` with the current set of desired queries.
+	*
+	* If this is set to `undefined` that means no queries were sent inside the `sec-protocol` header
+	* and an `initConnection` message must be sent to the server after receiving the `connected` message.
+	*/
+	#initConnectionQueries;
+	/**
+	* We try to send the deleted clients and (client groups) as part of the
+	* sec-protocol header. If we can't because the header would get too large we
+	* keep track of the deleted clients and send them after the connection is
+	* established.
+	*/
+	#deletedClients;
+	#lastMutationIDSent = NULL_LAST_MUTATION_ID_SENT;
+	#onPong = () => void 0;
+	#onlineManager;
+	#onUpdateNeeded;
+	#onClientStateNotFound;
+	#connectCookie = null;
+	#connectedCount = 0;
+	#messageCount = 0;
+	#connectedAt = 0;
+	#connectErrorCount = 0;
+	#abortPingTimeout = () => {};
+	#forceEnableRefresh = false;
+	/**
+	* The timeout in milliseconds for ping operations. Controls both:
+	* - How long to wait in idle before sending a ping
+	* - How long to wait for a pong response
+	*
+	* Total time to detect a dead connection is 2 × pingTimeoutMs.
+	*
+	* The new value will take effect on the next ping cycle.
+	*/
+	pingTimeoutMs;
+	#zeroContext;
+	#pendingPullsByRequestID = /* @__PURE__ */ new Map();
+	#lastMutationIDReceived = 0;
+	#socket = void 0;
+	#socketResolver = resolver();
+	/**
+	* Utility promise that resolves when the socket transitions to connected.
+	* It rejects if we hit an error or timeout before the connected message.
+	* Used by push/pull helpers to queue work until the connection is usable.
+	*/
+	#connectResolver = resolver();
+	#closeAbortController = new AbortController();
+	#visibilityWatcher;
+	#connectionManager;
+	#connection;
+	#activeClientsManager;
+	#inspector;
+	#connectStart = void 0;
+	#totalToConnectStart = void 0;
+	#options;
+	#kvStore;
+	/**
+	* Query builders for each table in the schema.
+	*
+	* @deprecated Use {@linkcode createBuilder} to create query builders instead.
+	*/
+	query;
+	#metrics;
+	#reload = () => getBrowserGlobal("location")?.reload();
+	/**
+	* Constructs a new Zero client.
+	*/
+	constructor(options) {
+		const { userID, storageKey, onOnlineChange, onUpdateNeeded, onClientStateNotFound, hiddenTabDisconnectDelay = DEFAULT_DISCONNECT_HIDDEN_DELAY_MS, pingTimeoutMs = DEFAULT_PING_TIMEOUT_MS, disconnectTimeoutMs = DEFAULT_DISCONNECT_TIMEOUT_MS, schema, batchViewUpdates = (applyViewUpdates) => applyViewUpdates(), maxRecentQueries = 0, slowMaterializeThreshold = 5e3 } = options;
+		if (userID === "") throw new ClientError({
+			kind: Internal,
+			message: "ZeroOptions.userID should not be empty. Omit it entirely for logged-out clients."
+		});
+		this.#checkAuthValid(userID ?? void 0, options.auth);
+		const server = getServer(options.cacheURL ?? options.server);
+		this.#enableAnalytics = shouldEnableAnalytics(server, false);
+		let { kvStore = "idb" } = options;
+		if (kvStore === "idb") {
+			if (!getBrowserGlobal("indexedDB")) {
+				console.warn("IndexedDB is not supported in this environment. Falling back to memory storage.");
+				kvStore = "mem";
+			}
+		}
+		if (hiddenTabDisconnectDelay < 0) throw new ClientError({
+			kind: Internal,
+			message: "ZeroOptions.hiddenTabDisconnectDelay must not be negative."
+		});
+		this.#kvStore = kvStore;
+		this.pingTimeoutMs = pingTimeoutMs;
+		this.#onlineManager = new OnlineManager();
+		if (onOnlineChange) this.#onlineManager.subscribe(onOnlineChange);
+		this.#options = options;
+		this.#logOptions = this.#createLogOptions({
+			consoleLogLevel: options.logLevel ?? "warn",
+			server: null,
+			enableAnalytics: this.#enableAnalytics,
+			consoleLogSink: options.logSink
+		});
+		const logOptions = this.#logOptions;
+		this.#connectionManager = new ConnectionManager({ disconnectTimeout: disconnectTimeoutMs });
+		const syncConnectionState = (state) => {
+			this.#onlineManager.setOnline(state.name === Connected);
+			if (state.name === "closed") this.#queryManager.handleClosed(state.reason);
+		};
+		syncConnectionState(this.#connectionManager.state);
+		this.#connectionManager.subscribe(syncConnectionState);
+		const sink = logOptions.logSink;
+		const lc = new LogContext(logOptions.logLevel, {}, sink);
+		this.#mutationTracker = new MutationTracker(lc, (upTo) => this.#send(["ackMutationResponses", upTo]), (error) => this.#disconnect(lc, error));
+		this.#ivmMain = new IVMSourceBranch(schema.tables);
+		const { enableLegacyQueries = false } = schema;
+		const replicacheMutators = makeReplicacheMutators(schema, options.mutators, this.context, lc);
+		this.storageKey = storageKey ?? "";
+		const { clientSchema, hash } = clientSchemaFrom(schema);
+		this.#clientSchema = clientSchema;
+		const hashedKey = h64(JSON.stringify({
+			storageKey: this.storageKey,
+			mutateUrl: options.mutateURL ?? "",
+			queryUrl: options.queryURL ?? options.getQueriesURL ?? ""
+		})).toString(36);
+		const storageScopedUserID = userID ?? "__anonymous__";
+		const replicacheOptions = {
+			schemaVersion: `51.${hash}`,
+			logLevel: logOptions.logLevel,
+			logSinks: [logOptions.logSink],
+			mutators: replicacheMutators,
+			name: `zero-${storageScopedUserID}-${hashedKey}`,
+			pusher: (req, reqID) => this.#pusher(req, reqID),
+			puller: (req, reqID) => this.#puller(req, reqID),
+			pushDelay: 0,
+			requestOptions: {
+				maxDelayMs: 0,
+				minDelayMs: 0
+			},
+			licenseKey: "zero-client-static-key",
+			kvStore
+		};
+		this.#zeroContext = new ZeroContext(lc, this.#ivmMain, (ast, ttl, gotCallback) => {
+			if (enableLegacyQueries) return this.#queryManager.addLegacy(ast, ttl, gotCallback);
+			return emptyFunction;
+		}, (ast, customQueryID, ttl, gotCallback) => this.#queryManager.addCustom(ast, customQueryID, ttl, gotCallback), (ast, ttl) => {
+			if (enableLegacyQueries) this.#queryManager.updateLegacy(ast, ttl);
+		}, (customQueryID, ttl) => this.#queryManager.updateCustom(customQueryID, ttl), () => this.#queryManager.flushBatch(), batchViewUpdates, this.#addMetric, assertValidRunOptions);
+		this.query = createRunnableBuilder(this.#zeroContext, schema);
+		const rep = new ReplicacheImpl(replicacheOptions, {
+			enableClientGroupForking: false,
+			enableMutationRecovery: false,
+			enablePullAndPushInOpen: false,
+			enableRefresh: () => this.#enableRefresh(),
+			onClientsDeleted: (deletedClients) => this.#deleteClientsManager.onClientsDeleted(deletedClients),
+			zero: new ZeroRep(this.#zeroContext, this.#ivmMain, options.mutators !== void 0, this.#mutationTracker)
+		});
+		this.#rep = rep;
+		this.#server = server;
+		this.userID = userID ?? void 0;
+		this.#lc = lc.withContext("clientID", rep.clientID);
+		if (userID === "anon" && !options.auth) this.#lc.warn?.("ZeroOptions.userID \"anon\" is deprecated for logged-out clients. Omit it entirely for logged-out clients.");
+		this.#connection = new ConnectionImpl(this.#connectionManager, this.#lc, (auth) => this.#setAuth(auth));
+		this.#mutationTracker.setClientIDAndWatch(rep.clientID, rep.experimentalWatch.bind(rep));
+		this.#activeClientsManager = makeActiveClientsManager(rep.clientGroupID, this.clientID, this.#closeAbortController.signal, (clientID, clientGroupID) => this.#deleteClientsManager.onClientsDeleted([{
+			clientGroupID,
+			clientID
+		}]));
+		const onUpdateNeededCallback = (reason) => {
+			if (onUpdateNeeded) onUpdateNeeded(reason);
+			else reloadWithReason(this.#lc, this.#reload, reason.type, updateNeededReloadReasonMessage(reason));
+		};
+		this.#onUpdateNeeded = onUpdateNeededCallback;
+		this.#rep.onUpdateNeeded = (reason) => {
+			onUpdateNeededCallback(convertOnUpdateNeededReason(reason));
+		};
+		this.#onClientStateNotFound = (kind, message) => {
+			if (onClientStateNotFound) onClientStateNotFound();
+			else reloadWithReason(this.#lc, this.#reload, kind, message);
+		};
+		this.#rep.onClientStateNotFound = () => {
+			this.#onClientStateNotFound(ClientNotFound, ON_CLIENT_STATE_NOT_FOUND_REASON_CLIENT);
+		};
+		const mutatorProxy = new MutatorProxy(this.#lc, this.#connectionManager, this.#mutationTracker);
+		const { mutators } = options;
+		const registeredMutators = new Set(isMutatorRegistry(mutators) ? iterateMutators(mutators) : void 0);
+		const callableMutate = (mr) => {
+			if (!registeredMutators.has(mr.mutator)) throw new Error(`Mutator "${mr.mutator.mutatorName}" is not registered. Mutators must be registered with the Zero constructor before use.`);
+			const repMutator = rep.mutate[mr.mutator.mutatorName];
+			return mutatorProxy.wrapCustomMutator(mr.mutator.mutatorName, repMutator)(mr.args);
+		};
+		const mutateBatch = makeCRUDMutateBatch(schema, rep.mutate);
+		if (schema.enableLegacyMutators) addTableCRUDProperties(schema, callableMutate, rep.mutate);
+		if (mutators && !isMutatorRegistry(mutators)) addCustomMutatorsProperties(mutators, mutatorProxy, callableMutate, rep.mutate);
+		this.mutate = callableMutate;
+		this.mutateBatch = mutateBatch;
+		this.#queryManager = new QueryManager(this.#lc, this.#mutationTracker, rep.clientID, schema.tables, (msg) => {
+			let body = msg[1];
+			if (this.#options.getTraceparent) body = {
+				...msg[1],
+				traceparent: this.#options.getTraceparent?.()
+			};
+			this.#send([msg[0], body]);
+		}, rep.experimentalWatch.bind(rep), maxRecentQueries, options.queryChangeThrottleMs ?? DEFAULT_QUERY_CHANGE_THROTTLE_MS, slowMaterializeThreshold, (error) => {
+			this.#disconnect(lc, error);
+		});
+		this.#clientToServer = clientToServer(schema.tables);
+		this.#deleteClientsManager = new DeleteClientsManager((msg) => this.#send(msg), rep.perdag, this.#lc, this.#rep.clientGroupID, rep.clientID);
+		reportReloadReason(this.#lc);
+		this.#metrics = new MetricManager({
+			reportIntervalMs: REPORT_INTERVAL_MS,
+			host: getBrowserGlobal("location")?.host ?? "",
+			source: "client",
+			reporter: this.#enableAnalytics ? (allSeries) => this.#reportMetrics(allSeries) : () => Promise.resolve(),
+			lc: this.#lc
+		});
+		this.#metrics.tags.push(`version:${this.version}`);
+		this.#pokeHandler = new PokeHandler((poke) => this.#rep.poke(poke), (e) => this.#onPokeError(e), rep.clientID, schema, this.#lc, this.#mutationTracker);
+		this.#visibilityWatcher = getDocumentVisibilityWatcher(getBrowserGlobal("document"), hiddenTabDisconnectDelay, this.#closeAbortController.signal);
+		this.#runLoop();
+		this.#expose();
+	}
+	#enableRefresh() {
+		return this.#forceEnableRefresh || !this.#connectionManager.is("connected") && !this.#connectionManager.is("connecting");
+	}
+	#expose() {
+		const g = globalThis;
+		if (g.__zero === void 0) g.__zero = this;
+		else if (g.__zero instanceof Zero) {
+			const prev = g.__zero;
+			g.__zero = {
+				[prev.clientID]: prev,
+				[this.clientID]: this
+			};
+		} else g.__zero[this.clientID] = this;
+	}
+	#unexpose() {
+		const g = globalThis;
+		assert(g.__zero !== void 0, "No global zero instance found");
+		if (g.__zero instanceof Zero) {
+			assert(g.__zero === this, "Global zero instance does not match this instance");
+			delete g.__zero;
+		} else {
+			delete g.__zero[this.clientID];
+			if (Object.entries(g.__zero).length === 1) g.__zero = Object.values(g.__zero)[0];
+		}
+	}
+	#send(msg) {
+		if (this.#socket && this.#connectionManager.is("connected")) send(this.#socket, msg);
+	}
+	#createLogOptions(options) {
+		return createLogOptions(options);
+	}
+	/**
+	* Preloads data for a query into the cache, without keeping it in memory.
+	*
+	* This function is useful when you want to populate the cache ahead of time,
+	* for example after login, to avoid a flash of loading screen on the next page.
+	*
+	* Returns an object with two properties:
+	* - `complete`: a Promise that resolves when the data is loaded
+	* - `cleanup`: a function that can be called to cancel the preload
+	*
+	* @example
+	* ```ts
+	* const {complete, cleanup} = zero.preload(userQuery);
+	* await complete;
+	* // Now the data is cached and can be used immediately
+	* ```
+	*/
+	preload(query, options) {
+		return this.#zeroContext.preload(addContextToQuery(query, this.context), options);
+	}
+	/**
+	* Executes a query once and returns the results.
+	*
+	* By default, waits for any pending data to sync before running the query.
+	* This ensures fresh results from the server. Use `{type: 'unknown'}` to
+	* run immediately with whatever data is available locally.
+	*
+	* @param query - The query to execute
+	* @param runOptions - Options controlling query execution
+	* @returns A Promise resolving to the query results
+	*
+	* @example
+	* ```ts
+	* // Wait for server sync
+	* const users = await zero.run(userQuery);
+	*
+	* // Run with local data only
+	* const cachedUsers = await zero.run(userQuery, {type: 'unknown'});
+	* ```
+	*/
+	run(query, runOptions) {
+		return this.#zeroContext.run(addContextToQuery(query, this.context), runOptions);
+	}
+	get context() {
+		return this.#options.context;
+	}
+	materialize(query, factoryOrOptions, maybeOptions) {
+		const q = addContextToQuery(query, this.context);
+		let factory;
+		let options;
+		if (typeof factoryOrOptions === "function") {
+			factory = factoryOrOptions;
+			options = maybeOptions;
+		} else options = factoryOrOptions;
+		return this.#zeroContext.materialize(q, factory, options);
+	}
+	/**
+	* The server URL that this Zero instance is configured with.
+	*/
+	get server() {
+		return this.#server;
+	}
+	/**
+	* The name of the IndexedDB database in which the data of this
+	* instance of Zero is stored.
+	*/
+	get idbName() {
+		return this.#rep.idbName;
+	}
+	/**
+	* The schema version of the data understood by this application.
+	* See [[ZeroOptions.schemaVersion]].
+	*/
+	get schemaVersion() {
+		return this.#rep.schemaVersion;
+	}
+	/**
+	* The schema passed into Zero when it was constructed.
+	*
+	* This can be paired with the inspector API to explore the client cache for
+	* debugging or tooling. The inspector exposes the raw key/value map as well
+	* as the per-table rows that back `zero.query[tableName].run()`.
+	*
+	* ```ts
+	* const inspector = __zero.inspector;
+	* const client = inspector.client;
+	*
+	* console.log('client map:', await client.map());
+	*
+	* for (const tableName of Object.keys(__zero.schema.tables)) {
+	*   console.table(await client.rows(tableName));
+	* }
+	* ```
+	*/
+	get schema() {
+		return this.#options.schema;
+	}
+	/**
+	* The client ID for this instance of Zero. Each instance
+	* gets a unique client ID.
+	*/
+	get clientID() {
+		return this.#rep.clientID;
+	}
+	get clientGroupID() {
+		return this.#rep.clientGroupID;
+	}
+	/**
+	* Use to execute mutations. The primary flow is to call
+	* `zero.mutate(mutationRequest)` with your registered custom mutators:
+	*
+	* ```ts
+	* await zero.mutate(
+	*   mutators.myMutator({id: '1', title: 'First issue'}),
+	* );
+	* ```
+	*
+	* When `schema.enableLegacyMutators` is true, legacy conveniences are added:
+	* - Table-scoped CRUD helpers, e.g. `zero.mutate.issue.create` / `set` / `update` / `delete`
+	* - Your custom mutators exposed directly on `zero.mutate`
+	*
+	* ```ts
+	* await zero.mutate.issue.create({id: '1', title: 'First issue', priority: 'high'});
+	* await zero.mutate.comment.create({id: '1', text: 'First comment', issueID: '1'});
+	* await zero.mutate.myMutator({id: '1', title: 'First issue'});
+	* ```
+	*
+	* The `update` methods support partials. Unspecified or `undefined` fields
+	* are left unchanged:
+	*
+	* ```ts
+	* // Priority left unchanged.
+	* await zero.mutate.issue.update({id: '1', title: 'Updated title'});
+	* ```
+	*/
+	mutate;
+	/**
+	* Provides a way to batch multiple CRUD mutations together:
+	*
+	* ```ts
+	* await zero.mutateBatch(m => {
+	*   await m.issue.create({id: '1', title: 'First issue'});
+	*   await m.comment.create({id: '1', text: 'First comment', issueID: '1'});
+	* });
+	* ```
+	*
+	* Batch sends all mutations in a single transaction. If one fails, all are
+	* rolled back together. Batch can also be more efficient than making many
+	* individual mutations.
+	*
+	* `mutateBatch` is not allowed inside another `mutateBatch` call. Doing so
+	* will throw an error.
+	*
+	* @deprecated Use `zero.mutate(mutationRequest)`
+	*/
+	mutateBatch;
+	/**
+	* The connection API for managing Zero's connection lifecycle.
+	*
+	* Use this to monitor connection state and manually control connections.
+	*
+	* @example
+	* ```ts
+	* // Subscribe to connection state changes
+	* z.connection.state.subscribe(state => {
+	*   console.log('Connection state:', state.name);
+	* });
+	*
+	* // Manually resume connection from error state
+	* await z.connection.connect();
+	* ```
+	*/
+	get connection() {
+		return this.#connection;
+	}
+	/**
+	* Whether this Zero instance has been closed.
+	*
+	* Once a Zero instance has been closed it no longer syncs, you can no
+	* longer query or mutate data with it, and its query views stop updating.
+	*/
+	get closed() {
+		return this.#connectionManager.is(Closed);
+	}
+	/**
+	* Closes this Zero instance.
+	*
+	* Once a Zero instance has been closed it no longer syncs, you can no
+	* longer query or mutate data with it, and its query views stop updating.
+	*/
+	async close() {
+		const lc = this.#lc.withContext("close");
+		try {
+			if (this.closed) {
+				lc.debug?.("close() called on already closed instance");
+				return;
+			}
+			lc.debug?.("Closing Zero instance. Stack:", (/* @__PURE__ */ new Error()).stack);
+			this.#onlineManager.cleanup();
+			if (!this.#connectionManager.is("disconnected")) this.#disconnect(lc, new ClientError({
+				kind: ClientClosed,
+				message: "Zero instance closed by user"
+			}), CLOSE_CODE_NORMAL);
+			lc.debug?.("Aborting closeAbortController due to close()");
+			this.#closeAbortController.abort();
+			this.#metrics.stop();
+			const ret = await this.#rep.close();
+			this.#unexpose();
+			return ret;
+		} catch (e) {
+			lc.error?.("Error closing Zero instance", e);
+			throw e;
+		} finally {
+			this.#connectionManager.closed();
+		}
+	}
+	#onMessage = (e) => {
+		const lc = this.#lc;
+		lc.debug?.("received message", e.data);
+		if (this.closed) {
+			lc.debug?.("ignoring message because already closed");
+			return;
+		}
+		let downMessage;
+		const { data } = e;
+		try {
+			downMessage = parse(JSON.parse(data), downstreamSchema, "passthrough");
+		} catch (e) {
+			const invalidMessageError = new ClientError({
+				kind: InvalidMessage,
+				message: `Invalid message received from server: ${getErrorMessage(e)}${data}`
+			}, { cause: e });
+			this.#disconnect(lc, invalidMessageError);
+			return;
+		}
+		this.#messageCount++;
+		const msgType = downMessage[0];
+		try {
+			switch (msgType) {
+				case "connected": return this.#handleConnectedMessage(lc, downMessage);
+				case "error": return this.#handleErrorMessage(lc, downMessage);
+				case "pong":
+					resetBackoff();
+					return this.#onPong();
+				case "pokeStart": return this.#handlePokeStart(lc, downMessage);
+				case "pokePart":
+					if (downMessage[1].rowsPatch) resetBackoff();
+					return this.#handlePokePart(lc, downMessage);
+				case "pokeEnd": return this.#handlePokeEnd(lc, downMessage);
+				case "pull": return this.#handlePullResponse(lc, downMessage);
+				case "deleteClients": return this.#deleteClientsManager.clientsDeletedOnServer(downMessage[1]);
+				case "pushResponse": return this.#mutationTracker.processPushResponse(downMessage[1]);
+				case "transformError":
+					this.#queryManager.handleTransformErrors(downMessage[1]);
+					break;
+				case "inspect": break;
+				default: unreachable(msgType);
+			}
+		} catch (e) {
+			lc.error?.("Unhandled error in onOpen", e);
+			this.#disconnect(lc, new ClientError({
+				kind: Internal,
+				message: getErrorMessage(e)
+			}, { cause: e }));
+			return;
+		}
+	};
+	#onOpen = () => {
+		let lc = this.#lc;
+		try {
+			assert(this.#socket, "Socket is not set before onOpen");
+			lc = addWebSocketIDFromSocketToLogContext(this.#socket, lc);
+			if (this.#connectStart === void 0) throw new Error("Got open event but connect start time is undefined.");
+			else {
+				const timeToOpenMs = Date.now() - this.#connectStart;
+				lc.info?.("Got socket open event", {
+					navigatorOnline: localNavigator?.onLine,
+					timeToOpenMs
+				});
+			}
+		} catch (e) {
+			lc.error?.("Unhandled error in onOpen", e);
+			this.#disconnect(lc, new ClientError({
+				kind: Internal,
+				message: getErrorMessage(e)
+			}, { cause: e }));
+		}
+	};
+	#onClose = (e) => {
+		let lc = this.#lc;
+		try {
+			assert(this.#socket, "Socket is not set before onClose");
+			lc = addWebSocketIDFromSocketToLogContext(this.#socket, lc);
+			const { code, reason, wasClean } = e;
+			if (code <= 1001 || code === 1006) lc.info?.("Got socket close event", {
+				code,
+				reason,
+				wasClean
+			});
+			else lc.error?.("Got unexpected socket close event", {
+				code,
+				reason,
+				wasClean
+			});
+			const closeError = new ClientError(wasClean ? {
+				kind: CleanClose,
+				message: "WebSocket connection closed cleanly"
+			} : {
+				kind: AbruptClose,
+				message: "WebSocket connection closed abruptly"
+			});
+			this.#connectResolver.reject(closeError);
+			this.#disconnect(lc, closeError);
+		} catch (e) {
+			lc.error?.("Unhandled error in onClose", e);
+			const internalError = new ClientError({
+				kind: Internal,
+				message: getErrorMessage(e)
+			}, { cause: e });
+			this.#connectResolver.reject(internalError);
+			this.#disconnect(lc, internalError);
+		}
+	};
+	async #handleErrorMessage(lc, downMessage) {
+		const [, { kind, message }] = downMessage;
+		if (kind === "MutationRateLimited") {
+			this.#lastMutationIDSent = NULL_LAST_MUTATION_ID_SENT;
+			lc.error?.(kind, "Mutation rate limited", { message });
+			return;
+		}
+		lc.info?.(`${kind}: ${message}}`);
+		const error = new ProtocolError(downMessage[1]);
+		lc.error?.(`${error.kind}:\n\n${error.errorBody.message}`, error);
+		lc.debug?.("Rejecting connect resolver due to error", error);
+		this.#connectResolver.reject(error);
+		this.#disconnect(lc, error);
+		if (kind === "VersionNotSupported") this.#onUpdateNeeded({
+			type: kind,
+			message
+		});
+		else if (kind === "SchemaVersionNotSupported") {
+			await this.#rep.disableClientGroup();
+			this.#onUpdateNeeded({
+				type: "SchemaVersionNotSupported",
+				message
+			});
+		} else if (kind === "ClientNotFound") {
+			await this.#rep.disableClientGroup();
+			this.#onClientStateNotFound(kind, onClientStateNotFoundServerReason(message));
+		} else if (kind === "InvalidConnectionRequestLastMutationID" || kind === "InvalidConnectionRequestBaseCookie") {
+			await dropDatabase(this.#rep.idbName, { kvStore: this.#kvStore });
+			this.#onClientStateNotFound(kind, serverAheadReloadReason);
+		}
+	}
+	async #handleConnectedMessage(lc, connectedMessage) {
+		const now = Date.now();
+		const [, connectBody] = connectedMessage;
+		lc = addWebSocketIDToLogContext(connectBody.wsid, lc);
+		if (this.#connectedCount === 0) this.#checkConnectivity("firstConnect");
+		else if (this.#connectErrorCount > 0) this.#checkConnectivity("connectAfterError");
+		this.#connectedCount++;
+		this.#connectedAt = now;
+		this.#metrics.lastConnectError.clear();
+		const proceedingConnectErrorCount = this.#connectErrorCount;
+		this.#connectErrorCount = 0;
+		let timeToConnectMs;
+		let connectMsgLatencyMs;
+		if (this.#connectStart === void 0) lc.error?.("Got connected message but connect start time is undefined.");
+		else {
+			timeToConnectMs = now - this.#connectStart;
+			this.#metrics.timeToConnectMs.set(timeToConnectMs);
+			connectMsgLatencyMs = connectBody.timestamp !== void 0 ? now - connectBody.timestamp : void 0;
+			this.#connectStart = void 0;
+		}
+		let totalTimeToConnectMs;
+		if (this.#totalToConnectStart === void 0) lc.error?.("Got connected message but total to connect start time is undefined.");
+		else {
+			totalTimeToConnectMs = now - this.#totalToConnectStart;
+			this.#totalToConnectStart = void 0;
+		}
+		this.#metrics.setConnected(timeToConnectMs ?? 0, totalTimeToConnectMs ?? 0);
+		lc.info?.("Connected", {
+			navigatorOnline: localNavigator?.onLine,
+			timeToConnectMs,
+			totalTimeToConnectMs,
+			connectMsgLatencyMs,
+			connectedCount: this.#connectedCount,
+			proceedingConnectErrorCount
+		});
+		this.#lastMutationIDSent = NULL_LAST_MUTATION_ID_SENT;
+		lc.debug?.("Resolving connect resolver");
+		const socket = must(this.#socket);
+		const queriesPatch = await this.#rep.query((tx) => this.#queryManager.getQueriesPatch(tx, this.#initConnectionQueries));
+		const hasDeletedClients = () => skipEmptyArray(this.#deletedClients?.clientIDs) || skipEmptyArray(this.#deletedClients?.clientGroupIDs);
+		const maybeSendDeletedClients = () => {
+			if (hasDeletedClients()) {
+				send(socket, ["deleteClients", this.#deletedClients]);
+				this.#deletedClients = void 0;
+			}
+		};
+		if (queriesPatch.size > 0 && this.#initConnectionQueries !== void 0) {
+			maybeSendDeletedClients();
+			send(socket, ["changeDesiredQueries", {
+				desiredQueriesPatch: [...queriesPatch.values()],
+				traceparent: this.#options.getTraceparent?.()
+			}]);
+		} else if (this.#initConnectionQueries === void 0) {
+			const clientSchema = this.#clientSchema;
+			send(socket, ["initConnection", {
+				desiredQueriesPatch: [...queriesPatch.values()],
+				deleted: skipEmptyDeletedClients(this.#deletedClients),
+				...this.#connectCookie === null ? { clientSchema } : {},
+				userPushURL: this.#options.mutateURL,
+				userPushHeaders: this.#options.mutateHeaders,
+				userQueryURL: this.#options.queryURL ?? this.#options.getQueriesURL,
+				userQueryHeaders: this.#options.queryHeaders,
+				traceparent: this.#options.getTraceparent?.()
+			}]);
+			this.#deletedClients = void 0;
+		}
+		this.#initConnectionQueries = void 0;
+		maybeSendDeletedClients();
+		this.#connectionManager.connected();
+		this.#connectResolver.resolve();
+	}
+	/**
+	* Starts a new connection. This will create the WebSocket that does the HTTP
+	* request to the server.
+	*
+	* {@link #connect} will throw an assertion error if the
+	* {@link #connectionManager} status is not {@link ConnectionManagerState.Disconnected}
+	* or {@link ConnectionManagerState.Connecting}.
+	* Callers MUST check the connection status before calling this method and log
+	* an error as needed.
+	*
+	* The function will resolve once the socket is connected. If you need to know
+	* when a connection has been established, as in we have received the
+	* {@link ConnectedMessage}, you should await the {@link #connectResolver}
+	* promise. The {@link #connectResolver} promise rejects if an error message
+	* is received before the connected message is received or if the connection
+	* attempt times out.
+	*/
+	async #connect(lc, additionalConnectParams) {
+		if (this.closed) return;
+		assert(this.#server, "No server provided");
+		assert(this.#connectionManager.is("disconnected") || this.#connectionManager.is("connecting"), "connect() called from invalid state: " + this.#connectionManager.state.name);
+		const wsid = nanoid();
+		lc = addWebSocketIDToLogContext(wsid, lc);
+		lc.info?.("Connecting...", { navigatorOnline: localNavigator?.onLine });
+		this.#connectionManager.connecting();
+		assert(this.#connectStart === void 0, "connect start time is defined");
+		const now = Date.now();
+		this.#connectStart = now;
+		if (this.#totalToConnectStart === void 0) this.#totalToConnectStart = now;
+		if (this.closed) return;
+		this.#connectCookie = parse(await this.#rep.cookie, nullableVersionSchema, "passthrough");
+		if (this.closed) return;
+		const timeoutID = setTimeout(() => {
+			lc.debug?.("Rejecting connect resolver due to timeout");
+			const timeoutError = new ClientError({
+				kind: ConnectTimeout,
+				message: `Connection attempt timed out after ${CONNECT_TIMEOUT_MS / 1e3} seconds`
+			});
+			this.#connectResolver.reject(timeoutError);
+			this.#disconnect(lc, timeoutError);
+		}, CONNECT_TIMEOUT_MS);
+		const abortHandler = () => {
+			clearTimeout(timeoutID);
+		};
+		this.#closeAbortController.signal.addEventListener("abort", abortHandler);
+		const [ws, initConnectionQueries, deletedClients] = await createSocket(this.#rep, this.#queryManager, this.#deleteClientsManager, toWSString(this.#server), this.#connectCookie, this.clientID, await this.clientGroupID, this.#clientSchema, this.userID, fromReplicacheAuthToken(this.#rep.auth), this.#lastMutationIDReceived, wsid, this.#options.logLevel === "debug", lc, this.#options.mutateURL, this.#options.mutateHeaders, this.#options.queryURL ?? this.#options.getQueriesURL, this.#options.queryHeaders, additionalConnectParams, await this.#activeClientsManager, this.#options.maxHeaderLength);
+		if (this.closed) return;
+		this.#initConnectionQueries = initConnectionQueries;
+		this.#deletedClients = deletedClients;
+		ws.addEventListener("message", this.#onMessage);
+		ws.addEventListener("open", this.#onOpen);
+		ws.addEventListener("close", this.#onClose);
+		this.#socket = ws;
+		this.#socketResolver.resolve(ws);
+		try {
+			lc.debug?.("Waiting for connection to be acknowledged");
+			await this.#connectResolver.promise;
+			this.#mutationTracker.onConnected(this.#lastMutationIDReceived);
+			this.#rep.push().catch(() => {});
+		} finally {
+			clearTimeout(timeoutID);
+			this.#closeAbortController.signal.removeEventListener("abort", abortHandler);
+		}
+	}
+	#disconnect(lc, reason, closeCode) {
+		if (shouldReportConnectError(reason)) {
+			this.#connectErrorCount++;
+			this.#metrics.lastConnectError.set(getLastConnectErrorValue(reason));
+			this.#metrics.timeToConnectMs.set(DID_NOT_CONNECT_VALUE);
+			this.#metrics.setConnectError(reason);
+			if (this.#connectErrorCount % CHECK_CONNECTIVITY_ON_ERROR_FREQUENCY === 1) this.#checkConnectivity(`connectErrorCount=${this.#connectErrorCount}`);
+		}
+		lc.info?.("disconnecting", {
+			navigatorOnline: localNavigator?.onLine,
+			reason: reason.kind,
+			connectStart: this.#connectStart,
+			totalToConnectStart: this.#totalToConnectStart,
+			connectedAt: this.#connectedAt,
+			connectionDuration: this.#connectedAt ? Date.now() - this.#connectedAt : 0,
+			messageCount: this.#messageCount,
+			connectionState: this.#connectionManager.state,
+			connectErrorCount: this.#connectErrorCount
+		});
+		const connectionStatus = this.#connectionManager.state.name;
+		switch (connectionStatus) {
+			case Connected:
+				if (this.#connectStart !== void 0) lc.error?.("disconnect() called while connected but connect start time is defined.");
+				break;
+			case Closed:
+				lc.debug?.("disconnect() called while closed");
+				return;
+			case Disconnected:
+			case Connecting:
+			case NeedsAuth:
+			case Error$1: break;
+			default: unreachable(connectionStatus);
+		}
+		this.#socketResolver = resolver();
+		lc.debug?.("Creating new connect resolver");
+		this.#connectResolver = resolver();
+		this.#messageCount = 0;
+		this.#connectStart = void 0;
+		this.#connectedAt = 0;
+		this.#socket?.removeEventListener("message", this.#onMessage);
+		this.#socket?.removeEventListener("open", this.#onOpen);
+		this.#socket?.removeEventListener("close", this.#onClose);
+		this.#socket?.close(closeCode);
+		this.#socket = void 0;
+		this.#lastMutationIDSent = NULL_LAST_MUTATION_ID_SENT;
+		this.#pokeHandler.handleDisconnect();
+		const transition = getErrorConnectionTransition(reason);
+		switch (transition.status) {
+			case NeedsAuth:
+				this.#connectionManager.needsAuth(transition.reason);
+				break;
+			case Error$1:
+				this.#connectionManager.error(transition.reason);
+				break;
+			case Disconnected:
+				this.#connectionManager.disconnected(transition.reason);
+				break;
+			case Closed:
+				this.#connectionManager.closed();
+				break;
+			case NO_STATUS_TRANSITION:
+				if (!this.#connectionManager.isInTerminalState()) this.#connectionManager.connecting(transition.reason);
+				break;
+			default: unreachable(transition);
+		}
+	}
+	#handlePokeStart(_lc, pokeMessage) {
+		this.#abortPingTimeout();
+		this.#pokeHandler.handlePokeStart(pokeMessage[1]);
+	}
+	#handlePokePart(_lc, pokeMessage) {
+		this.#abortPingTimeout();
+		const lastMutationIDChangeForSelf = this.#pokeHandler.handlePokePart(pokeMessage[1]);
+		if (lastMutationIDChangeForSelf !== void 0) this.#lastMutationIDReceived = lastMutationIDChangeForSelf;
+	}
+	#handlePokeEnd(_lc, pokeMessage) {
+		this.#abortPingTimeout();
+		this.#pokeHandler.handlePokeEnd(pokeMessage[1]);
+	}
+	#onPokeError(error) {
+		const lc = this.#lc;
+		lc.info?.("poke error, disconnecting?", !this.#connectionManager.is(Disconnected));
+		if (!this.#connectionManager.is("disconnected")) {
+			const errorStr = String(error);
+			const isBaseCookieError = errorStr.includes("unexpected base cookie");
+			this.#disconnect(lc, new ClientError({
+				kind: isBaseCookieError ? UnexpectedBaseCookie : Internal,
+				message: isBaseCookieError ? "Server returned unexpected base cookie during sync" : `Poke processing error: ${errorStr}`
+			}));
+		}
+	}
+	#handlePullResponse(lc, pullResponseMessage) {
+		this.#abortPingTimeout();
+		const body = pullResponseMessage[1];
+		lc = lc.withContext("requestID", body.requestID);
+		lc.debug?.("Handling pull response", body);
+		const resolver = this.#pendingPullsByRequestID.get(body.requestID);
+		if (!resolver) {
+			lc.debug?.("No resolver found");
+			return;
+		}
+		resolver.resolve(pullResponseMessage[1]);
+	}
+	async #pusher(req, requestID) {
+		assert(req.pushVersion === 1, "Expected pushVersion 1");
+		await this.#connectResolver.promise;
+		const lc = this.#lc.withContext("requestID", requestID);
+		lc.debug?.(`pushing ${req.mutations.length} mutations`);
+		const socket = this.#socket;
+		assert(socket, "Expected socket to be connected for push");
+		const isMutationRecoveryPush = req.clientGroupID !== await this.clientGroupID;
+		const start = isMutationRecoveryPush ? 0 : req.mutations.findIndex((m) => m.clientID === this.#lastMutationIDSent.clientID && m.id === this.#lastMutationIDSent.id) + 1;
+		lc.debug?.(isMutationRecoveryPush ? "pushing for recovery" : "pushing", req.mutations.length - start, "mutations of", req.mutations.length, "mutations.");
+		const now = Date.now();
+		for (let i = start; i < req.mutations.length; i++) {
+			const m = req.mutations[i];
+			const timestamp = now - Math.round(performance.now() - m.timestamp);
+			const zeroM = m.name === "_zero_crud" ? {
+				type: CRUD,
+				timestamp,
+				id: m.id,
+				clientID: m.clientID,
+				name: m.name,
+				args: [mapCRUD(m.args, this.#clientToServer)]
+			} : {
+				type: Custom,
+				timestamp,
+				id: m.id,
+				clientID: m.clientID,
+				name: m.name,
+				args: [m.args]
+			};
+			send(socket, ["push", {
+				timestamp: now,
+				clientGroupID: req.clientGroupID,
+				mutations: [zeroM],
+				pushVersion: req.pushVersion,
+				requestID,
+				traceparent: this.#options.getTraceparent?.()
+			}]);
+			if (!isMutationRecoveryPush) this.#lastMutationIDSent = {
+				clientID: m.clientID,
+				id: m.id
+			};
+		}
+		return { httpRequestInfo: {
+			errorMessage: "",
+			httpStatusCode: 200
+		} };
+	}
+	async #runLoop() {
+		this.#lc.info?.(`Starting Zero version: ${this.version}`);
+		if (this.#server === null) {
+			this.#lc.info?.("No socket origin provided, not starting connect loop.");
+			this.#connectionManager.disconnected(new ClientError({
+				kind: NoSocketOrigin,
+				message: "No server socket origin provided"
+			}));
+			return;
+		}
+		let runLoopCounter = 0;
+		const bareLogContext = this.#lc;
+		const getLogContext = () => {
+			let lc = bareLogContext;
+			if (this.#socket) lc = addWebSocketIDFromSocketToLogContext(this.#socket, lc);
+			return lc.withContext("runLoopCounter", runLoopCounter);
+		};
+		const { auth } = this.#options;
+		this.#setAuth(auth);
+		let backoffMs;
+		let additionalConnectParams;
+		while (this.#connectionManager.shouldContinueRunLoop()) {
+			runLoopCounter++;
+			let lc = getLogContext();
+			backoffMs = RUN_LOOP_INTERVAL_MS;
+			try {
+				const currentState = this.#connectionManager.state;
+				switch (currentState.name) {
+					case Connecting:
+					case Disconnected: {
+						if (this.#visibilityWatcher.visibilityState === "hidden") {
+							this.#metrics.setDisconnectedWaitingForVisible();
+							this.#totalToConnectStart = void 0;
+						}
+						const visibilityResult = await promiseRace({
+							visible: this.#visibilityWatcher.waitForVisible(),
+							stateChange: this.#connectionManager.waitForStateChange()
+						});
+						if (visibilityResult.key === "stateChange") {
+							throwIfConnectionError(visibilityResult.result);
+							break;
+						}
+						if (reloadScheduled()) break;
+						await this.#connect(lc, additionalConnectParams);
+						additionalConnectParams = void 0;
+						throwIfConnectionError(this.#connectionManager.state);
+						assert(this.#socket, "Expected socket after reconnection");
+						lc = getLogContext();
+						lc.debug?.("Connected successfully");
+						break;
+					}
+					case Connected: {
+						const controller = new AbortController();
+						this.#abortPingTimeout = () => controller.abort();
+						const [pingTimeoutPromise, pingTimeoutAborted] = sleepWithAbort(this.pingTimeoutMs, controller.signal);
+						const raceResult = await promiseRace({
+							waitForPing: pingTimeoutPromise,
+							waitForPingAborted: pingTimeoutAborted,
+							tabHidden: this.#visibilityWatcher.waitForHidden(),
+							stateChange: this.#connectionManager.waitForStateChange()
+						});
+						switch (raceResult.key) {
+							case "waitForPing":
+								await this.#ping(lc);
+								break;
+							case "waitForPingAborted": break;
+							case "tabHidden": {
+								const hiddenError = new ClientError({
+									kind: Hidden,
+									message: "Connection closed because tab was hidden"
+								});
+								this.#disconnect(lc, hiddenError);
+								break;
+							}
+							case "stateChange":
+								throwIfConnectionError(raceResult.result);
+								break;
+							default: unreachable(raceResult);
+						}
+						break;
+					}
+					case NeedsAuth:
+						lc.info?.(`Run loop paused in needs-auth state. Call zero.connection.connect({auth}) to resume.`, currentState.reason);
+						if ((await promiseRace({
+							connectRequest: this.#connectionManager.waitForConnectRequest(),
+							stateChange: this.#connectionManager.waitForStateChange()
+						})).key === "connectRequest") this.#connectionManager.resumeFromConnectRequest();
+						break;
+					case Error$1:
+						lc.info?.(`Run loop paused in error state. Call zero.connection.connect() to resume.`, currentState.reason);
+						if ((await promiseRace({
+							connectRequest: this.#connectionManager.waitForConnectRequest(),
+							stateChange: this.#connectionManager.waitForStateChange()
+						})).key === "connectRequest") this.#connectionManager.resumeFromConnectRequest();
+						break;
+					case Closed: break;
+					default: unreachable(currentState);
+				}
+			} catch (ex) {
+				const isClientClosedError = isClientError(ex) && ex.kind === "ClientClosed";
+				if (!this.#connectionManager.is("connected") && !isClientClosedError) {
+					const level = isAuthError(ex) ? "warn" : "error";
+					const kind = isServerError(ex) ? ex.kind : "Unknown Error";
+					lc[level]?.("Failed to connect", ex, kind, {
+						lmid: this.#lastMutationIDReceived,
+						baseCookie: this.#connectCookie
+					});
+				}
+				lc.debug?.("Got an exception in the run loop", "state:", this.#connectionManager.state, "exception:", ex);
+				const transition = getErrorConnectionTransition(ex);
+				let sleepMs = void 0;
+				switch (transition.status) {
+					case NO_STATUS_TRANSITION: {
+						const backoffParams = getBackoffParams(transition.reason);
+						if (backoffParams) {
+							if (backoffParams.minBackoffMs !== void 0) backoffMs = Math.max(backoffMs, backoffParams.minBackoffMs);
+							if (backoffParams.maxBackoffMs !== void 0) backoffMs = Math.min(backoffMs, backoffParams.maxBackoffMs);
+							additionalConnectParams = backoffParams.reconnectParams;
+						}
+						lc.debug?.("Sleeping", backoffMs, "ms before reconnecting due to error, state:", this.#connectionManager.state);
+						sleepMs = backoffMs;
+						break;
+					}
+					case NeedsAuth:
+						lc.debug?.("Auth error encountered, transitioning to needs-auth state");
+						this.#connectionManager.needsAuth(transition.reason);
+						break;
+					case Error$1:
+						lc.debug?.("Fatal error encountered, transitioning to error state");
+						this.#connectionManager.error(transition.reason);
+						break;
+					case Disconnected:
+						this.#connectionManager.disconnected(transition.reason);
+						break;
+					case Closed: break;
+					default: unreachable(transition);
+				}
+				if (transition.status !== "closed") try {
+					this.#forceEnableRefresh = true;
+					await this.#rep.runRefresh();
+				} catch (ex) {
+					if (ex instanceof AbortError) this.#lc.debug?.(`Refresh from storage did not complete before close.`);
+					else this.#lc.error?.(`Error during refresh from storage`, ex);
+				} finally {
+					this.#forceEnableRefresh = false;
+				}
+				if (sleepMs) await sleep(sleepMs);
+			}
+		}
+	}
+	async #puller(req, requestID) {
+		assert(req.pullVersion === 1, "Expected pullVersion 1");
+		const lc = this.#lc.withContext("requestID", requestID);
+		lc.debug?.("Pull", req);
+		if (req.clientGroupID === await this.clientGroupID) return { httpRequestInfo: {
+			errorMessage: "",
+			httpStatusCode: 200
+		} };
+		await this.#connectResolver.promise;
+		const socket = this.#socket;
+		assert(socket, "Expected socket to be connected for mutation recovery pull");
+		lc.debug?.("Pull is for mutation recovery");
+		const cookie = parse(req.cookie, nullableVersionSchema, "passthrough");
+		send(socket, ["pull", {
+			clientGroupID: req.clientGroupID,
+			cookie,
+			requestID
+		}]);
+		const pullResponseResolver = resolver();
+		this.#pendingPullsByRequestID.set(requestID, pullResponseResolver);
+		try {
+			const raceResult = await promiseRace({
+				timeout: sleep(PULL_TIMEOUT_MS),
+				success: pullResponseResolver.promise
+			});
+			switch (raceResult.key) {
+				case "timeout":
+					lc.debug?.("Mutation recovery pull timed out");
+					throw new ClientError({
+						kind: PullTimeout,
+						message: "Pull timed out"
+					});
+				case "success": {
+					lc.debug?.("Returning mutation recovery pull response");
+					const response = await pullResponseResolver.promise;
+					return {
+						response: {
+							cookie: response.cookie,
+							lastMutationIDChanges: response.lastMutationIDChanges,
+							patch: []
+						},
+						httpRequestInfo: {
+							errorMessage: "",
+							httpStatusCode: 200
+						}
+					};
+				}
+				default: unreachable(raceResult);
+			}
+		} finally {
+			pullResponseResolver.reject(new ClientError({
+				kind: PullTimeout,
+				message: "Pull timed out"
+			}));
+			this.#pendingPullsByRequestID.delete(requestID);
+		}
+	}
+	/**
+	* Sets the authentication token on the replicache instance.
+	*
+	* @param auth - The authentication token to set.
+	*/
+	#setAuth(auth) {
+		this.#checkAuthValid(this.userID, auth);
+		this.#rep.auth = toReplicacheAuthToken(auth);
+		if (auth) this.#send(["updateAuth", { auth }]);
+	}
+	/**
+	* A rough heuristic for whether the client is currently online and
+	* authenticated.
+	*
+	* @deprecated Use `connection` instead, which provides more detailed connection state.
+	*/
+	get online() {
+		return this.#onlineManager.online;
+	}
+	/**
+	* Subscribe to online status changes.
+	*
+	* This is useful when you want to update state based on the online status.
+	*
+	* @param listener - The listener to subscribe to.
+	* @returns A function to unsubscribe the listener.
+	*
+	* @deprecated Use `connection` instead, which provides more detailed connection state.
+	*/
+	onOnline = (listener) => this.#onlineManager.subscribe(listener);
+	/**
+	* Starts a ping and waits for a pong.
+	*/
+	async #ping(lc) {
+		lc.debug?.("pinging");
+		const { promise, resolve } = resolver();
+		this.#onPong = resolve;
+		const pingMessage = ["ping", {}];
+		const t0 = performance.now();
+		assert(this.#socket, "Expected socket to be connected for ping");
+		send(this.#socket, pingMessage);
+		const raceResult = await promiseRace({
+			waitForPong: promise,
+			pingTimeout: sleep(this.pingTimeoutMs),
+			stateChange: this.#connectionManager.waitForStateChange()
+		});
+		const delta = performance.now() - t0;
+		switch (raceResult.key) {
+			case "waitForPong":
+				lc.debug?.("ping succeeded in", delta, "ms");
+				return;
+			case "pingTimeout": {
+				lc.info?.("ping failed in", delta, "ms - disconnecting");
+				const pingTimeoutError = new ClientError({
+					kind: PingTimeout,
+					message: "Server ping request failed"
+				});
+				this.#disconnect(lc, pingTimeoutError);
+				throw pingTimeoutError;
+			}
+			case "stateChange":
+				lc.debug?.("ping aborted due to connection state change", raceResult.result);
+				throwIfConnectionError(raceResult.result);
+				break;
+			default: unreachable(raceResult);
+		}
+	}
+	async #reportMetrics(_allSeries) {}
+	#checkConnectivity(reason) {
+		this.#checkConnectivityAsync(reason);
+	}
+	#checkConnectivityAsync(_reason) {}
+	/**
+	* `inspector` is an object that can be used to inspect the state of the
+	* queries a Zero instance uses. It is intended for debugging purposes.
+	*/
+	get inspector() {
+		BUNDLE_SIZE: return this.#inspector ??= new Inspector(this.#rep, this.#queryManager, this.#zeroContext, async () => {
+			await this.#connectResolver.promise;
+			return must(this.#socket);
+		});
+	}
+	async delete() {
+		await this.close();
+		const idbDatabasesStore = new IDBDatabasesStore(getKVStoreProvider(this.#lc, this.#kvStore).create);
+		try {
+			const databases = await idbDatabasesStore.getDatabases();
+			const dbNamesToDelete = Object.values(databases).filter((database) => database.replicacheName === this.#rep.name).map((database) => database.name);
+			const deleteResults = await Promise.allSettled(dbNamesToDelete.map(async (dbName) => {
+				await dropDatabase(dbName, { kvStore: this.#kvStore });
+				return dbName;
+			}));
+			const deleted = [];
+			const errors = [];
+			for (const result of deleteResults) if (result.status === "fulfilled") deleted.push(result.value);
+			else errors.push(result.reason);
+			return {
+				deleted,
+				errors
+			};
+		} finally {
+			await idbDatabasesStore.close();
+		}
+	}
+	#addMetric = (metric, value, ...args) => {
+		assert(isClientMetric(metric), `Invalid metric: ${metric}`);
+		this.#queryManager.addMetric(metric, value, ...args);
+	};
+	#checkAuthValid(userID, auth) {
+		if (userID === void 0 && auth) throw new ClientError({
+			kind: Internal,
+			message: "ZeroOptions.userID is required when auth is set."
+		});
+	}
+};
+var OnlineManager = class extends Subscribable {
+	#online = false;
+	setOnline(online) {
+		if (this.#online === online) return;
+		this.#online = online;
+		this.notify(online);
+	}
+	get online() {
+		return this.#online;
+	}
+};
+async function createSocket(rep, queryManager, deleteClientsManager, socketOrigin, baseCookie, clientID, clientGroupID, clientSchema, userID, auth, lmid, wsid, debugPerf, lc, userPushURL, userPushHeaders, userQueryURL, userQueryHeaders, additionalConnectParams, activeClientsManager, maxHeaderLength = 1024 * 8) {
+	const url = await createConnectionURL(socketOrigin, clientID, clientGroupID, userID, baseCookie, lmid, wsid, rep, debugPerf, additionalConnectParams, lc);
+	const WS = mustGetBrowserGlobal("WebSocket");
+	const queriesPatchP = rep.query((tx) => queryManager.getQueriesPatch(tx));
+	let deletedClients = convertDeletedClientsToBody(await deleteClientsManager.getDeletedClients(), clientGroupID);
+	let queriesPatch = await queriesPatchP;
+	const { activeClients } = activeClientsManager;
+	let secProtocol = encodeSecProtocols(["initConnection", {
+		desiredQueriesPatch: [...queriesPatch.values()],
+		deleted: skipEmptyDeletedClients(deletedClients),
+		...baseCookie === null ? { clientSchema } : {},
+		userPushURL,
+		userPushHeaders,
+		userQueryURL,
+		userQueryHeaders,
+		activeClients: [...activeClients]
+	}], auth);
+	if (secProtocol.length > maxHeaderLength) {
+		secProtocol = encodeSecProtocols(void 0, auth);
+		if (secProtocol.length > maxHeaderLength) lc.warn?.(`Encoded auth token length (${secProtocol.length}) exceeds ZeroOptions.maxHeaderLength (${maxHeaderLength}). This may cause connection failures.`);
+		queriesPatch = void 0;
+	} else deletedClients = void 0;
+	return [
+		new WS(url.toString(), secProtocol),
+		queriesPatch,
+		skipEmptyDeletedClients(deletedClients)
+	];
+}
+async function createConnectionURL(socketOrigin, clientID, clientGroupID, userID, baseCookie, lmid, wsid, rep, debugPerf, additionalConnectParams, lc) {
+	const url = new URL(appendPath(socketOrigin, `/sync/v51/connect`));
+	const { searchParams } = url;
+	searchParams.set("clientID", clientID);
+	searchParams.set("clientGroupID", clientGroupID);
+	if (userID !== void 0) searchParams.set("userID", userID);
+	searchParams.set("baseCookie", baseCookie === null ? "" : String(baseCookie));
+	searchParams.set("ts", String(performance.now()));
+	searchParams.set("lmid", String(lmid));
+	searchParams.set("wsid", wsid);
+	searchParams.set("profileID", await rep.profileID);
+	if (debugPerf) searchParams.set("debugPerf", true.toString());
+	if (additionalConnectParams) for (const k in additionalConnectParams) if (searchParams.has(k)) lc.warn?.(`skipping conflicting parameter ${k}`);
+	else searchParams.set(k, additionalConnectParams[k]);
+	lc.info?.("Connecting to", url.toString());
+	return url;
+}
+function skipEmptyArray(arr) {
+	return arr && arr.length > 0 ? arr : void 0;
+}
+function skipEmptyDeletedClients(deletedClients) {
+	if (!deletedClients) return;
+	const { clientIDs, clientGroupIDs } = deletedClients;
+	if ((!clientIDs || clientIDs.length === 0) && (!clientGroupIDs || clientGroupIDs.length === 0)) return;
+	const data = {};
+	data.clientIDs = skipEmptyArray(clientIDs);
+	data.clientGroupIDs = skipEmptyArray(clientGroupIDs);
+	return data;
+}
+function convertDeletedClientsToBody(deletedClients, clientGroupID) {
+	if (deletedClients.length === 0) return;
+	const clientIDs = deletedClients.filter((pair) => pair.clientID && pair.clientGroupID === clientGroupID).map((pair) => pair.clientID);
+	if (clientIDs.length === 0) return;
+	return { clientIDs };
+}
+/**
+* Adds the wsid query parameter to the log context. If the URL does not
+* have a wsid we use a randomID instead.
+*/
+function addWebSocketIDFromSocketToLogContext({ url }, lc) {
+	return addWebSocketIDToLogContext(new URL(url).searchParams.get("wsid") ?? nanoid(), lc);
+}
+function addWebSocketIDToLogContext(wsid, lc) {
+	return lc.withContext("wsid", wsid);
+}
+function assertValidRunOptions(_options) {}
+async function makeActiveClientsManager(clientGroupID, clientID, signal, onDelete) {
+	const manager = await ActiveClientsManager.create(await clientGroupID, clientID, signal);
+	manager.onDelete = onDelete;
+	return manager;
+}
+//#endregion
+export { Zero };
+
+//# sourceMappingURL=zero.js.map

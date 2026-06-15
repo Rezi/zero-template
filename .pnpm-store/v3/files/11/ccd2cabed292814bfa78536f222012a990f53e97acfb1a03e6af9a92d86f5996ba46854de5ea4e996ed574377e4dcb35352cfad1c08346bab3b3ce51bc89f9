@@ -1,0 +1,27 @@
+import { getErrorMessage } from "../../../shared/src/error.js";
+import { Internal } from "../../../zero-protocol/src/error-kind-enum.js";
+import { ZeroCache } from "../../../zero-protocol/src/error-origin-enum.js";
+import { ProtocolError, isProtocolError } from "../../../zero-protocol/src/error.js";
+//#region ../zero-cache/src/types/error-with-level.ts
+var ProtocolErrorWithLevel = class extends ProtocolError {
+	logLevel;
+	constructor(errorBody, logLevel, options) {
+		super(errorBody, options);
+		this.logLevel = logLevel;
+	}
+};
+function getLogLevel(error) {
+	return error instanceof ProtocolErrorWithLevel ? error.logLevel : isProtocolError(error) ? "warn" : "error";
+}
+function wrapWithProtocolError(error) {
+	if (isProtocolError(error)) return error;
+	return new ProtocolError({
+		kind: Internal,
+		message: getErrorMessage(error),
+		origin: ZeroCache
+	}, { cause: error });
+}
+//#endregion
+export { ProtocolErrorWithLevel, getLogLevel, wrapWithProtocolError };
+
+//# sourceMappingURL=error-with-level.js.map

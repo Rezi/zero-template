@@ -1,0 +1,6 @@
+import * as v from '../../shared/src/valita.ts';
+export declare const versionSchema: v.Type<string>;
+export declare const nullableVersionSchema: v.UnionType<[v.Type<string>, v.Type<null>]>;
+export type Version = v.Infer<typeof versionSchema>;
+export type NullableVersion = v.Infer<typeof nullableVersionSchema>;
+//# sourceMappingURL=version.d.ts.map

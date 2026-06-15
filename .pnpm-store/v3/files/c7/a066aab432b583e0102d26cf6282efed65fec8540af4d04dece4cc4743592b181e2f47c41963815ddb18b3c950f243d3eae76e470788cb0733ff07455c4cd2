@@ -1,0 +1,8 @@
+export type HTTPString = `http${'' | 's'}://${string}`;
+export type WSString = `ws${'' | 's'}://${string}`;
+export declare function toWSString(url: HTTPString): WSString;
+export declare function toHTTPString(url: WSString): HTTPString;
+export declare function assertHTTPString(url: string): asserts url is HTTPString;
+export declare function assertWSString(url: string): asserts url is WSString;
+export declare function appendPath<T extends HTTPString | WSString>(url: T, toAppend: `/${string}`): T;
+//# sourceMappingURL=http-string.d.ts.map

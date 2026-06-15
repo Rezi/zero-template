@@ -1,0 +1,17 @@
+import type { LogContext } from '@rocicorp/logger';
+import { type ActiveUsers } from '../../server/anonymous-otel-start.ts';
+import type { PostgresDB } from '../../types/pg.ts';
+import { type ShardID } from '../../types/shards.ts';
+import type { Service } from '../service.ts';
+type Options = {
+    updateIntervalMs?: number;
+};
+export declare class ActiveUsersGauge implements Service {
+    #private;
+    readonly id = "active-users-gauge";
+    constructor(lc: LogContext, db: PostgresDB, shard: ShardID, opts?: Options, setActiveUsersGetterFn?: (getter: () => ActiveUsers) => void);
+    run(): Promise<void>;
+    stop(): Promise<void>;
+}
+export {};
+//# sourceMappingURL=active-users-gauge.d.ts.map

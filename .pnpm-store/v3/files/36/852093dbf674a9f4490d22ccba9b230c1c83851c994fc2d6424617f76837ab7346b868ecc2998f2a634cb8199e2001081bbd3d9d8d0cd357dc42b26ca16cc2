@@ -1,0 +1,2 @@
+export { opSQLiteStoreProvider, type OpSQLiteStoreOptions, } from './kv/op-sqlite/store.ts';
+//# sourceMappingURL=op-sqlite.d.ts.map

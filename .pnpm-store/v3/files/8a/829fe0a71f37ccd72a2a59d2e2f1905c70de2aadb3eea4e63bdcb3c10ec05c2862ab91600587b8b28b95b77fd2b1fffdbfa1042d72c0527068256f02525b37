@@ -1,0 +1,43 @@
+import { initBgIntervalProcess } from "../bg-interval.js";
+import { withWrite } from "../with-transactions.js";
+import { getClients, setClients } from "./clients.js";
+import { addDeletedClients } from "../deleted-clients.js";
+//#region ../replicache/src/persist/client-gc.ts
+/**
+* The maximum time a client can be inactive before it is garbage collected.
+* This means that this is the maximum time a tab can be in the background
+* (frozen) and still be able to sync when it comes back to the foreground.
+*/
+var CLIENT_MAX_INACTIVE_TIME = 1440 * 60 * 1e3;
+/**
+* How frequently to try to garbage collect clients.
+*/
+var GC_INTERVAL = 300 * 1e3;
+var latestGCUpdate;
+function initClientGC(clientID, dagStore, clientMaxInactiveTime, gcInterval, onClientsDeleted, lc, signal) {
+	initBgIntervalProcess("ClientGC", () => {
+		latestGCUpdate = gcClients(clientID, dagStore, clientMaxInactiveTime, onClientsDeleted);
+		return latestGCUpdate;
+	}, () => gcInterval, lc, signal);
+}
+function gcClients(clientID, dagStore, clientMaxInactiveTime, onClientsDeleted) {
+	return withWrite(dagStore, async (dagWrite) => {
+		const now = Date.now();
+		const clients = await getClients(dagWrite);
+		const deletedClients = [];
+		const newClients = /* @__PURE__ */ new Map();
+		for (const [id, client] of clients) if (id === clientID || now - client.heartbeatTimestampMs <= clientMaxInactiveTime) newClients.set(id, client);
+		else deletedClients.push({
+			clientGroupID: client.clientGroupID,
+			clientID: id
+		});
+		if (newClients.size === clients.size) return clients;
+		await setClients(newClients, dagWrite);
+		await onClientsDeleted(await addDeletedClients(dagWrite, deletedClients));
+		return newClients;
+	});
+}
+//#endregion
+export { CLIENT_MAX_INACTIVE_TIME, GC_INTERVAL, initClientGC };
+
+//# sourceMappingURL=client-gc.js.map

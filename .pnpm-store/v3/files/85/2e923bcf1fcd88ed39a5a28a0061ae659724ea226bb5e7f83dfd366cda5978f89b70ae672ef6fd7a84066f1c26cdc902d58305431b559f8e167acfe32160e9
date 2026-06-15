@@ -1,0 +1,9 @@
+//#region ../replicache/src/to-error.ts
+function toError(e) {
+	if (e instanceof Error) return e;
+	return new Error(String(e));
+}
+//#endregion
+export { toError };
+
+//# sourceMappingURL=to-error.js.map

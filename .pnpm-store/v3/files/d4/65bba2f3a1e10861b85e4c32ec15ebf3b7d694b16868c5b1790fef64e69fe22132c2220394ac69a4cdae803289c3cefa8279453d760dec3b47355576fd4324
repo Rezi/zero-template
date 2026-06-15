@@ -1,0 +1,4 @@
+import type { Node } from './data.ts';
+import type { Stream } from './stream.ts';
+export declare function skipYields(stream: Stream<Node | 'yield'>): Stream<Node>;
+//# sourceMappingURL=skip-yields.d.ts.map

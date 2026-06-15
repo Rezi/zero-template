@@ -1,0 +1,43 @@
+import { requestIdle as defaultRequestIdle } from './request-idle.ts';
+export declare class ProcessScheduler {
+    #private;
+    /**
+     * Supports scheduling a `process` to be run with certain constraints.
+     *  - Process runs are never concurrent.
+     *  - Multiple calls to schedule will be fulfilled by a single process
+     *    run started after the call to schedule.  A call is never fulfilled by an
+     *    already running process run.  This can be thought of as debouncing.
+     *  - Process runs are throttled so that the process runs at most once every
+     *    `throttleMs`.
+     *  - Process runs try to run during an idle period, but will delay at most
+     *    `idleTimeoutMs`.
+     *  - Scheduled runs which have not completed when `abortSignal` is aborted
+     *    will reject with an `AbortError`.
+     */
+    constructor(process: () => Promise<void>, idleTimeoutMs: number, throttleMs: number, abortSignal: AbortSignal, requestIdle?: typeof defaultRequestIdle);
+    /**
+     * Schedules the process to run.
+     *
+     * The returned promise resolves when the process has completed running.
+     * If the process throws an error, the returned promise rejects with that error.
+     *
+     * If `schedule()` is called multiple times while a process is running/scheduled,
+     * they will be debounced into a single run.
+     */
+    schedule(): Promise<void>;
+    /**
+     * Runs the process immediately, skipping throttle and idle checks.
+     *
+     * The returned promise resolves when the process has completed running.
+     * If the process throws an error, the returned promise rejects with that error.
+     *
+     * If there is a scheduled run pending (waiting for idle or throttle), this run
+     * will effectively "take over" that scheduled run, and the promise returned
+     * by `schedule()` will resolve when this run completes.
+     *
+     * If there is a process currently running, this run will wait for it to finish
+     * before starting, satisfying the non-concurrency constraint.
+     */
+    run(): Promise<void>;
+}
+//# sourceMappingURL=process-scheduler.d.ts.map

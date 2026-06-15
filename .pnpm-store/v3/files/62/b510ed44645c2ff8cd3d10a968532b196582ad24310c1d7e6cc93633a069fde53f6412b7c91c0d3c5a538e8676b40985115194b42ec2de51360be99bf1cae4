@@ -1,0 +1,5 @@
+export type IterableUnion<T> = AsyncIterable<T> | Iterable<T>;
+type IteratorUnion<T> = AsyncIterator<T> | Iterator<T>;
+export declare function getIterator<T>(it: IterableUnion<T>): IteratorUnion<T>;
+export {};
+//# sourceMappingURL=iterable-union.d.ts.map

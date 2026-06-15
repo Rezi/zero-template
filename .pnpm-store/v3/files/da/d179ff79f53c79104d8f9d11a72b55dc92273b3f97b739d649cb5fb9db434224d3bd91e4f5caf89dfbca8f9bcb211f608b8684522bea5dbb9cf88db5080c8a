@@ -1,0 +1,74 @@
+import type { ReadonlyJSONValue } from '../../../shared/src/json.ts';
+import type { PrimaryKey } from '../../../zero-protocol/src/primary-key.ts';
+import type { SchemaValue, TableSchema } from '../table-schema.ts';
+export declare function table<TName extends string>(name: TName): TableBuilder<{
+    name: TName;
+    columns: {};
+    primaryKey: PrimaryKey;
+}>;
+export declare function string<T extends string = string>(): ColumnBuilder<{
+    type: "string";
+    optional: false;
+    customType: T;
+}>;
+export declare function number<T extends number = number>(): ColumnBuilder<{
+    type: "number";
+    optional: false;
+    customType: T;
+}>;
+export declare function boolean<T extends boolean = boolean>(): ColumnBuilder<{
+    type: "boolean";
+    optional: false;
+    customType: T;
+}>;
+export declare function json<T extends ReadonlyJSONValue = ReadonlyJSONValue>(): ColumnBuilder<{
+    type: "json";
+    optional: false;
+    customType: T;
+}>;
+export declare function enumeration<T extends string>(): ColumnBuilder<{
+    type: "string";
+    optional: false;
+    customType: T;
+}>;
+export declare const column: {
+    string: typeof string;
+    number: typeof number;
+    boolean: typeof boolean;
+    json: typeof json;
+    enumeration: typeof enumeration;
+};
+export declare class TableBuilder<TShape extends TableSchema> {
+    #private;
+    constructor(schema: TShape);
+    from<ServerName extends string>(serverName: ServerName): TableBuilder<TShape>;
+    columns<const TColumns extends Record<string, ColumnBuilder<SchemaValue>>>(columns: TColumns): TableBuilderWithColumns<{
+        name: TShape['name'];
+        columns: {
+            [K in keyof TColumns]: TColumns[K]['schema'];
+        };
+        primaryKey: TShape['primaryKey'];
+    }>;
+}
+export declare class TableBuilderWithColumns<TShape extends TableSchema> {
+    #private;
+    constructor(schema: TShape);
+    primaryKey<TPKColNames extends (keyof TShape['columns'])[]>(...pkColumnNames: TPKColNames): TableBuilderWithColumns<TShape & {
+        primaryKey: TPKColNames;
+    }>;
+    get schema(): TShape;
+    build(): TShape;
+}
+declare class ColumnBuilder<TShape extends SchemaValue<any>> {
+    #private;
+    constructor(schema: TShape);
+    from<ServerName extends string>(serverName: ServerName): ColumnBuilder<TShape & {
+        serverName: string;
+    }>;
+    optional(): ColumnBuilder<Omit<TShape, 'optional'> & {
+        optional: true;
+    }>;
+    get schema(): TShape;
+}
+export type { ColumnBuilder };
+//# sourceMappingURL=table-builder.d.ts.map

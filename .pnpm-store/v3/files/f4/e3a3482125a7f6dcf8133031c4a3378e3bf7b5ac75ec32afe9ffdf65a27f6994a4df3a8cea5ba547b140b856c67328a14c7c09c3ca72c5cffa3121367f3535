@@ -1,0 +1,80 @@
+import type { LogContext } from '@rocicorp/logger';
+import type postgres from 'postgres';
+import * as v from '../../../shared/src/valita.ts';
+import { type PostgresDB, type PostgresTransaction } from '../types/pg.ts';
+type Operations = (log: LogContext, tx: PostgresTransaction) => Promise<void>;
+/**
+ * Encapsulates the logic for setting up or upgrading to a new schema. After the
+ * Migration code successfully completes, {@link runSchemaMigrations}
+ * will update the schema version and commit the transaction.
+ */
+export type Migration = {
+    /**
+     * Perform database operations that create or alter table structure. This is
+     * called at most once during lifetime of the application. If a `migrateData()`
+     * operation is defined, that will be performed after `migrateSchema()` succeeds.
+     */
+    migrateSchema?: Operations;
+    /**
+     * Perform database operations to migrate data to the new schema. This is
+     * called after `migrateSchema()` (if defined), and may be called again
+     * to re-migrate data after the server was rolled back to an earlier version,
+     * and rolled forward again.
+     *
+     * Consequently, the logic in `migrateData()` must be idempotent.
+     */
+    migrateData?: Operations;
+    /**
+     * Sets the `minSafeVersion` to the specified value, prohibiting running
+     * any earlier code versions.
+     */
+    minSafeVersion?: number;
+};
+/**
+ * Mapping of incremental migrations to move from the previous old code
+ * version to next one. Versions must be non-zero.
+ *
+ * The schema resulting from performing incremental migrations should be
+ * equivalent to that of the `setupMigration` on a blank database.
+ *
+ * The highest destinationVersion of this map denotes the current
+ * "code version", and is also used as the destination version when
+ * running the initial setup migration on a blank database.
+ */
+export type IncrementalMigrationMap = {
+    [destinationVersion: number]: Migration;
+};
+/**
+ * Ensures that the schema is compatible with the current code, updating and
+ * migrating the schema if necessary.
+ */
+export declare function runSchemaMigrations(log: LogContext, debugName: string, schemaName: string, db: PostgresDB, setupMigration: Migration, incrementalMigrationMap: IncrementalMigrationMap): Promise<void>;
+export declare const versionHistory: v.ObjectType<{
+    /**
+     * The `schemaVersion` is highest code version that has ever been run
+     * on the database, and is used to delineate the structure of the tables
+     * in the database. A schemaVersion only moves forward; rolling back to
+     * an earlier (safe) code version does not revert schema changes that
+     * have already been applied.
+     */
+    schemaVersion: v.Type<number>;
+    /**
+     * The data version is the code version of the latest server that ran.
+     * Note that this may be less than the schemaVersion in the case that
+     * a server is rolled back to an earlier version after a schema change.
+     * In such a case, data (but not schema), may need to be re-migrated
+     * when rolling forward again.
+     */
+    dataVersion: v.Type<number>;
+    /**
+     * The minimum code version that is safe to run. This is used when
+     * a schema migration is not backwards compatible with an older version
+     * of the code.
+     */
+    minSafeVersion: v.Type<number>;
+}, undefined>;
+export type VersionHistory = v.Infer<typeof versionHistory>;
+export declare function createVersionHistoryTable(sql: postgres.Sql, schemaName: string): Promise<void>;
+export declare function getVersionHistory(sql: postgres.Sql, schemaName: string, create?: boolean): Promise<VersionHistory | null>;
+export {};
+//# sourceMappingURL=migration.d.ts.map

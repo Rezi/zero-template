@@ -1,0 +1,7 @@
+export declare const Client = "client";
+export declare const Server = "server";
+export declare const ZeroCache = "zeroCache";
+export type Client = typeof Client;
+export type Server = typeof Server;
+export type ZeroCache = typeof ZeroCache;
+//# sourceMappingURL=error-origin-enum.d.ts.map

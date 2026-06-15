@@ -1,0 +1,16 @@
+import type { LogContext } from '@rocicorp/logger';
+/**
+ * Sets up the OpenTelemetry diagnostic logger with custom error handling and suppression.
+ * This function can be called multiple times safely - it will only configure the logger once per LogContext.
+ *
+ * @param lc LogContext for routing OTEL diagnostic messages to the application logger
+ * @param force If true, will reconfigure even if already configured (useful after NodeSDK setup)
+ * @returns true if the logger was configured, false if it was already configured and not forced
+ */
+export declare function setupOtelDiagnosticLogger(lc?: LogContext, force?: boolean): boolean;
+/**
+ * Reset the diagnostic logger configuration state.
+ * This is primarily useful for testing scenarios.
+ */
+export declare function resetOtelDiagnosticLogger(): void;
+//# sourceMappingURL=otel-diag-logger.d.ts.map

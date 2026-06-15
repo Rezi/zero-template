@@ -1,0 +1,2 @@
+export declare function escapeLike(val: string): string;
+//# sourceMappingURL=escape-like.d.ts.map

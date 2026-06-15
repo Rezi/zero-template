@@ -1,0 +1,17 @@
+import { useZero } from "./zero-provider.js";
+import { useSyncExternalStore } from "react";
+//#region ../zero-react/src/use-connection-state.tsx
+/**
+* Hook to subscribe to the connection status of the Zero instance.
+*
+* @returns The connection status of the Zero instance.
+* @see {@link ConnectionState} for more details on the connection state.
+*/
+function useConnectionState() {
+	const zero = useZero();
+	return useSyncExternalStore(zero.connection.state.subscribe, () => zero.connection.state.current, () => zero.connection.state.current);
+}
+//#endregion
+export { useConnectionState };
+
+//# sourceMappingURL=use-connection-state.js.map

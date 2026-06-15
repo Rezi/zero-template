@@ -1,0 +1,22 @@
+import { newQuery } from "./query-impl.js";
+import { recordProxy } from "../../../shared/src/record-proxy.js";
+import { newRunnableQuery } from "./runnable-query-impl.js";
+//#region ../zql/src/query/create-builder.ts
+/**
+* Returns a set of query builders for the given schema.
+*/
+function createBuilder(schema) {
+	return createBuilderWithQueryFactory(schema, (table) => newQuery(schema, table));
+}
+/** @deprecated Use {@linkcode createBuilder} with `tx.run(zql.table.where(...))` instead. */
+function createRunnableBuilder(delegate, schema) {
+	if (!schema.enableLegacyQueries) return;
+	return createBuilderWithQueryFactory(schema, (table) => newRunnableQuery(delegate, schema, table));
+}
+function createBuilderWithQueryFactory(schema, queryFactory) {
+	return recordProxy(Object.assign(Object.create(null), schema.tables), (_tableSchema, prop) => queryFactory(prop));
+}
+//#endregion
+export { createBuilder, createRunnableBuilder };
+
+//# sourceMappingURL=create-builder.js.map

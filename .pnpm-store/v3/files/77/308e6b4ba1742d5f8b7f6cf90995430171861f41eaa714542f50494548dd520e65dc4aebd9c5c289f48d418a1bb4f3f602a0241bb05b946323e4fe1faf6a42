@@ -1,0 +1,9 @@
+/**
+ * This error is thrown when the puller fails for any reason.
+ */
+export declare class PullError extends Error {
+    name: string;
+    causedBy?: Error | undefined;
+    constructor(causedBy?: Error);
+}
+//# sourceMappingURL=pull-error.d.ts.map

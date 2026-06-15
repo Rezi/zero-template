@@ -1,0 +1,157 @@
+import { assertNumber } from "../../../shared/src/asserts.js";
+import { assertHash } from "../hash.js";
+import { Chunk, assertRefs, createChunk } from "./chunk.js";
+import { computeRefCountUpdates } from "./gc.js";
+import { chunkDataKey, chunkMetaKey, chunkRefCountKey, headKey } from "./key.js";
+import { mustGetChunk } from "./store.js";
+//#region ../replicache/src/dag/store-impl.ts
+var StoreImpl = class {
+	#kv;
+	#chunkHasher;
+	#assertValidHash;
+	constructor(kv, chunkHasher, assertValidHash) {
+		this.#kv = kv;
+		this.#chunkHasher = chunkHasher;
+		this.#assertValidHash = assertValidHash;
+	}
+	async read() {
+		return new ReadImpl(await this.#kv.read(), this.#assertValidHash);
+	}
+	async write() {
+		return new WriteImpl(await this.#kv.write(), this.#chunkHasher, this.#assertValidHash);
+	}
+	close() {
+		return this.#kv.close();
+	}
+};
+var ReadImpl = class {
+	_tx;
+	assertValidHash;
+	constructor(kv, assertValidHash) {
+		this._tx = kv;
+		this.assertValidHash = assertValidHash;
+	}
+	hasChunk(hash) {
+		return this._tx.has(chunkDataKey(hash));
+	}
+	async getChunk(hash) {
+		const dataPromise = this._tx.get(chunkDataKey(hash));
+		const refsPromise = this._tx.get(chunkMetaKey(hash));
+		const data = await dataPromise;
+		if (data === void 0) {
+			refsPromise.catch(() => {});
+			return;
+		}
+		const refsVal = await refsPromise;
+		let refs;
+		if (refsVal !== void 0) {
+			assertRefs(refsVal);
+			refs = refsVal;
+		} else refs = [];
+		return new Chunk(hash, data, refs);
+	}
+	mustGetChunk(hash) {
+		return mustGetChunk(this, hash);
+	}
+	async getHead(name) {
+		const data = await this._tx.get(headKey(name));
+		if (data === void 0) return;
+		assertHash(data);
+		return data;
+	}
+	release() {
+		this._tx.release();
+	}
+	get closed() {
+		return this._tx.closed;
+	}
+};
+var WriteImpl = class extends ReadImpl {
+	#chunkHasher;
+	#putChunks = /* @__PURE__ */ new Set();
+	#changedHeads = /* @__PURE__ */ new Map();
+	constructor(kvw, chunkHasher, assertValidHash) {
+		super(kvw, assertValidHash);
+		this.#chunkHasher = chunkHasher;
+	}
+	createChunk = (data, refs) => createChunk(data, refs, this.#chunkHasher);
+	get kvWrite() {
+		return this._tx;
+	}
+	async putChunk(c) {
+		const { hash, data, meta } = c;
+		this.assertValidHash(hash);
+		const key = chunkDataKey(hash);
+		const p1 = this._tx.put(key, data);
+		let p2;
+		if (meta.length > 0) {
+			for (const h of meta) this.assertValidHash(h);
+			p2 = this._tx.put(chunkMetaKey(hash), meta);
+		}
+		this.#putChunks.add(hash);
+		await p1;
+		await p2;
+	}
+	setHead(name, hash) {
+		return this.#setHead(name, hash);
+	}
+	removeHead(name) {
+		return this.#setHead(name, void 0);
+	}
+	async #setHead(name, hash) {
+		const oldHash = await this.getHead(name);
+		const hk = headKey(name);
+		let p1;
+		if (hash === void 0) p1 = this._tx.del(hk);
+		else p1 = this._tx.put(hk, hash);
+		const v = this.#changedHeads.get(name);
+		if (v === void 0) this.#changedHeads.set(name, {
+			new: hash,
+			old: oldHash
+		});
+		else v.new = hash;
+		await p1;
+	}
+	async commit() {
+		const refCountUpdates = await computeRefCountUpdates(this.#changedHeads.values(), this.#putChunks, this);
+		await this.#applyRefCountUpdates(refCountUpdates);
+		await this._tx.commit();
+	}
+	async getRefCount(hash) {
+		const value = await this._tx.get(chunkRefCountKey(hash));
+		if (value === void 0) return;
+		assertNumber(value);
+		if (value < 0 || value > 65535 || value !== (value | 0)) throw new Error(`Invalid ref count ${value}. We expect the value to be a Uint16`);
+		return value;
+	}
+	async getRefs(hash) {
+		const meta = await this._tx.get(chunkMetaKey(hash));
+		if (meta === void 0) return [];
+		assertRefs(meta);
+		return meta;
+	}
+	async #applyRefCountUpdates(refCountCache) {
+		const ps = [];
+		for (const [hash, count] of refCountCache) if (count === 0) ps.push(this.#removeAllRelatedKeys(hash));
+		else {
+			const refCountKey = chunkRefCountKey(hash);
+			ps.push(this._tx.put(refCountKey, count));
+		}
+		await Promise.all(ps);
+	}
+	async #removeAllRelatedKeys(hash) {
+		await Promise.all([
+			this._tx.del(chunkDataKey(hash)),
+			this._tx.del(chunkMetaKey(hash)),
+			this._tx.del(chunkRefCountKey(hash))
+		]);
+		this.#putChunks.delete(hash);
+	}
+	release() {
+		this._tx.release();
+	}
+};
+//#endregion
+export { StoreImpl };
+
+//# sourceMappingURL=store-impl.js.map

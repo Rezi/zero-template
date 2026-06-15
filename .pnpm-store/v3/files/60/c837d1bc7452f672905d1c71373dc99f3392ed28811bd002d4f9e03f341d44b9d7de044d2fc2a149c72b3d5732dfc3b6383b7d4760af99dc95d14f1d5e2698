@@ -1,0 +1,125 @@
+import { assert } from "../../../shared/src/asserts.js";
+import { stringify } from "../../../shared/src/bigint-json.js";
+import { dataTypeToZqlValueType } from "./pg-data-type.js";
+//#region ../zero-cache/src/types/lite.ts
+function columnType(col, table) {
+	const spec = table.columns[col];
+	assert(spec, `Unknown column ${col} in table ${table.name}`);
+	return spec.dataType;
+}
+/**
+* Creates a LiteRow from the supplied RowValue. A copy of the `row`
+* is made only if a value conversion is performed.
+*/
+function liteRow(row, table, jsonFormat) {
+	let copyNeeded = false;
+	let numCols = 0;
+	for (const key in row) {
+		numCols++;
+		const val = row[key];
+		if (val !== liteValue(val, columnType(key, table), jsonFormat)) {
+			copyNeeded = true;
+			break;
+		}
+	}
+	if (!copyNeeded) return {
+		row,
+		numCols
+	};
+	numCols = 0;
+	const converted = {};
+	for (const key in row) {
+		numCols++;
+		converted[key] = liteValue(row[key], columnType(key, table), jsonFormat);
+	}
+	return {
+		row: converted,
+		numCols
+	};
+}
+/**
+* Postgres values types that are supported by SQLite are stored as-is.
+* This includes Uint8Arrays for the `bytea` / `BLOB` type.
+* * `boolean` values are converted to `0` or `1` integers.
+* * `PreciseDate` values are converted to epoch microseconds.
+* * JSON and Array values are stored as `JSON.stringify()` strings.
+*
+* Note that this currently does not handle the `bytea[]` type, but that's
+* already a pretty questionable type.
+*/
+function liteValue(val, pgType, jsonFormat) {
+	if (val instanceof Uint8Array || val === null) return val;
+	if (liteTypeToZqlValueType(pgType) === "json") {
+		if (jsonFormat === "s" && typeof val === "string") return val;
+		return stringify(val);
+	}
+	const obj = toLiteValue(val);
+	return obj && typeof obj === "object" ? stringify(obj) : obj;
+}
+function toLiteValue(val) {
+	switch (typeof val) {
+		case "string":
+		case "number":
+		case "bigint": return val;
+		case "boolean": return val ? 1 : 0;
+	}
+	if (val === null) return val;
+	if (Array.isArray(val)) return val.map((v) => toLiteValue(v));
+	assert(val.constructor?.name === "Object", `Unhandled object type ${val.constructor?.name}`);
+	return val;
+}
+function mapLiteDataTypeToZqlSchemaValue(liteDataType) {
+	return { type: mapLiteDataTypeToZqlValueType(liteDataType) };
+}
+function mapLiteDataTypeToZqlValueType(dataType) {
+	const type = liteTypeToZqlValueType(dataType);
+	if (type === void 0) throw new Error(`Unsupported data type ${dataType}`);
+	return type;
+}
+var TEXT_ENUM_ATTRIBUTE = "|TEXT_ENUM";
+var NOT_NULL_ATTRIBUTE = "|NOT_NULL";
+var TEXT_ARRAY_ATTRIBUTE = "|TEXT_ARRAY";
+/**
+* Formats a {@link LiteTypeString}.
+*/
+function liteTypeString(upstreamDataType, notNull, textEnum, textArray) {
+	let typeString = upstreamDataType;
+	assert(!typeString.includes("|"), "Upstream type should not contain |");
+	if (notNull) typeString += NOT_NULL_ATTRIBUTE;
+	if (textEnum) typeString += TEXT_ENUM_ATTRIBUTE;
+	if (textArray) typeString += TEXT_ARRAY_ATTRIBUTE;
+	return typeString;
+}
+function upstreamDataType(liteTypeString) {
+	const delim = liteTypeString.indexOf("|");
+	return delim > 0 ? liteTypeString.substring(0, delim) : liteTypeString;
+}
+function nullableUpstream(liteTypeString) {
+	return !liteTypeString.includes(NOT_NULL_ATTRIBUTE);
+}
+/**
+* Returns the value type for the `pgDataType` if it is supported by ZQL.
+* (Note that `pgDataType` values are stored as-is in the SQLite column defs).
+*
+* For types not supported by ZQL, returns `undefined`.
+*/
+function liteTypeToZqlValueType(liteTypeString) {
+	return dataTypeToZqlValueType(upstreamDataType(liteTypeString).toLowerCase(), liteTypeString.includes(TEXT_ENUM_ATTRIBUTE), isArray(liteTypeString));
+}
+function isEnum(liteTypeString) {
+	return liteTypeString.includes(TEXT_ENUM_ATTRIBUTE);
+}
+function isArray(liteTypeString) {
+	return liteTypeString.includes("|TEXT_ARRAY") || liteTypeString.includes("[]");
+}
+var invalidDataTypeRe = /^.+\|.*\[\]/;
+function assertValidLiteColumnSpec(spec) {
+	const { dataType } = spec;
+	assert(dataType.includes(TEXT_ARRAY_ATTRIBUTE) === dataType.includes("[]"), () => `TEXT_ARRAY_ATTRIBUTE and [] must be consistent in dataType: ${dataType}`);
+	assert(dataType.includes("[]") === (spec.elemPgTypeClass !== null), () => `[] in dataType (${dataType}) must match elemPgTypeClass presence (${spec.elemPgTypeClass})`);
+	assert(!invalidDataTypeRe.test(dataType), `Invalid dataType ${dataType}`);
+}
+//#endregion
+export { assertValidLiteColumnSpec, isArray, isEnum, liteRow, liteTypeString, liteTypeToZqlValueType, liteValue, mapLiteDataTypeToZqlSchemaValue, nullableUpstream, upstreamDataType };
+
+//# sourceMappingURL=lite.js.map

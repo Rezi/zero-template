@@ -1,0 +1,12 @@
+import { expectTypeOf, test } from 'vitest';
+import { LogContext } from './logger.js';
+test('typed LogContext', () => {
+    const tlc = new LogContext('debug', { foo: 'bar' });
+    expectTypeOf(tlc.error).toEqualTypeOf();
+    tlc.error?.('x');
+    tlc.error?.('x', 1, 2, 3);
+    // @ts-expect-error not 'x'
+    tlc.error?.('y');
+    // @ts-expect-error not numbers
+    tlc.error?.('x', 'y');
+});

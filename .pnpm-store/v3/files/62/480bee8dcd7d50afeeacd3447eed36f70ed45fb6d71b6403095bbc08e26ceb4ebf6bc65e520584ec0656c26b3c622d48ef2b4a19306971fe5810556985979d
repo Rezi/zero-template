@@ -1,0 +1,21 @@
+import type { LogContext } from '@rocicorp/logger';
+import { type ZeroConfig } from '../config/zero-config.js';
+export type ActiveUsers = {
+    active_users_last_day: number;
+    users_1da: number;
+    users_7da: number;
+    users_30da: number;
+    users_1da_legacy: number;
+    users_7da_legacy: number;
+    users_30da_legacy: number;
+};
+export declare const startAnonymousTelemetry: (lc?: LogContext, config?: ZeroConfig) => void;
+export declare const recordMutation: (type: "crud" | "custom", count?: number) => void;
+export declare const recordQuery: (type: "crud" | "custom", count?: number) => void;
+export declare const recordRowsSynced: (count: number) => void;
+export declare const recordConnectionSuccess: () => void;
+export declare const recordConnectionAttempted: () => void;
+export declare const setActiveClientGroupsGetter: (getter: () => number) => void;
+export declare const setActiveUsersGetter: (getter: () => ActiveUsers) => void;
+export declare const shutdownAnonymousTelemetry: () => void;
+//# sourceMappingURL=anonymous-otel-start.d.ts.map

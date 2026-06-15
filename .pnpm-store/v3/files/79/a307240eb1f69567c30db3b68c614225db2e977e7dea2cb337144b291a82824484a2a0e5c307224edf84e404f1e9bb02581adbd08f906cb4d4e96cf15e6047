@@ -1,0 +1,45 @@
+//#region ../shared/src/asserts.ts
+function assert(b, msg) {
+	if (!b) throw new Error(typeof msg === "string" ? msg : msg());
+}
+function assertString(v) {
+	assertType(v, "string");
+}
+function assertNumber(v) {
+	assertType(v, "number");
+}
+function assertBoolean(v) {
+	assertType(v, "boolean");
+}
+function assertType(v, t) {
+	if (typeof v !== t) throwInvalidType(v, t);
+}
+function assertObject(v) {
+	if (v === null) throwInvalidType(v, "object");
+	assertType(v, "object");
+}
+function assertArray(v) {
+	if (!Array.isArray(v)) throwInvalidType(v, "array");
+}
+function invalidType(v, t) {
+	let s = "Invalid type: ";
+	if (v === null || v === void 0) s += v;
+	else s += `${typeof v} \`${v}\``;
+	return s + `, expected ${t}`;
+}
+function throwInvalidType(v, t) {
+	throw new Error(invalidType(v, t));
+}
+function assertNotNull(v) {
+	if (v === null) throw new Error("Expected non-null value");
+}
+function assertNotUndefined(v, msg = "Expected non undefined value") {
+	if (v === void 0) throw new Error(msg);
+}
+function unreachable(_) {
+	throw new Error("Unreachable");
+}
+//#endregion
+export { assert, assertArray, assertBoolean, assertNotNull, assertNotUndefined, assertNumber, assertObject, assertString, throwInvalidType, unreachable };
+
+//# sourceMappingURL=asserts.js.map

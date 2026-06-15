@@ -1,0 +1,24 @@
+//#region ../zero-protocol/src/error-kind-enum.ts
+var AuthInvalidated = "AuthInvalidated";
+var ClientNotFound = "ClientNotFound";
+var InvalidConnectionRequest = "InvalidConnectionRequest";
+var InvalidConnectionRequestBaseCookie = "InvalidConnectionRequestBaseCookie";
+var InvalidConnectionRequestLastMutationID = "InvalidConnectionRequestLastMutationID";
+var InvalidConnectionRequestClientDeleted = "InvalidConnectionRequestClientDeleted";
+var InvalidMessage = "InvalidMessage";
+var InvalidPush = "InvalidPush";
+var PushFailed = "PushFailed";
+var MutationFailed = "MutationFailed";
+var MutationRateLimited = "MutationRateLimited";
+var Rebalance = "Rebalance";
+var Rehome = "Rehome";
+var TransformFailed = "TransformFailed";
+var Unauthorized = "Unauthorized";
+var VersionNotSupported = "VersionNotSupported";
+var SchemaVersionNotSupported = "SchemaVersionNotSupported";
+var ServerOverloaded = "ServerOverloaded";
+var Internal = "Internal";
+//#endregion
+export { AuthInvalidated, ClientNotFound, Internal, InvalidConnectionRequest, InvalidConnectionRequestBaseCookie, InvalidConnectionRequestClientDeleted, InvalidConnectionRequestLastMutationID, InvalidMessage, InvalidPush, MutationFailed, MutationRateLimited, PushFailed, Rebalance, Rehome, SchemaVersionNotSupported, ServerOverloaded, TransformFailed, Unauthorized, VersionNotSupported };
+
+//# sourceMappingURL=error-kind-enum.js.map

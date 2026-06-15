@@ -1,0 +1,62 @@
+import { assert } from "../../../shared/src/asserts.js";
+import { BTreeRead, allEntriesAsDiff } from "../btree/read.js";
+import { commitFromHash } from "../db/commit.js";
+import { diff as diff$1 } from "../btree/diff.js";
+import { readIndexesForRead } from "../db/read.js";
+//#region ../replicache/src/sync/diff.ts
+/**
+* The diffs in different indexes. The key of the map is the index name.
+* "" is used for the primary index.
+*/
+var DiffsMap = class extends Map {
+	set(key, value) {
+		if (value.length === 0) return this;
+		return super.set(key, value);
+	}
+};
+/**
+* Diffs the state of the db at two different hashes.
+* It will include the primary indexes as well as all the secondary indexes.
+*/
+async function diff(oldHash, newHash, read, diffConfig, formatVersion) {
+	const [oldCommit, newCommit] = await Promise.all([commitFromHash(oldHash, read), commitFromHash(newHash, read)]);
+	return diffCommits(oldCommit, newCommit, read, diffConfig, formatVersion);
+}
+/**
+* Diffs the state of the db at two different commits.
+* It will include the primary indexes as well as all the secondary indexes.
+*/
+async function diffCommits(oldCommit, newCommit, read, diffConfig, formatVersion) {
+	const diffsMap = new DiffsMap();
+	if (!diffConfig.shouldComputeDiffs()) return diffsMap;
+	const valueDiff = await diff$1(new BTreeRead(read, formatVersion, oldCommit.valueHash), new BTreeRead(read, formatVersion, newCommit.valueHash));
+	diffsMap.set("", valueDiff);
+	await addDiffsForIndexes(oldCommit, newCommit, read, diffsMap, diffConfig, formatVersion);
+	return diffsMap;
+}
+async function addDiffsForIndexes(mainCommit, syncCommit, read, diffsMap, diffConfig, formatVersion) {
+	const oldIndexes = readIndexesForRead(mainCommit, read, formatVersion);
+	const newIndexes = readIndexesForRead(syncCommit, read, formatVersion);
+	for (const [oldIndexName, oldIndex] of oldIndexes) {
+		if (!diffConfig.shouldComputeDiffsForIndex(oldIndexName)) continue;
+		const newIndex = newIndexes.get(oldIndexName);
+		if (newIndex !== void 0) {
+			assert(newIndex !== oldIndex, "Expected newIndex to differ from oldIndex");
+			const diffs = await diff$1(oldIndex.map, newIndex.map);
+			newIndexes.delete(oldIndexName);
+			diffsMap.set(oldIndexName, diffs);
+		} else {
+			const diffs = await allEntriesAsDiff(oldIndex.map, "del");
+			diffsMap.set(oldIndexName, diffs);
+		}
+	}
+	for (const [newIndexName, newIndex] of newIndexes) {
+		if (!diffConfig.shouldComputeDiffsForIndex(newIndexName)) continue;
+		const diffs = await allEntriesAsDiff(newIndex.map, "add");
+		diffsMap.set(newIndexName, diffs);
+	}
+}
+//#endregion
+export { DiffsMap, addDiffsForIndexes, diff, diffCommits };
+
+//# sourceMappingURL=diff.js.map

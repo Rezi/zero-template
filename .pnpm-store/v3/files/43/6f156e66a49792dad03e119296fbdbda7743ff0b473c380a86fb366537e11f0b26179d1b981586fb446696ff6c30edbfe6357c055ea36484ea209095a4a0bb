@@ -1,0 +1,8 @@
+import type { LogContext } from '@rocicorp/logger';
+/**
+ * Run an operation with priority, indicating that IVM should use smaller time
+ * slices to allow this operation to proceed more quickly
+ */
+export declare function runPriorityOp<T>(lc: LogContext, description: string, op: () => Promise<T>): Promise<T>;
+export declare function isPriorityOpRunning(): boolean;
+//# sourceMappingURL=priority-op.d.ts.map

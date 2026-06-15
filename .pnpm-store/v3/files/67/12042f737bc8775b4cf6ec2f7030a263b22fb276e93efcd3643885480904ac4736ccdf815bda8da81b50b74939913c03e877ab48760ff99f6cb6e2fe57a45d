@@ -1,0 +1,1 @@
+{"version":3,"file":"has-own.js","names":[],"sources":["../../../../shared/src/has-own.ts"],"sourcesContent":["// hasOwn was added in ES2022\nexport const {hasOwn} = Object;\n"],"mappings":";AACA,IAAa,EAAC,WAAU"}

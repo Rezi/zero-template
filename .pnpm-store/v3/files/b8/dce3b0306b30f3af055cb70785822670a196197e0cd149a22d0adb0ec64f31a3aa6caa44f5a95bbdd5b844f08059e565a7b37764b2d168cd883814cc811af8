@@ -1,0 +1,23 @@
+import * as v from '../../shared/src/valita.ts';
+import type { Schema } from '../../zero-types/src/schema.ts';
+import { type PermissionsConfig } from './compiled-permissions.ts';
+import type { Relationship, TableSchema } from './table-schema.ts';
+export type SchemaConfig = {
+    schema: Schema;
+    permissions: PermissionsConfig;
+};
+export declare const relationshipSchema: v.Type<Relationship>;
+export declare const schemaValueSchema: v.ObjectType<Readonly<{
+    type: v.Type<import("../../zero-protocol/src/client-schema.ts").ValueType>;
+    serverName: v.Optional<string>;
+    optional: v.Optional<boolean>;
+}>, undefined>;
+export declare const tableSchemaSchema: v.Type<TableSchema>;
+export declare const schemaSchema: v.ObjectType<Readonly<{
+    tables: v.Type<Record<string, TableSchema>>;
+    relationships: v.Type<Record<string, Record<string, Relationship>>>;
+    enableLegacyQueries: v.Optional<boolean>;
+    enableLegacyMutators: v.Optional<boolean>;
+}>, undefined>;
+export declare function isSchemaConfig(value: any): value is SchemaConfig;
+//# sourceMappingURL=schema-config.d.ts.map

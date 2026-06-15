@@ -1,0 +1,12 @@
+//#region ../zql/src/planner/planner-node.ts
+/**
+* Omit the fanout function from a cost estimate for serialization.
+*/
+function omitFanout(cost) {
+	const { fanout: _, ...rest } = cost;
+	return rest;
+}
+//#endregion
+export { omitFanout };
+
+//# sourceMappingURL=planner-node.js.map

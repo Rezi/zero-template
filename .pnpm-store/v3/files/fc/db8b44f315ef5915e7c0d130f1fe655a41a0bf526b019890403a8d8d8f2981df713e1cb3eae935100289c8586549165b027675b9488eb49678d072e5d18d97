@@ -1,0 +1,2 @@
+export * from '../../../zero-server/src/adapters/postgresjs.ts';
+//# sourceMappingURL=postgresjs.d.ts.map

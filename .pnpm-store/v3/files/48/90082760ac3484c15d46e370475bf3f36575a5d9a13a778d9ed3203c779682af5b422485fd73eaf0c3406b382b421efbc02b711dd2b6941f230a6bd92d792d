@@ -1,0 +1,1 @@
+{"version":3,"file":"report-error.js","names":[],"sources":["../../../../replicache/src/report-error.ts"],"sourcesContent":["/**\n * Wrapper error class that should be reported as error (logger.error)\n */\nexport class ReportError extends Error {}\n"],"mappings":";;;;AAGA,IAAa,cAAb,cAAiC,MAAM"}

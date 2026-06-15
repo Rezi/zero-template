@@ -1,0 +1,25 @@
+import { valita_exports } from "../../shared/src/valita.js";
+import { mutationIDSchema } from "./mutation-id.js";
+import { mutationResponseSchema } from "./mutation.js";
+//#region ../zero-protocol/src/mutations-patch.ts
+/**
+* Mutation results are stored ephemerally in the client
+* hence why we only have the `put` operation.
+*
+* On put the mutation promise is resolved/rejected
+* and reference released.
+*/
+var putOpSchema = valita_exports.object({
+	op: valita_exports.literal("put"),
+	mutation: mutationResponseSchema
+});
+var delOpSchema = valita_exports.object({
+	op: valita_exports.literal("del"),
+	id: mutationIDSchema
+});
+var patchOpSchema = valita_exports.union(putOpSchema, delOpSchema);
+var mutationsPatchSchema = valita_exports.array(patchOpSchema);
+//#endregion
+export { mutationsPatchSchema };
+
+//# sourceMappingURL=mutations-patch.js.map

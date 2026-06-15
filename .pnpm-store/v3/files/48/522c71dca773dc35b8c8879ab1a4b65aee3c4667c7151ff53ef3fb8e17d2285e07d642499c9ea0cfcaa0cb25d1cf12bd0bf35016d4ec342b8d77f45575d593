@@ -1,0 +1,11 @@
+//#region ../zero-client/src/client/metric-name-enum.ts
+var TimeToConnectMs = "time_to_connect_ms";
+var LastConnectError = "last_connect_error";
+var TimeToConnectMsV2 = "time_to_connect_ms_v2";
+var LastConnectErrorV2 = "last_connect_error_v2";
+var TotalTimeToConnectMs = "total_time_to_connect_ms";
+var NotConnected = "not_connected";
+//#endregion
+export { LastConnectError, LastConnectErrorV2, NotConnected, TimeToConnectMs, TimeToConnectMsV2, TotalTimeToConnectMs };
+
+//# sourceMappingURL=metric-name-enum.js.map

@@ -1,0 +1,11 @@
+import "../kv/idb-store-with-mem-fallback.js";
+//#region ../replicache/src/persist/idb-databases-store-db-name.ts
+var IDB_DATABASES_DB_NAME = "replicache-dbs-v0";
+var testNamespace = "";
+function getIDBDatabasesDBName() {
+	return testNamespace + IDB_DATABASES_DB_NAME;
+}
+//#endregion
+export { getIDBDatabasesDBName };
+
+//# sourceMappingURL=idb-databases-store-db-name.js.map

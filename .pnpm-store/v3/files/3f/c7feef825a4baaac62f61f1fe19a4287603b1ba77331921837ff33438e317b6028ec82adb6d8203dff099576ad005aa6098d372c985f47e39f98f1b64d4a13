@@ -1,0 +1,340 @@
+import { assert, unreachable } from "../../../shared/src/asserts.js";
+import { must } from "../../../shared/src/must.js";
+import { mapAST, normalizeAST } from "../../../zero-protocol/src/ast.js";
+import { TransformFailed } from "../../../zero-protocol/src/error-kind-enum.js";
+import { ZeroCache } from "../../../zero-protocol/src/error-origin-enum.js";
+import { Internal } from "../../../zero-protocol/src/error-reason-enum.js";
+import { ProtocolError } from "../../../zero-protocol/src/error.js";
+import { hashOfAST, hashOfNameAndArgs } from "../../../zero-protocol/src/query-hash.js";
+import { clientToServer, serverToClient } from "../../../zero-schema/src/name-mapper.js";
+import "./error.js";
+import { clampTTL, compareTTL } from "../../../zql/src/query/ttl.js";
+import { desiredQueriesPrefixForClient } from "./keys.js";
+import { difference } from "../../../shared/src/set-utils.js";
+import { TDigest } from "../../../shared/src/tdigest.js";
+//#region ../zero-client/src/client/query-manager.ts
+/**
+* Tracks what queries the client is currently subscribed to on the server.
+* Sends `changeDesiredQueries` message to server when this changes.
+* Deduplicates requests so that we only listen to a given unique query once.
+*/
+var QueryManager = class {
+	#clientID;
+	#clientToServer;
+	#serverToClient;
+	#send;
+	#onFatalError;
+	#queries = /* @__PURE__ */ new Map();
+	#recentQueriesMaxSize;
+	#recentQueries = /* @__PURE__ */ new Set();
+	#gotQueries = /* @__PURE__ */ new Set();
+	#mutationTracker;
+	#pendingQueryChanges = [];
+	#queryChangeThrottleMs;
+	#pendingRemovals = [];
+	#batchTimer;
+	#lc;
+	#metrics = newMetrics();
+	#queryMetrics = /* @__PURE__ */ new Map();
+	#slowMaterializeThreshold;
+	#closedError;
+	#queryEvictedCallback;
+	constructor(lc, mutationTracker, clientID, tables, send, experimentalWatch, recentQueriesMaxSize, queryChangeThrottleMs, slowMaterializeThreshold, onFatalError) {
+		this.#lc = lc.withContext("QueryManager");
+		this.#clientID = clientID;
+		this.#clientToServer = clientToServer(tables);
+		this.#serverToClient = serverToClient(tables);
+		this.#recentQueriesMaxSize = recentQueriesMaxSize;
+		this.#send = send;
+		this.#mutationTracker = mutationTracker;
+		this.#queryChangeThrottleMs = queryChangeThrottleMs;
+		this.#slowMaterializeThreshold = slowMaterializeThreshold;
+		this.#onFatalError = onFatalError;
+		this.#mutationTracker.onAllMutationsApplied(() => {
+			if (this.#pendingRemovals.length === 0) return;
+			const pendingRemovals = this.#pendingRemovals;
+			this.#pendingRemovals = [];
+			for (const removal of pendingRemovals) removal();
+		});
+		experimentalWatch((diff) => {
+			for (const diffOp of diff) {
+				const queryHash = diffOp.key.substring(2);
+				switch (diffOp.op) {
+					case "add":
+						this.#gotQueries.add(queryHash);
+						this.#fireGotCallbacks(queryHash, true);
+						break;
+					case "del":
+						this.#gotQueries.delete(queryHash);
+						this.#fireGotCallbacks(queryHash, false);
+						break;
+				}
+			}
+		}, {
+			prefix: "g/",
+			initialValuesInFirstDiff: true
+		});
+	}
+	getAST(queryID) {
+		const ast = this.#queries.get(queryID)?.normalized;
+		return ast && mapAST(ast, this.#serverToClient);
+	}
+	setQueryEvictedCallback(cb) {
+		this.#queryEvictedCallback = cb;
+	}
+	mapClientASTToServer(ast) {
+		return mapAST(ast, this.#clientToServer);
+	}
+	#fireGotCallbacks(queryHash, got) {
+		const gotCallbacks = this.#queries.get(queryHash)?.gotCallbacks ?? [];
+		for (const gotCallback of gotCallbacks) gotCallback(got);
+	}
+	/**
+	* Get the queries that need to be registered with the server.
+	*
+	* An optional `lastPatch` can be provided. This is the last patch that was
+	* sent to the server and may not yet have been acked. If `lastPatch` is provided,
+	* this method will return a patch that does not include any events sent in `lastPatch`.
+	*
+	* This diffing of last patch and current patch is needed since we send
+	* a set of queries to the server when we first connect inside of the `sec-protocol` as
+	* the `initConnectionMessage`.
+	*
+	* While we're waiting for the `connected` response to come back from the server,
+	* the client may have registered more queries. We need to diff the `initConnectionMessage`
+	* queries with the current set of queries to understand what those were.
+	*/
+	async getQueriesPatch(tx, lastPatch) {
+		const existingQueryHashes = /* @__PURE__ */ new Set();
+		const prefix = desiredQueriesPrefixForClient(this.#clientID);
+		for await (const key of tx.scan({ prefix }).keys()) existingQueryHashes.add(key.substring(prefix.length, key.length));
+		const patch = /* @__PURE__ */ new Map();
+		for (const hash of existingQueryHashes) if (!this.#queries.has(hash)) patch.set(hash, {
+			op: "del",
+			hash
+		});
+		for (const [hash, { normalized, ttl, name, args }] of this.#queries) if (!existingQueryHashes.has(hash)) patch.set(hash, {
+			op: "put",
+			hash,
+			ast: name === void 0 ? normalized : void 0,
+			name,
+			args,
+			ttl: clampTTL(ttl)
+		});
+		if (lastPatch) {
+			for (const [hash, { op }] of lastPatch) if (op === "put" && !patch.has(hash)) patch.set(hash, {
+				op: "del",
+				hash
+			});
+			for (const [hash, { op }] of patch) {
+				const lastPatchOp = lastPatch.get(hash);
+				if (lastPatchOp && lastPatchOp.op === op) patch.delete(hash);
+			}
+		}
+		return patch;
+	}
+	handleTransformErrors(errors) {
+		for (const error of errors) {
+			const queryId = error.id;
+			const entry = this.#queries.get(queryId);
+			if (!entry) continue;
+			if (error.error === "app" || error.error === "parse") entry.gotCallbacks.forEach((callback) => callback(false, error));
+			else this.#onFatalError(new ProtocolError({
+				kind: TransformFailed,
+				origin: ZeroCache,
+				reason: Internal,
+				message: `Unknown error transforming queries: ${JSON.stringify(error)}`,
+				queryIDs: []
+			}));
+		}
+	}
+	handleClosed(reason) {
+		if (this.#closedError) return;
+		this.#closedError = reason;
+		for (const [queryId, entry] of this.#queries) {
+			const erroredQuery = {
+				error: "app",
+				id: queryId,
+				name: entry.name ?? "legacy",
+				message: reason.message,
+				details: { kind: reason.kind }
+			};
+			for (const gotCallback of entry.gotCallbacks) gotCallback(false, erroredQuery);
+		}
+	}
+	addCustom(ast, { name, args }, ttl, gotCallback) {
+		const normalized = normalizeAST(ast);
+		const queryId = hashOfNameAndArgs(name, args);
+		return this.#add(queryId, normalized, name, args, ttl, gotCallback);
+	}
+	addLegacy(ast, ttl, gotCallback) {
+		const normalized = normalizeAST(ast);
+		const astHash = hashOfAST(normalized);
+		return this.#add(astHash, normalized, void 0, void 0, ttl, gotCallback);
+	}
+	#add(queryId, normalized, name, args, ttl, gotCallback) {
+		assert(name === void 0 === (args === void 0), "If name is defined, args must be defined");
+		ttl = clampTTL(ttl, this.#lc);
+		let entry = this.#queries.get(queryId);
+		this.#recentQueries.delete(queryId);
+		if (!entry) {
+			normalized = mapAST(normalized, this.#clientToServer);
+			entry = {
+				normalized,
+				name,
+				args,
+				count: 1,
+				gotCallbacks: gotCallback ? [gotCallback] : [],
+				ttl
+			};
+			this.#queries.set(queryId, entry);
+			this.#queueQueryChange({
+				op: "put",
+				hash: queryId,
+				ast: name === void 0 ? normalized : void 0,
+				name,
+				args,
+				ttl
+			});
+		} else {
+			++entry.count;
+			this.#updateEntry(entry, queryId, ttl);
+			if (gotCallback) entry.gotCallbacks.push(gotCallback);
+		}
+		if (gotCallback) gotCallback(this.#gotQueries.has(queryId));
+		let removed = false;
+		const cleanupCb = () => {
+			if (removed) return;
+			removed = true;
+			if (this.#mutationTracker.size > 0) {
+				this.#pendingRemovals.push(() => this.#remove(entry, queryId, gotCallback));
+				return;
+			}
+			this.#remove(entry, queryId, gotCallback);
+		};
+		return cleanupCb;
+	}
+	updateCustom({ name, args }, ttl) {
+		const queryID = hashOfNameAndArgs(name, args);
+		const entry = must(this.#queries.get(queryID));
+		this.#updateEntry(entry, queryID, ttl);
+	}
+	updateLegacy(ast, ttl) {
+		const queryID = hashOfAST(normalizeAST(ast));
+		const entry = must(this.#queries.get(queryID));
+		this.#updateEntry(entry, queryID, ttl);
+	}
+	#updateEntry(entry, queryID, ttl) {
+		ttl = clampTTL(ttl, this.#lc);
+		if (compareTTL(ttl, entry.ttl) > 0) {
+			entry.ttl = ttl;
+			this.#queueQueryChange({
+				op: "put",
+				hash: queryID,
+				ast: entry.name === void 0 ? entry.normalized : void 0,
+				name: entry.name,
+				args: entry.args,
+				ttl
+			});
+		}
+	}
+	#queueQueryChange(op) {
+		this.#pendingQueryChanges.push(op);
+		this.#scheduleBatch();
+	}
+	#scheduleBatch() {
+		if (this.#batchTimer === void 0) this.#batchTimer = setTimeout(() => this.flushBatch(), this.#queryChangeThrottleMs);
+	}
+	flushBatch() {
+		if (this.#batchTimer !== void 0) {
+			clearTimeout(this.#batchTimer);
+			this.#batchTimer = void 0;
+		}
+		if (this.#pendingQueryChanges.length > 0) {
+			this.#send(["changeDesiredQueries", { desiredQueriesPatch: [...this.#pendingQueryChanges] }]);
+			this.#pendingQueryChanges.length = 0;
+		}
+	}
+	#remove(entry, astHash, gotCallback) {
+		if (gotCallback) {
+			const index = entry.gotCallbacks.indexOf(gotCallback);
+			entry.gotCallbacks.splice(index, 1);
+		}
+		--entry.count;
+		if (entry.count === 0) {
+			this.#recentQueries.add(astHash);
+			if (this.#recentQueries.size > this.#recentQueriesMaxSize) {
+				const lruQueryID = this.#recentQueries.values().next().value;
+				assert(lruQueryID, "Expected LRU query ID to exist");
+				const evictedAST = this.getAST(lruQueryID);
+				const evictedMetrics = this.#queryMetrics.get(lruQueryID) ?? newPerQueryMetrics();
+				this.#queries.delete(lruQueryID);
+				this.#recentQueries.delete(lruQueryID);
+				this.#queryMetrics.delete(lruQueryID);
+				this.#queueQueryChange({
+					op: "del",
+					hash: lruQueryID
+				});
+				assert(evictedAST, "Expected evicted AST to exist");
+				this.#queryEvictedCallback?.(lruQueryID, evictedAST, evictedMetrics);
+			}
+		}
+	}
+	/**
+	* Gets the aggregated metrics for all queries managed by this QueryManager.
+	*/
+	get metrics() {
+		return this.#metrics;
+	}
+	addMetric(metric, value, ...args) {
+		this.#metrics[metric].add(value);
+		const queryID = args[0];
+		if (metric === "query-materialization-end-to-end") {
+			const ast = args[1];
+			if (this.#slowMaterializeThreshold !== void 0 && value > this.#slowMaterializeThreshold) this.#lc.warn?.("Slow query materialization (including server/network)", queryID, ast, value);
+			else this.#lc.debug?.("Materialized query (including server/network)", queryID, ast, value);
+		}
+		let existing = this.#queryMetrics.get(queryID);
+		if (!existing) {
+			existing = newPerQueryMetrics();
+			this.#queryMetrics.set(queryID, existing);
+		}
+		switch (metric) {
+			case "query-update-client":
+				existing["query-update-client"].add(value);
+				break;
+			case "query-materialization-client":
+			case "query-materialization-end-to-end":
+				existing[metric] = value;
+				break;
+			default: unreachable(metric);
+		}
+	}
+	getQueryMetrics(queryID) {
+		return this.#queryMetrics.get(queryID);
+	}
+	/**
+	* For testing only: returns all query hashes currently registered.
+	*/
+	getAllNonGotQueryHashes() {
+		return difference(this.#queries, this.#gotQueries);
+	}
+};
+function newMetrics() {
+	return {
+		"query-materialization-client": new TDigest(),
+		"query-materialization-end-to-end": new TDigest(),
+		"query-update-client": new TDigest()
+	};
+}
+function newPerQueryMetrics() {
+	return {
+		"query-materialization-client": void 0,
+		"query-materialization-end-to-end": void 0,
+		"query-update-client": new TDigest()
+	};
+}
+//#endregion
+export { QueryManager };
+
+//# sourceMappingURL=query-manager.js.map

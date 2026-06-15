@@ -1,0 +1,2 @@
+import { runAnalyzeCLI } from "../../analyze-query/src/analyze-cli.js";
+export { runAnalyzeCLI };

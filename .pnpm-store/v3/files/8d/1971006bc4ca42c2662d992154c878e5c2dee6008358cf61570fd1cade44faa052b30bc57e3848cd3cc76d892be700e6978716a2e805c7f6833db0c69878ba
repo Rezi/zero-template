@@ -1,0 +1,31 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { ZeroConfig } from './zero-config.ts';
+/** {@link ZeroConfig} with defaults set per option documentation. */
+export type NormalizedZeroConfig = ZeroConfig & {
+    taskID: string;
+    changeStreamer: {
+        port: number;
+        address: string;
+    };
+    change: {
+        db: string;
+    };
+    cvr: {
+        db: string;
+    };
+    litestream: {
+        port: number;
+    };
+    numSyncWorkers: number;
+};
+export declare function isDevelopmentMode(): boolean;
+export declare function assertNormalized(config: ZeroConfig): asserts config is NormalizedZeroConfig;
+/**
+ * Normalizes the parsed `config` by setting defaults from the environment
+ * or from other options as documented. When defaults are applied, the
+ * corresponding `env` variable is updated so that the settings are propagated
+ * to spawned child workers. Child workers can then call
+ * {@link assertNormalized} to verify that the expected defaults have been set.
+ */
+export declare function normalizeZeroConfig(lc: LogContext, config: ZeroConfig, env: NodeJS.ProcessEnv, defaultTaskID?: string): NormalizedZeroConfig;
+//# sourceMappingURL=normalize.d.ts.map

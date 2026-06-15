@@ -1,0 +1,104 @@
+import type { LogContext } from '@rocicorp/logger';
+import postgres, { type PostgresType } from 'postgres';
+import { type JSONValue } from '../../../shared/src/bigint-json.ts';
+export declare function timestampToFpMillis(timestamp: string): number;
+declare function serializeTimestamp(val: unknown): string;
+export declare function millisecondsToPostgresTime(milliseconds: number): string;
+export declare function postgresTimeToMilliseconds(timeString: string): number;
+declare function dateToUTCMidnight(date: string): number;
+/**
+ * The (javascript) types of objects that can be returned by our configured
+ * Postgres clients. For initial-sync, these comes from the postgres.js client:
+ *
+ * https://github.com/porsager/postgres/blob/master/src/types.js
+ *
+ * and for the replication stream these come from the the node-postgres client:
+ *
+ * https://github.com/brianc/node-pg-types/blob/master/lib/textParsers.js
+ */
+export type PostgresValueType = JSONValue | Uint8Array;
+export type TypeOptions = {
+    /**
+     * Sends strings directly as JSON values (i.e. without JSON stringification).
+     * The application is responsible for ensuring that string inputs for JSON
+     * columns are already stringified. Other data types (e.g. objects) will
+     * still be stringified by the pg client.
+     */
+    sendStringAsJson?: boolean;
+};
+/**
+ * Configures types for the Postgres.js client library (`postgres`).
+ *
+ * @param jsonAsString Keep JSON / JSONB values as strings instead of parsing.
+ */
+export declare const postgresTypeConfig: ({ sendStringAsJson }?: TypeOptions) => {
+    types: {
+        bigint: postgres.PostgresType<bigint>;
+        json: {
+            to: number;
+            from: number[];
+            serialize: typeof import("../../../shared/src/bigint-json.ts").stringify;
+            parse: typeof import("../../../shared/src/bigint-json.ts").parse;
+        };
+        timestamp: {
+            to: number;
+            from: number[];
+            serialize: typeof serializeTimestamp;
+            parse: typeof timestampToFpMillis;
+        };
+        time: {
+            to: number;
+            from: number[];
+            serialize: (x: unknown) => string;
+            parse: typeof postgresTimeToMilliseconds;
+        };
+        timetz: {
+            to: number;
+            from: number[];
+            serialize: (x: unknown) => string;
+            parse: typeof postgresTimeToMilliseconds;
+        };
+        date: {
+            to: number;
+            from: number[];
+            serialize: (x: string | Date) => string;
+            parse: typeof dateToUTCMidnight;
+        };
+        numeric: {
+            to: number;
+            from: number[];
+            serialize: (x: number) => string;
+            parse: (x: string | number) => number;
+        };
+    };
+};
+export type PostgresDB = postgres.Sql<{
+    bigint: bigint;
+    json: JSONValue;
+}>;
+export type PostgresTransaction = postgres.TransactionSql<{
+    bigint: bigint;
+    json: JSONValue;
+}>;
+export declare function pgClient(lc: LogContext, connectionURI: string, applicationName: string, options?: postgres.Options<{
+    bigint: PostgresType<bigint>;
+    json: PostgresType<JSONValue>;
+}>, opts?: TypeOptions): PostgresDB;
+export declare function connectPgClient(...args: Parameters<typeof pgClient>): Promise<PostgresDB>;
+/**
+ * Disables any statement_timeout for the current transaction. By default,
+ * Postgres does not impose a statement timeout, but some users and providers
+ * set one at the database level (even though it is explicitly discouraged by
+ * the Postgres documentation).
+ *
+ * Zero logic in particular often does not fit into the category of general
+ * application logic; for potentially long-running operations like migrations
+ * and background cleanup, the statement timeout should be disabled to prevent
+ * these operations from timing out.
+ */
+export declare function disableStatementTimeout(sql: PostgresTransaction): void;
+export declare const typeNameByOID: Record<number, string>;
+export declare function isPostgresError(e: unknown, ...codes: [string, ...string[]]): boolean;
+export declare function isPostgresConfigError(e: unknown): boolean;
+export {};
+//# sourceMappingURL=pg.d.ts.map

@@ -1,0 +1,51 @@
+//#region ../shared/src/set-utils.ts
+function equals(a, b) {
+	if (a.size !== b.size) return false;
+	const iterator = a.keys();
+	for (let { done, value } = iterator.next(); !done; {done, value} = iterator.next()) if (!b.has(value)) return false;
+	return true;
+}
+function union(...sets) {
+	const result = /* @__PURE__ */ new Set();
+	for (const set of sets) {
+		const iterator = set.keys();
+		for (let { done, value } = iterator.next(); !done; {done, value} = iterator.next()) result.add(value);
+	}
+	return result;
+}
+function intersection(a, b) {
+	const result = /* @__PURE__ */ new Set();
+	if (a.size > b.size) {
+		const swap = a;
+		a = b;
+		b = swap;
+	}
+	const iterator = a.keys();
+	for (let { done, value } = iterator.next(); !done; {done, value} = iterator.next()) if (b.has(value)) result.add(value);
+	return result;
+}
+/**
+* Returns the elements in {@linkcode a} that are not in {@linkcode b}.
+*/
+function difference(a, b) {
+	const result = /* @__PURE__ */ new Set();
+	const iterator = a.keys();
+	for (let { done, value } = iterator.next(); !done; {done, value} = iterator.next()) if (!b.has(value)) result.add(value);
+	return result;
+}
+function symmetricDifferences(a, b) {
+	const onlyA = /* @__PURE__ */ new Set();
+	const iteratorA = a.keys();
+	for (let { done, value } = iteratorA.next(); !done; {done, value} = iteratorA.next()) onlyA.add(value);
+	const onlyB = /* @__PURE__ */ new Set();
+	const iteratorB = b.keys();
+	for (let { done, value } = iteratorB.next(); !done; {done, value} = iteratorB.next()) if (a.has(value)) {
+		onlyA.delete(value);
+		onlyB.delete(value);
+	} else onlyB.add(value);
+	return [onlyA, onlyB];
+}
+//#endregion
+export { difference, equals, intersection, symmetricDifferences, union };
+
+//# sourceMappingURL=set-utils.js.map

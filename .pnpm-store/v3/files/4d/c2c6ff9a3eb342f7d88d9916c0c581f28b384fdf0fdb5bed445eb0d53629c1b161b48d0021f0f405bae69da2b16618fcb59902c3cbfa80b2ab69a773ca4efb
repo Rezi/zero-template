@@ -1,0 +1,5 @@
+import { type Attributes, type Span, type Tracer } from '@opentelemetry/api';
+export declare function startSpan<T>(tracer: Tracer, name: string, cb: (span: Omit<Span, 'end'>) => T): T;
+export declare function startAsyncSpan<T>(tracer: Tracer, name: string, cb: (span: Omit<Span, 'end'>) => Promise<T>): Promise<T>;
+export declare function manualSpan(tracer: Tracer, name: string, durationMs: number, attributes?: Attributes): void;
+//# sourceMappingURL=span.d.ts.map

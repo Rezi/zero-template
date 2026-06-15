@@ -1,0 +1,34 @@
+import type { Enum } from '../../../shared/src/enum.ts';
+import type { Write } from '../dag/store.ts';
+import type * as FormatVersion from '../format-version-enum.ts';
+import type { FrozenJSONValue } from '../frozen-json.ts';
+import { type Hash } from '../hash.ts';
+import { DataNodeImpl, type Entry, InternalNodeImpl } from './node.ts';
+import { BTreeRead } from './read.ts';
+type FormatVersion = Enum<typeof FormatVersion>;
+export declare class BTreeWrite extends BTreeRead {
+    #private;
+    protected _dagRead: Write;
+    readonly minSize: number;
+    readonly maxSize: number;
+    constructor(dagWrite: Write, formatVersion: FormatVersion, root?: Hash, minSize?: number, maxSize?: number, getEntrySize?: <K, V>(k: K, v: V) => number, chunkHeaderSize?: number);
+    updateNode(node: DataNodeImpl | InternalNodeImpl): void;
+    newInternalNodeImpl(entries: Array<Entry<Hash>>, level: number): InternalNodeImpl;
+    newDataNodeImpl(entries: Entry<FrozenJSONValue>[]): DataNodeImpl;
+    newNodeImpl(entries: Entry<FrozenJSONValue>[], level: number): DataNodeImpl;
+    newNodeImpl(entries: Entry<Hash>[], level: number): InternalNodeImpl;
+    newNodeImpl(entries: Entry<Hash>[] | Entry<FrozenJSONValue>[], level: number): InternalNodeImpl | DataNodeImpl;
+    put(key: string, value: FrozenJSONValue): Promise<void>;
+    /**
+     * Inserts multiple key-value pairs into the BTree efficiently.
+     * The entries array must be sorted by key.
+     * @param entries - Array of [key, value] tuples, must be sorted by key
+     * @returns Promise that resolves when all entries are inserted
+     */
+    putMany(entries: ReadonlyArray<readonly [string, FrozenJSONValue]>): Promise<void>;
+    del(key: string): Promise<boolean>;
+    clear(): Promise<void>;
+    flush(): Promise<Hash>;
+}
+export {};
+//# sourceMappingURL=write.d.ts.map

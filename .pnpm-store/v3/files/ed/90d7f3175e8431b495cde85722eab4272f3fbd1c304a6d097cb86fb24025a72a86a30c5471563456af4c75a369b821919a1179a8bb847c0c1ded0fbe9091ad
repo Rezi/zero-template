@@ -1,0 +1,63 @@
+import { assert } from "../../../shared/src/asserts.js";
+import { must } from "../../../shared/src/must.js";
+import { createRunnableBuilder } from "../../../zql/src/query/create-builder.js";
+import "../../../zql/src/query/query.js";
+import { zeroData } from "../../../replicache/src/transactions.js";
+import { emptyFunction } from "../../../shared/src/sentinels.js";
+import { ZeroContext } from "./context.js";
+import { makeCRUDExecutor } from "./crud.js";
+import { makeTransactionMutate } from "../../../zql/src/mutate/crud.js";
+//#region ../zero-client/src/client/custom.ts
+var TransactionImpl = class {
+	location = "client";
+	mutate;
+	/**
+	* @deprecated Use {@linkcode createBuilder} with `tx.run(zql.table.where(...))` instead.
+	*/
+	query;
+	#repTx;
+	#zeroContext;
+	constructor(lc, repTx, schema) {
+		must(repTx.reason === "initial" || repTx.reason === "rebase");
+		const txData = getZeroTxData(repTx);
+		const ivmBranch = txData.ivmSources;
+		this.#repTx = repTx;
+		this.mutate = makeTransactionMutate(schema, makeCRUDExecutor(repTx, schema, ivmBranch));
+		const zeroContext = newZeroContext(lc, txData.ivmSources);
+		this.query = createRunnableBuilder(zeroContext, schema);
+		this.#zeroContext = zeroContext;
+	}
+	get clientID() {
+		return this.#repTx.clientID;
+	}
+	get mutationID() {
+		return this.#repTx.mutationID;
+	}
+	get reason() {
+		return this.#repTx.reason === "initial" ? "optimistic" : "rebase";
+	}
+	get token() {
+		return this.#repTx[zeroData]?.token;
+	}
+	run(query, options) {
+		return this.#zeroContext.run(query, options);
+	}
+};
+function getZeroTxData(repTx) {
+	return must(repTx[zeroData], "zero was not set on replicache internal options!");
+}
+function makeReplicacheMutator(lc, mutator, schema, context) {
+	return async (repTx, args) => {
+		await mutator(new TransactionImpl(lc, repTx, schema), args, context);
+	};
+}
+function assertValidRunOptions(options) {
+	assert(options?.type !== "complete", "Cannot wait for complete results in custom mutations");
+}
+function newZeroContext(lc, ivmBranch) {
+	return new ZeroContext(lc, ivmBranch, () => emptyFunction, () => emptyFunction, emptyFunction, emptyFunction, emptyFunction, (applyViewUpdates) => applyViewUpdates(), emptyFunction, assertValidRunOptions);
+}
+//#endregion
+export { TransactionImpl, makeReplicacheMutator };
+
+//# sourceMappingURL=custom.js.map

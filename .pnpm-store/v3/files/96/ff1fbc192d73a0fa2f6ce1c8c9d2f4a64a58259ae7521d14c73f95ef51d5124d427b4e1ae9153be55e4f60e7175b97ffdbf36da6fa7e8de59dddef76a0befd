@@ -1,0 +1,2 @@
+export declare function toError(e: unknown): Error;
+//# sourceMappingURL=to-error.d.ts.map

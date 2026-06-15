@@ -1,0 +1,35 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { Store } from '../../../replicache/src/dag/store.ts';
+import { type DeletedClients } from '../../../replicache/src/deleted-clients.ts';
+import type { ClientGroupID } from '../../../replicache/src/sync/ids.ts';
+import type { DeleteClientsBody, DeleteClientsMessage } from '../../../zero-protocol/src/delete-clients.ts';
+/**
+ * Replicache will tell us when it deletes clients from the persistent storage
+ * due to GC. When this happens we tell the server about the deleted clients.
+ * Replicache also store the deleted clients in IDB in case the server is
+ * currently offline.
+ *
+ * The server will reply with the client it actually deleted. When we get that
+ * we remove those IDs from our local storage.
+ */
+export declare class DeleteClientsManager {
+    #private;
+    constructor(send: (msg: DeleteClientsMessage) => void, dagStore: Store, lc: LogContext, clientGroupID: Promise<ClientGroupID>, clientID: string);
+    /**
+     * This gets called by Replicache when it deletes clients from the persistent
+     * storage.
+     */
+    onClientsDeleted(deletedClients: DeletedClients): Promise<void>;
+    /**
+     * Zero calls this after it connects to ensure that the server knows about all
+     * the clients that might have been deleted locally since the last connection.
+     */
+    sendDeletedClientsToServer(): Promise<void>;
+    /**
+     * This is called as a response to the server telling us which clients it
+     * actually deleted.
+     */
+    clientsDeletedOnServer(deletedClients: DeleteClientsBody): Promise<void>;
+    getDeletedClients(): Promise<DeletedClients>;
+}
+//# sourceMappingURL=delete-clients-manager.d.ts.map

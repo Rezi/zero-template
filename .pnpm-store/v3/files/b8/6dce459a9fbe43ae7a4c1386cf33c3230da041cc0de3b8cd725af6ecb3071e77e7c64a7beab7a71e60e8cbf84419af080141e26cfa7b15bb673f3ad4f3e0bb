@@ -1,0 +1,2 @@
+export * from '../../zqlite/src/mod.ts';
+//# sourceMappingURL=zqlite.d.ts.map

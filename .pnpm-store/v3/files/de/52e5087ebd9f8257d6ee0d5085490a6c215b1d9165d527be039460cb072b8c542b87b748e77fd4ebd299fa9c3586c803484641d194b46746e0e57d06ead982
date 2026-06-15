@@ -1,0 +1,3 @@
+import type { LogContext } from '@rocicorp/logger';
+export declare function initBgIntervalProcess(processName: string, process: () => Promise<unknown>, delayMs: () => number, lc: LogContext, signal: AbortSignal): void;
+//# sourceMappingURL=bg-interval.d.ts.map

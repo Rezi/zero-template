@@ -1,0 +1,3 @@
+#!/usr/bin/env node
+import '../../zero-cache/src/scripts/deploy-permissions.ts';
+//# sourceMappingURL=deploy-permissions.d.ts.map

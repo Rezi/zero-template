@@ -1,0 +1,115 @@
+import type { LogContext } from '@rocicorp/logger';
+import { type JSONObject } from '../../../../../../shared/src/bigint-json.ts';
+import * as v from '../../../../../../shared/src/valita.ts';
+import type { PostgresDB, PostgresTransaction } from '../../../../types/pg.ts';
+import type { AppID, ShardConfig, ShardID } from '../../../../types/shards.ts';
+import { type PublicationInfo, type PublishedSchema } from './published.ts';
+/**
+ * Validates that a publication name is a valid PostgreSQL identifier.
+ * This provides defense-in-depth against SQL injection when publication
+ * names are used in replication commands.
+ */
+export declare function validatePublicationName(name: string): void;
+export declare function internalPublicationPrefix({ appID }: AppID): string;
+export declare function legacyReplicationSlot({ appID, shardNum }: ShardID): string;
+export declare function replicationSlotPrefix(shard: ShardID): string;
+/**
+ * An expression used to match replication slots in the shard
+ * in a Postgres `LIKE` operator.
+ */
+export declare function replicationSlotExpression(shard: ShardID): string;
+export declare function metadataPublicationName(appID: string, shardID: string | number): string;
+export declare function ensureGlobalTables(db: PostgresDB, appID: AppID): Promise<void>;
+export declare function getClientsTableDefinition(schema: string): string;
+/**
+ * Tracks the results of mutations.
+ * 1. It is an error for the same mutation ID to be used twice.
+ * 2. The result is JSONB to allow for arbitrary results.
+ *
+ * The tables must be cleaned up as the clients
+ * receive the mutation responses and as clients are removed.
+ */
+export declare function getMutationsTableDefinition(schema: string): string;
+export declare const SHARD_CONFIG_TABLE = "shardConfig";
+export declare function shardSetup(shardConfig: ShardConfig, metadataPublication: string): string;
+export declare function dropShard(appID: string, shardID: string | number): string;
+declare const internalShardConfigSchema: v.ObjectType<{
+    publications: v.ArrayType<v.Type<string>>;
+    ddlDetection: v.Type<boolean>;
+}, undefined>;
+export type InternalShardConfig = v.Infer<typeof internalShardConfigSchema>;
+declare const replicaSchema: v.ObjectType<Omit<{
+    publications: v.ArrayType<v.Type<string>>;
+    ddlDetection: v.Type<boolean>;
+}, "id" | "initialSyncContext" | "version" | "rank" | "slot" | "initialSchema" | "subscriberContext"> & {
+    id: v.Type<string>;
+    rank: v.Type<bigint>;
+    slot: v.Type<string>;
+    version: v.Type<string>;
+    initialSchema: v.Type<{
+        indexes: {
+            isReplicaIdentity?: boolean | undefined;
+            isPrimaryKey?: boolean | undefined;
+            isImmediate?: boolean | undefined;
+            name: string;
+            columns: Record<string, "ASC" | "DESC">;
+            schema: string;
+            tableName: string;
+            unique: boolean;
+        }[];
+        tables: {
+            replicaIdentityColumns: string[];
+            primaryKey?: string[] | undefined;
+            schemaOID?: number | undefined;
+            replicaIdentity?: "n" | "d" | "f" | "i" | undefined;
+            name: string;
+            schema: string;
+            oid: number;
+            columns: Record<string, {
+                pgTypeClass?: "e" | "d" | "b" | "c" | "p" | "r" | "m" | undefined;
+                elemPgTypeClass?: "e" | "d" | "b" | "c" | "p" | "r" | "m" | null | undefined;
+                characterMaximumLength?: number | null | undefined;
+                notNull?: boolean | null | undefined;
+                dflt?: string | null | undefined;
+                pos: number;
+                dataType: string;
+                typeOID: number;
+            }>;
+            publications: Record<string, {
+                rowFilter: string | null;
+            }>;
+        }[];
+    }>;
+    initialSyncContext: v.Type<Readonly<Record<string, import("../../../../../../shared/src/bigint-json.ts").JSONValue>> | null>;
+    subscriberContext: v.Type<Readonly<Record<string, import("../../../../../../shared/src/bigint-json.ts").JSONValue>> | null>;
+}, undefined>;
+export type Replica = v.Infer<typeof replicaSchema>;
+/**
+ * Creates a new replica to mark it as the owner of a specified `slot`.
+ * This should be done with an advisory lock for replica/slot management
+ * to ensure that the slot does not get dropped by concurrent cleanup
+ * logic.
+ *
+ * Once initial sync is complete, {@link initReplica} should be called to
+ * make the replica usable for incremental sync.
+ */
+export declare function createReplica(sql: PostgresDB, shard: ShardID, id: string, slot: string, replicaVersion: string): Promise<void>;
+export declare function initReplica(sql: PostgresDB, shard: ShardID, id: string, { tables, indexes }: PublishedSchema, initialSyncContext: JSONObject): Promise<void>;
+/**
+ * Gets the latest initialized replica at the specified version.
+ */
+export declare function getReplicaAtVersion(lc: LogContext, sql: PostgresDB, shard: ShardID, replicaVersion: string, context?: JSONObject): Promise<Replica | null>;
+export declare function getInternalShardConfig(sql: PostgresDB, shard: ShardID): Promise<InternalShardConfig>;
+/**
+ * Sets up and returns all publications (including internal ones) for
+ * the given shard.
+ */
+export declare function setupTablesAndReplication(lc: LogContext, sql: PostgresTransaction, requested: ShardConfig): Promise<void>;
+export declare function setupTriggers(lc: LogContext, tx: PostgresTransaction, shard: ShardConfig): Promise<void>;
+export declare function validatePublications(lc: LogContext, published: PublicationInfo): void;
+type ReplicaIdentities = {
+    apply(lc: LogContext, db: PostgresDB): Promise<void>;
+};
+export declare function replicaIdentitiesForTablesWithoutPrimaryKeys(pubs: PublishedSchema): ReplicaIdentities | undefined;
+export {};
+//# sourceMappingURL=shard.d.ts.map

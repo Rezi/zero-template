@@ -1,0 +1,82 @@
+import { hashOfAST } from "../../../zero-protocol/src/query-hash.js";
+import { simplifyCondition } from "../../../zql/src/query/expression.js";
+import { bindStaticParameters } from "../../../zql/src/builder/builder.js";
+//#region ../zero-cache/src/auth/read-authorizer.ts
+/**
+* Adds permission rules to the given query so it only returns rows that the
+* user is allowed to read.
+*
+* If the returned query is `undefined` that means that user cannot run
+* the query at all. This is only the case if we can infer that all rows
+* would be excluded without running the query.
+* E.g., the user is trying to query a table that is not readable.
+*/
+function transformAndHashQuery(lc, id, query, permissionRules, auth, internalQuery) {
+	const transformed = internalQuery ? query : transformQuery(lc, query, permissionRules, auth);
+	return {
+		id,
+		transformedAst: transformed,
+		transformationHash: hashOfAST(transformed)
+	};
+}
+/**
+* For a given AST, apply the read-auth rules and bind static auth data.
+*/
+function transformQuery(lc, query, permissionRules, auth) {
+	return bindStaticParameters(transformQueryInternal(lc, query, permissionRules), { authData: auth ? auth.decoded : {} });
+}
+function transformQueryInternal(lc, query, permissionRules) {
+	let rowSelectRules = permissionRules?.tables?.[query.table]?.row?.select;
+	if (!rowSelectRules || rowSelectRules.length === 0) {
+		lc.warn?.("No permission rules found for table '" + query.table + "'. No rows will be returned. Use ANYONE_CAN to allow all users to access all rows.");
+		rowSelectRules = [["allow", {
+			type: "or",
+			conditions: []
+		}]];
+	}
+	const updatedWhere = addRulesToWhere(query.where ? transformCondition(lc, query.where, permissionRules) : void 0, rowSelectRules);
+	return {
+		...query,
+		where: simplifyCondition(updatedWhere),
+		related: query.related?.map((sq) => {
+			const subquery = transformQueryInternal(lc, sq.subquery, permissionRules);
+			return {
+				...sq,
+				subquery
+			};
+		})
+	};
+}
+function addRulesToWhere(where, rowSelectRules) {
+	return {
+		type: "and",
+		conditions: [...where ? [where] : [], {
+			type: "or",
+			conditions: rowSelectRules.map(([_, condition]) => condition)
+		}]
+	};
+}
+function transformCondition(lc, cond, auth) {
+	switch (cond.type) {
+		case "simple": return cond;
+		case "and":
+		case "or": return {
+			...cond,
+			conditions: cond.conditions.map((c) => transformCondition(lc, c, auth))
+		};
+		case "correlatedSubquery": {
+			const query = transformQueryInternal(lc, cond.related.subquery, auth);
+			return {
+				...cond,
+				related: {
+					...cond.related,
+					subquery: query
+				}
+			};
+		}
+	}
+}
+//#endregion
+export { transformAndHashQuery };
+
+//# sourceMappingURL=read-authorizer.js.map

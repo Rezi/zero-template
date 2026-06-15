@@ -1,0 +1,35 @@
+import { defaultFormat } from "../../../zero-types/src/format.js";
+import { QueryImpl } from "./query-impl.js";
+//#region ../zql/src/query/runnable-query-impl.ts
+function newRunnableQuery(delegate, schema, table) {
+	return new RunnableQueryImpl(delegate, schema, table, { table }, defaultFormat, void 0);
+}
+var RunnableQueryImpl = class RunnableQueryImpl extends QueryImpl {
+	#delegate;
+	constructor(delegate, schema, tableName, ast = { table: tableName }, format = defaultFormat, system = "client", customQueryID, currentJunction) {
+		super(schema, tableName, ast, format, system, customQueryID, currentJunction, (tableName, ast, format, customQueryID, currentJunction) => new RunnableQueryImpl(delegate, schema, tableName, ast, format, system, customQueryID, currentJunction));
+		this.#delegate = delegate;
+	}
+	run(options) {
+		return this.#delegate.run(this, options);
+	}
+	preload(options) {
+		return this.#delegate.preload(this, options);
+	}
+	materialize(factory, ttl) {
+		let actualFactory;
+		let options;
+		if (typeof factory === "function") {
+			actualFactory = factory;
+			options = { ttl };
+		} else {
+			actualFactory = void 0;
+			options = { ttl: factory };
+		}
+		return this.#delegate.materialize(this, actualFactory, options);
+	}
+};
+//#endregion
+export { newRunnableQuery };
+
+//# sourceMappingURL=runnable-query-impl.js.map

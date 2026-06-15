@@ -1,0 +1,668 @@
+import * as v from '../../../../../shared/src/valita.ts';
+import type { QueriesRow } from './cvr.ts';
+export declare const cvrVersionSchema: v.ObjectType<{
+    /**
+     * The database `stateVersion` with which the rows in the CVR are consistent.
+     */
+    stateVersion: v.Type<string>;
+    /**
+     * `configVersion` is subversion of `stateVersion` that is initially absent for each
+     * `stateVersion`, and incremented for configuration changes that affect the contents
+     * of the CVR such as:
+     *
+     * * query set changes
+     * * query transformation changes (which may happen for changes
+     *   in server-side logic or authorization policies)
+     *
+     * Such configuration changes are always correlated with a change to one or more
+     * `/meta/...` records in the CVR, often (but not always) with corresponding
+     * patches in `/patches/meta/...`.
+     *
+     * When the `stateVersion` moves forward, the `minorVersion` is reset to absent.
+     * In this manner it behaves like the analogous concept in semantic versioning.
+     */
+    configVersion: v.Optional<number>;
+}, undefined>;
+export type CVRVersion = v.Infer<typeof cvrVersionSchema>;
+export declare const EMPTY_CVR_VERSION: CVRVersion;
+export declare function oneAfter(v: NullableCVRVersion): CVRVersion;
+export type NullableCVRVersion = CVRVersion | null;
+export declare function cmpVersions(a: NullableCVRVersion, b: NullableCVRVersion): number;
+export declare function maxVersion(a: CVRVersion, b?: CVRVersion): CVRVersion;
+export declare function versionToCookie(v: CVRVersion): string;
+export declare function versionToNullableCookie(v: NullableCVRVersion): string | null;
+export declare function cookieToVersion(cookie: string | null): NullableCVRVersion;
+export declare const cvrIDSchema: v.ObjectType<{
+    id: v.Type<string>;
+}, undefined>;
+export type CvrID = v.Infer<typeof cvrIDSchema>;
+export declare const clientRecordSchema: v.ObjectType<{
+    /** The client ID, of which there can be multiple for a client group view. */
+    id: v.Type<string>;
+    /** The client's desired query IDs. Patch information is stored in the QueryRecord. */
+    desiredQueryIDs: v.ArrayType<v.Type<string>>;
+}, undefined>;
+export type ClientRecord = v.Infer<typeof clientRecordSchema>;
+export declare const baseQueryRecordSchema: v.ObjectType<{
+    /** The client-specified ID used to identify this query. Typically a hash. */
+    id: v.Type<string>;
+    /**
+     * The hash of the query after server-side transformations, which include:
+     *
+     * * Normalization (which may differ from what the client does)
+     * * Query "expansion" to include primary keys and query-execution-related columns
+     * * Authorization transforms
+     *
+     * Transformations depend on conditions that are independent of the db state version,
+     * such as server-side logic and authorization policies. As such, the version of a CVR
+     * version may need to be advanced independent of db state changes. This is done
+     * via the `minorVersion` counter of the CVRVersion object, which is used to account
+     * for both changes to the query set and changes to query transformations (which are
+     * effectively remove-old-query + add-new-query).
+     *
+     * Note that the transformed AST itself is **not** stored, as the result of the previous
+     * transformation is not useful in and of itself. If the current transformation results in
+     * a different hash than that of the transformation used for the last version of the CVR,
+     * it is simply handled by invalidating the existing rows, re-executed the query with
+     * the new transformation, and advancing the CVR's `minorVersion` and this query's
+     * `transformationVersion`.
+     *
+     * Note that the transformationHash is only stored when the query has reached the "gotten"
+     * state. If the query is in the "desired" but not yet "gotten" state, the field is absent.
+     */
+    transformationHash: v.Optional<string>;
+    /**
+     * The CVR version corresponding to the `transformationHash`. This essentially tracks when
+     * this version of the query was effectively added to the CVR (as opposed to the
+     * `patchVersion`, which is simply when the client was notified that its query was added
+     * to the gotten set). Catchup of clients from old CVR versions require executing all
+     * queries with a newer `transformationVersion`.
+     */
+    transformationVersion: v.Optional<{
+        configVersion?: number | undefined;
+        stateVersion: string;
+    }>;
+    /**
+     * Hex-encoded XOR signature over `h64(JSON.stringify([schema, table, rowKey]))`
+     * of every row currently attached to this query. Maintained incrementally by
+     * `PipelineDriver` as ADDs / REMOVEs are yielded from the query's pipeline
+     * (EDITs no-op), and persisted via `CVRQueryDrivenUpdater.flush` by a
+     * signature-provider callback.
+     *
+     * Used to detect drift on re-hydration of queries containing the `Cap` operator,
+     * which intentionally does not impose ordering and thus may pick a different N-row
+     * subset on re-execution. Comparing the pre-hydration signature with the post-
+     * hydration signature lets us force a `configVersion` bump so the standard CVR-diff
+     * machinery emits the reconciling poke. Absent or `'0'` means the signature is
+     * empty (no rows currently attached).
+     */
+    rowSetSignature: v.Optional<string>;
+}, undefined>;
+/**
+ * Internal queries track rows in the database for internal use, such as the
+ * `lastMutationID`s in the `zero.clients` table. They participate in the standard
+ * invalidation / update logic for row contents, but not in the desired/got or
+ * size-based quota logic for client-requested queries.
+ */
+export declare const internalQueryRecordSchema: v.ObjectType<Omit<{
+    /** The client-specified ID used to identify this query. Typically a hash. */
+    id: v.Type<string>;
+    /**
+     * The hash of the query after server-side transformations, which include:
+     *
+     * * Normalization (which may differ from what the client does)
+     * * Query "expansion" to include primary keys and query-execution-related columns
+     * * Authorization transforms
+     *
+     * Transformations depend on conditions that are independent of the db state version,
+     * such as server-side logic and authorization policies. As such, the version of a CVR
+     * version may need to be advanced independent of db state changes. This is done
+     * via the `minorVersion` counter of the CVRVersion object, which is used to account
+     * for both changes to the query set and changes to query transformations (which are
+     * effectively remove-old-query + add-new-query).
+     *
+     * Note that the transformed AST itself is **not** stored, as the result of the previous
+     * transformation is not useful in and of itself. If the current transformation results in
+     * a different hash than that of the transformation used for the last version of the CVR,
+     * it is simply handled by invalidating the existing rows, re-executed the query with
+     * the new transformation, and advancing the CVR's `minorVersion` and this query's
+     * `transformationVersion`.
+     *
+     * Note that the transformationHash is only stored when the query has reached the "gotten"
+     * state. If the query is in the "desired" but not yet "gotten" state, the field is absent.
+     */
+    transformationHash: v.Optional<string>;
+    /**
+     * The CVR version corresponding to the `transformationHash`. This essentially tracks when
+     * this version of the query was effectively added to the CVR (as opposed to the
+     * `patchVersion`, which is simply when the client was notified that its query was added
+     * to the gotten set). Catchup of clients from old CVR versions require executing all
+     * queries with a newer `transformationVersion`.
+     */
+    transformationVersion: v.Optional<{
+        configVersion?: number | undefined;
+        stateVersion: string;
+    }>;
+    /**
+     * Hex-encoded XOR signature over `h64(JSON.stringify([schema, table, rowKey]))`
+     * of every row currently attached to this query. Maintained incrementally by
+     * `PipelineDriver` as ADDs / REMOVEs are yielded from the query's pipeline
+     * (EDITs no-op), and persisted via `CVRQueryDrivenUpdater.flush` by a
+     * signature-provider callback.
+     *
+     * Used to detect drift on re-hydration of queries containing the `Cap` operator,
+     * which intentionally does not impose ordering and thus may pick a different N-row
+     * subset on re-execution. Comparing the pre-hydration signature with the post-
+     * hydration signature lets us force a `configVersion` bump so the standard CVR-diff
+     * machinery emits the reconciling poke. Absent or `'0'` means the signature is
+     * empty (no rows currently attached).
+     */
+    rowSetSignature: v.Optional<string>;
+}, "type" | "ast"> & {
+    type: v.Type<"internal">;
+    ast: v.Type<import("../../../../../zero-protocol/src/ast.ts").AST>;
+}, undefined>;
+export type InternalQueryRecord = v.Infer<typeof internalQueryRecordSchema>;
+export declare const clientQueryRecordSchema: v.ObjectType<Omit<Omit<{
+    /** The client-specified ID used to identify this query. Typically a hash. */
+    id: v.Type<string>;
+    /**
+     * The hash of the query after server-side transformations, which include:
+     *
+     * * Normalization (which may differ from what the client does)
+     * * Query "expansion" to include primary keys and query-execution-related columns
+     * * Authorization transforms
+     *
+     * Transformations depend on conditions that are independent of the db state version,
+     * such as server-side logic and authorization policies. As such, the version of a CVR
+     * version may need to be advanced independent of db state changes. This is done
+     * via the `minorVersion` counter of the CVRVersion object, which is used to account
+     * for both changes to the query set and changes to query transformations (which are
+     * effectively remove-old-query + add-new-query).
+     *
+     * Note that the transformed AST itself is **not** stored, as the result of the previous
+     * transformation is not useful in and of itself. If the current transformation results in
+     * a different hash than that of the transformation used for the last version of the CVR,
+     * it is simply handled by invalidating the existing rows, re-executed the query with
+     * the new transformation, and advancing the CVR's `minorVersion` and this query's
+     * `transformationVersion`.
+     *
+     * Note that the transformationHash is only stored when the query has reached the "gotten"
+     * state. If the query is in the "desired" but not yet "gotten" state, the field is absent.
+     */
+    transformationHash: v.Optional<string>;
+    /**
+     * The CVR version corresponding to the `transformationHash`. This essentially tracks when
+     * this version of the query was effectively added to the CVR (as opposed to the
+     * `patchVersion`, which is simply when the client was notified that its query was added
+     * to the gotten set). Catchup of clients from old CVR versions require executing all
+     * queries with a newer `transformationVersion`.
+     */
+    transformationVersion: v.Optional<{
+        configVersion?: number | undefined;
+        stateVersion: string;
+    }>;
+    /**
+     * Hex-encoded XOR signature over `h64(JSON.stringify([schema, table, rowKey]))`
+     * of every row currently attached to this query. Maintained incrementally by
+     * `PipelineDriver` as ADDs / REMOVEs are yielded from the query's pipeline
+     * (EDITs no-op), and persisted via `CVRQueryDrivenUpdater.flush` by a
+     * signature-provider callback.
+     *
+     * Used to detect drift on re-hydration of queries containing the `Cap` operator,
+     * which intentionally does not impose ordering and thus may pick a different N-row
+     * subset on re-execution. Comparing the pre-hydration signature with the post-
+     * hydration signature lets us force a `configVersion` bump so the standard CVR-diff
+     * machinery emits the reconciling poke. Absent or `'0'` means the signature is
+     * empty (no rows currently attached).
+     */
+    rowSetSignature: v.Optional<string>;
+}, "patchVersion" | "clientState"> & {
+    /**
+     * The client state for this query, which includes the inactivatedAt, ttl and
+     * version. The client state is stored in a record with the client ID as the
+     * key.
+     */
+    clientState: v.Type<Record<string, {
+        inactivatedAt?: import("../ttl-clock.ts").TTLClock | undefined;
+        ttl: number;
+        version: {
+            configVersion?: number | undefined;
+            stateVersion: string;
+        };
+    }>>;
+    patchVersion: v.Optional<{
+        configVersion?: number | undefined;
+        stateVersion: string;
+    }>;
+}, "type" | "ast"> & {
+    type: v.Type<"client">;
+    /** The original AST as supplied by the client. */
+    ast: v.Type<import("../../../../../zero-protocol/src/ast.ts").AST>;
+}, undefined>;
+export type ClientQueryRecord = v.Infer<typeof clientQueryRecordSchema>;
+export declare const customQueryRecordSchema: v.ObjectType<Omit<Omit<{
+    /** The client-specified ID used to identify this query. Typically a hash. */
+    id: v.Type<string>;
+    /**
+     * The hash of the query after server-side transformations, which include:
+     *
+     * * Normalization (which may differ from what the client does)
+     * * Query "expansion" to include primary keys and query-execution-related columns
+     * * Authorization transforms
+     *
+     * Transformations depend on conditions that are independent of the db state version,
+     * such as server-side logic and authorization policies. As such, the version of a CVR
+     * version may need to be advanced independent of db state changes. This is done
+     * via the `minorVersion` counter of the CVRVersion object, which is used to account
+     * for both changes to the query set and changes to query transformations (which are
+     * effectively remove-old-query + add-new-query).
+     *
+     * Note that the transformed AST itself is **not** stored, as the result of the previous
+     * transformation is not useful in and of itself. If the current transformation results in
+     * a different hash than that of the transformation used for the last version of the CVR,
+     * it is simply handled by invalidating the existing rows, re-executed the query with
+     * the new transformation, and advancing the CVR's `minorVersion` and this query's
+     * `transformationVersion`.
+     *
+     * Note that the transformationHash is only stored when the query has reached the "gotten"
+     * state. If the query is in the "desired" but not yet "gotten" state, the field is absent.
+     */
+    transformationHash: v.Optional<string>;
+    /**
+     * The CVR version corresponding to the `transformationHash`. This essentially tracks when
+     * this version of the query was effectively added to the CVR (as opposed to the
+     * `patchVersion`, which is simply when the client was notified that its query was added
+     * to the gotten set). Catchup of clients from old CVR versions require executing all
+     * queries with a newer `transformationVersion`.
+     */
+    transformationVersion: v.Optional<{
+        configVersion?: number | undefined;
+        stateVersion: string;
+    }>;
+    /**
+     * Hex-encoded XOR signature over `h64(JSON.stringify([schema, table, rowKey]))`
+     * of every row currently attached to this query. Maintained incrementally by
+     * `PipelineDriver` as ADDs / REMOVEs are yielded from the query's pipeline
+     * (EDITs no-op), and persisted via `CVRQueryDrivenUpdater.flush` by a
+     * signature-provider callback.
+     *
+     * Used to detect drift on re-hydration of queries containing the `Cap` operator,
+     * which intentionally does not impose ordering and thus may pick a different N-row
+     * subset on re-execution. Comparing the pre-hydration signature with the post-
+     * hydration signature lets us force a `configVersion` bump so the standard CVR-diff
+     * machinery emits the reconciling poke. Absent or `'0'` means the signature is
+     * empty (no rows currently attached).
+     */
+    rowSetSignature: v.Optional<string>;
+}, "patchVersion" | "clientState"> & {
+    /**
+     * The client state for this query, which includes the inactivatedAt, ttl and
+     * version. The client state is stored in a record with the client ID as the
+     * key.
+     */
+    clientState: v.Type<Record<string, {
+        inactivatedAt?: import("../ttl-clock.ts").TTLClock | undefined;
+        ttl: number;
+        version: {
+            configVersion?: number | undefined;
+            stateVersion: string;
+        };
+    }>>;
+    patchVersion: v.Optional<{
+        configVersion?: number | undefined;
+        stateVersion: string;
+    }>;
+}, "type" | "name" | "args"> & {
+    type: v.Type<"custom">;
+    name: v.Type<string>;
+    args: v.Type<readonly import("../../../../../shared/src/json.ts").ReadonlyJSONValue[]>;
+}, undefined>;
+export type CustomQueryRecord = v.Infer<typeof customQueryRecordSchema>;
+export declare const queryRecordSchema: v.UnionType<[v.ObjectType<Omit<Omit<{
+    /** The client-specified ID used to identify this query. Typically a hash. */
+    id: v.Type<string>;
+    /**
+     * The hash of the query after server-side transformations, which include:
+     *
+     * * Normalization (which may differ from what the client does)
+     * * Query "expansion" to include primary keys and query-execution-related columns
+     * * Authorization transforms
+     *
+     * Transformations depend on conditions that are independent of the db state version,
+     * such as server-side logic and authorization policies. As such, the version of a CVR
+     * version may need to be advanced independent of db state changes. This is done
+     * via the `minorVersion` counter of the CVRVersion object, which is used to account
+     * for both changes to the query set and changes to query transformations (which are
+     * effectively remove-old-query + add-new-query).
+     *
+     * Note that the transformed AST itself is **not** stored, as the result of the previous
+     * transformation is not useful in and of itself. If the current transformation results in
+     * a different hash than that of the transformation used for the last version of the CVR,
+     * it is simply handled by invalidating the existing rows, re-executed the query with
+     * the new transformation, and advancing the CVR's `minorVersion` and this query's
+     * `transformationVersion`.
+     *
+     * Note that the transformationHash is only stored when the query has reached the "gotten"
+     * state. If the query is in the "desired" but not yet "gotten" state, the field is absent.
+     */
+    transformationHash: v.Optional<string>;
+    /**
+     * The CVR version corresponding to the `transformationHash`. This essentially tracks when
+     * this version of the query was effectively added to the CVR (as opposed to the
+     * `patchVersion`, which is simply when the client was notified that its query was added
+     * to the gotten set). Catchup of clients from old CVR versions require executing all
+     * queries with a newer `transformationVersion`.
+     */
+    transformationVersion: v.Optional<{
+        configVersion?: number | undefined;
+        stateVersion: string;
+    }>;
+    /**
+     * Hex-encoded XOR signature over `h64(JSON.stringify([schema, table, rowKey]))`
+     * of every row currently attached to this query. Maintained incrementally by
+     * `PipelineDriver` as ADDs / REMOVEs are yielded from the query's pipeline
+     * (EDITs no-op), and persisted via `CVRQueryDrivenUpdater.flush` by a
+     * signature-provider callback.
+     *
+     * Used to detect drift on re-hydration of queries containing the `Cap` operator,
+     * which intentionally does not impose ordering and thus may pick a different N-row
+     * subset on re-execution. Comparing the pre-hydration signature with the post-
+     * hydration signature lets us force a `configVersion` bump so the standard CVR-diff
+     * machinery emits the reconciling poke. Absent or `'0'` means the signature is
+     * empty (no rows currently attached).
+     */
+    rowSetSignature: v.Optional<string>;
+}, "patchVersion" | "clientState"> & {
+    /**
+     * The client state for this query, which includes the inactivatedAt, ttl and
+     * version. The client state is stored in a record with the client ID as the
+     * key.
+     */
+    clientState: v.Type<Record<string, {
+        inactivatedAt?: import("../ttl-clock.ts").TTLClock | undefined;
+        ttl: number;
+        version: {
+            configVersion?: number | undefined;
+            stateVersion: string;
+        };
+    }>>;
+    patchVersion: v.Optional<{
+        configVersion?: number | undefined;
+        stateVersion: string;
+    }>;
+}, "type" | "ast"> & {
+    type: v.Type<"client">;
+    /** The original AST as supplied by the client. */
+    ast: v.Type<import("../../../../../zero-protocol/src/ast.ts").AST>;
+}, undefined>, v.ObjectType<Omit<Omit<{
+    /** The client-specified ID used to identify this query. Typically a hash. */
+    id: v.Type<string>;
+    /**
+     * The hash of the query after server-side transformations, which include:
+     *
+     * * Normalization (which may differ from what the client does)
+     * * Query "expansion" to include primary keys and query-execution-related columns
+     * * Authorization transforms
+     *
+     * Transformations depend on conditions that are independent of the db state version,
+     * such as server-side logic and authorization policies. As such, the version of a CVR
+     * version may need to be advanced independent of db state changes. This is done
+     * via the `minorVersion` counter of the CVRVersion object, which is used to account
+     * for both changes to the query set and changes to query transformations (which are
+     * effectively remove-old-query + add-new-query).
+     *
+     * Note that the transformed AST itself is **not** stored, as the result of the previous
+     * transformation is not useful in and of itself. If the current transformation results in
+     * a different hash than that of the transformation used for the last version of the CVR,
+     * it is simply handled by invalidating the existing rows, re-executed the query with
+     * the new transformation, and advancing the CVR's `minorVersion` and this query's
+     * `transformationVersion`.
+     *
+     * Note that the transformationHash is only stored when the query has reached the "gotten"
+     * state. If the query is in the "desired" but not yet "gotten" state, the field is absent.
+     */
+    transformationHash: v.Optional<string>;
+    /**
+     * The CVR version corresponding to the `transformationHash`. This essentially tracks when
+     * this version of the query was effectively added to the CVR (as opposed to the
+     * `patchVersion`, which is simply when the client was notified that its query was added
+     * to the gotten set). Catchup of clients from old CVR versions require executing all
+     * queries with a newer `transformationVersion`.
+     */
+    transformationVersion: v.Optional<{
+        configVersion?: number | undefined;
+        stateVersion: string;
+    }>;
+    /**
+     * Hex-encoded XOR signature over `h64(JSON.stringify([schema, table, rowKey]))`
+     * of every row currently attached to this query. Maintained incrementally by
+     * `PipelineDriver` as ADDs / REMOVEs are yielded from the query's pipeline
+     * (EDITs no-op), and persisted via `CVRQueryDrivenUpdater.flush` by a
+     * signature-provider callback.
+     *
+     * Used to detect drift on re-hydration of queries containing the `Cap` operator,
+     * which intentionally does not impose ordering and thus may pick a different N-row
+     * subset on re-execution. Comparing the pre-hydration signature with the post-
+     * hydration signature lets us force a `configVersion` bump so the standard CVR-diff
+     * machinery emits the reconciling poke. Absent or `'0'` means the signature is
+     * empty (no rows currently attached).
+     */
+    rowSetSignature: v.Optional<string>;
+}, "patchVersion" | "clientState"> & {
+    /**
+     * The client state for this query, which includes the inactivatedAt, ttl and
+     * version. The client state is stored in a record with the client ID as the
+     * key.
+     */
+    clientState: v.Type<Record<string, {
+        inactivatedAt?: import("../ttl-clock.ts").TTLClock | undefined;
+        ttl: number;
+        version: {
+            configVersion?: number | undefined;
+            stateVersion: string;
+        };
+    }>>;
+    patchVersion: v.Optional<{
+        configVersion?: number | undefined;
+        stateVersion: string;
+    }>;
+}, "type" | "name" | "args"> & {
+    type: v.Type<"custom">;
+    name: v.Type<string>;
+    args: v.Type<readonly import("../../../../../shared/src/json.ts").ReadonlyJSONValue[]>;
+}, undefined>, v.ObjectType<Omit<{
+    /** The client-specified ID used to identify this query. Typically a hash. */
+    id: v.Type<string>;
+    /**
+     * The hash of the query after server-side transformations, which include:
+     *
+     * * Normalization (which may differ from what the client does)
+     * * Query "expansion" to include primary keys and query-execution-related columns
+     * * Authorization transforms
+     *
+     * Transformations depend on conditions that are independent of the db state version,
+     * such as server-side logic and authorization policies. As such, the version of a CVR
+     * version may need to be advanced independent of db state changes. This is done
+     * via the `minorVersion` counter of the CVRVersion object, which is used to account
+     * for both changes to the query set and changes to query transformations (which are
+     * effectively remove-old-query + add-new-query).
+     *
+     * Note that the transformed AST itself is **not** stored, as the result of the previous
+     * transformation is not useful in and of itself. If the current transformation results in
+     * a different hash than that of the transformation used for the last version of the CVR,
+     * it is simply handled by invalidating the existing rows, re-executed the query with
+     * the new transformation, and advancing the CVR's `minorVersion` and this query's
+     * `transformationVersion`.
+     *
+     * Note that the transformationHash is only stored when the query has reached the "gotten"
+     * state. If the query is in the "desired" but not yet "gotten" state, the field is absent.
+     */
+    transformationHash: v.Optional<string>;
+    /**
+     * The CVR version corresponding to the `transformationHash`. This essentially tracks when
+     * this version of the query was effectively added to the CVR (as opposed to the
+     * `patchVersion`, which is simply when the client was notified that its query was added
+     * to the gotten set). Catchup of clients from old CVR versions require executing all
+     * queries with a newer `transformationVersion`.
+     */
+    transformationVersion: v.Optional<{
+        configVersion?: number | undefined;
+        stateVersion: string;
+    }>;
+    /**
+     * Hex-encoded XOR signature over `h64(JSON.stringify([schema, table, rowKey]))`
+     * of every row currently attached to this query. Maintained incrementally by
+     * `PipelineDriver` as ADDs / REMOVEs are yielded from the query's pipeline
+     * (EDITs no-op), and persisted via `CVRQueryDrivenUpdater.flush` by a
+     * signature-provider callback.
+     *
+     * Used to detect drift on re-hydration of queries containing the `Cap` operator,
+     * which intentionally does not impose ordering and thus may pick a different N-row
+     * subset on re-execution. Comparing the pre-hydration signature with the post-
+     * hydration signature lets us force a `configVersion` bump so the standard CVR-diff
+     * machinery emits the reconciling poke. Absent or `'0'` means the signature is
+     * empty (no rows currently attached).
+     */
+    rowSetSignature: v.Optional<string>;
+}, "type" | "ast"> & {
+    type: v.Type<"internal">;
+    ast: v.Type<import("../../../../../zero-protocol/src/ast.ts").AST>;
+}, undefined>]>;
+export type QueryRecord = v.Infer<typeof queryRecordSchema>;
+export declare const rowIDSchema: v.ObjectType<{
+    schema: v.Type<string>;
+    table: v.Type<string>;
+    rowKey: v.Type<Record<string, import("../../../../../shared/src/bigint-json.ts").JSONValue>>;
+}, undefined>;
+export type RowID = v.Infer<typeof rowIDSchema>;
+export declare const rowRecordSchema: v.ObjectType<Omit<{
+    /**
+     * CVR records store the CVRVersion at which the record was last patched into
+     * the CVR, which corresponds with a patch row that is cleaned up when the
+     * record is changed (updated, deleted, and re-added in the case of rows).
+     *
+     * Tombstones are stored for row records but not for config records. This means
+     * that "orphaned" delete patches for config records may exist, and therefore
+     * scans of config patches must always run until the end of the list. On the
+     * contrary, for row patches, the row record tombstones allow cleanup of delete
+     * patches.
+     */
+    patchVersion: v.ObjectType<{
+        /**
+         * The database `stateVersion` with which the rows in the CVR are consistent.
+         */
+        stateVersion: v.Type<string>;
+        /**
+         * `configVersion` is subversion of `stateVersion` that is initially absent for each
+         * `stateVersion`, and incremented for configuration changes that affect the contents
+         * of the CVR such as:
+         *
+         * * query set changes
+         * * query transformation changes (which may happen for changes
+         *   in server-side logic or authorization policies)
+         *
+         * Such configuration changes are always correlated with a change to one or more
+         * `/meta/...` records in the CVR, often (but not always) with corresponding
+         * patches in `/patches/meta/...`.
+         *
+         * When the `stateVersion` moves forward, the `minorVersion` is reset to absent.
+         * In this manner it behaves like the analogous concept in semantic versioning.
+         */
+        configVersion: v.Optional<number>;
+    }, undefined>;
+}, "id" | "rowVersion" | "refCounts"> & {
+    id: v.ObjectType<{
+        schema: v.Type<string>;
+        table: v.Type<string>;
+        rowKey: v.Type<Record<string, import("../../../../../shared/src/bigint-json.ts").JSONValue>>;
+    }, undefined>;
+    rowVersion: v.Type<string>;
+    refCounts: v.Type<Record<string, number> | null>;
+}, undefined>;
+export type RowRecord = v.Infer<typeof rowRecordSchema>;
+export declare const patchSchema: v.ObjectType<{
+    type: v.Type<"row" | "query">;
+    op: v.Type<"put" | "del">;
+}, undefined>;
+export declare const putRowPatchSchema: v.ObjectType<Omit<{
+    type: v.Type<"row" | "query">;
+    op: v.Type<"put" | "del">;
+}, "type" | "op" | "id" | "rowVersion"> & {
+    type: v.Type<"row">;
+    op: v.Type<"put">;
+    id: v.ObjectType<{
+        schema: v.Type<string>;
+        table: v.Type<string>;
+        rowKey: v.Type<Record<string, import("../../../../../shared/src/bigint-json.ts").JSONValue>>;
+    }, undefined>;
+    rowVersion: v.Type<string>;
+}, undefined>;
+export type PutRowPatch = v.Infer<typeof putRowPatchSchema>;
+export declare const delRowPatchSchema: v.ObjectType<Omit<{
+    type: v.Type<"row" | "query">;
+    op: v.Type<"put" | "del">;
+}, "type" | "op" | "id"> & {
+    type: v.Type<"row">;
+    op: v.Type<"del">;
+    id: v.ObjectType<{
+        schema: v.Type<string>;
+        table: v.Type<string>;
+        rowKey: v.Type<Record<string, import("../../../../../shared/src/bigint-json.ts").JSONValue>>;
+    }, undefined>;
+}, undefined>;
+export type DelRowPatch = v.Infer<typeof delRowPatchSchema>;
+export declare const rowPatchSchema: v.UnionType<[v.ObjectType<Omit<{
+    type: v.Type<"row" | "query">;
+    op: v.Type<"put" | "del">;
+}, "type" | "op" | "id" | "rowVersion"> & {
+    type: v.Type<"row">;
+    op: v.Type<"put">;
+    id: v.ObjectType<{
+        schema: v.Type<string>;
+        table: v.Type<string>;
+        rowKey: v.Type<Record<string, import("../../../../../shared/src/bigint-json.ts").JSONValue>>;
+    }, undefined>;
+    rowVersion: v.Type<string>;
+}, undefined>, v.ObjectType<Omit<{
+    type: v.Type<"row" | "query">;
+    op: v.Type<"put" | "del">;
+}, "type" | "op" | "id"> & {
+    type: v.Type<"row">;
+    op: v.Type<"del">;
+    id: v.ObjectType<{
+        schema: v.Type<string>;
+        table: v.Type<string>;
+        rowKey: v.Type<Record<string, import("../../../../../shared/src/bigint-json.ts").JSONValue>>;
+    }, undefined>;
+}, undefined>]>;
+export type RowPatch = v.Infer<typeof rowPatchSchema>;
+export declare const queryPatchSchema: v.ObjectType<Omit<{
+    type: v.Type<"row" | "query">;
+    op: v.Type<"put" | "del">;
+}, "type" | "id" | "clientID"> & {
+    type: v.Type<"query">;
+    id: v.Type<string>;
+    clientID: v.Optional<string>;
+}, undefined>;
+export type QueryPatch = v.Infer<typeof queryPatchSchema>;
+export type PutQueryPatch = QueryPatch & {
+    op: 'put';
+};
+export type DelQueryPatch = QueryPatch & {
+    op: 'del';
+};
+export declare const metadataPatchSchema: v.ObjectType<Omit<{
+    type: v.Type<"row" | "query">;
+    op: v.Type<"put" | "del">;
+}, "type" | "id" | "clientID"> & {
+    type: v.Type<"query">;
+    id: v.Type<string>;
+    clientID: v.Optional<string>;
+}, undefined>;
+export type MetadataPatch = v.Infer<typeof metadataPatchSchema>;
+export declare function versionString(v: CVRVersion): string;
+export declare function versionFromString(str: string): CVRVersion;
+export declare function queryRecordToQueryRow(clientGroupID: string, query: QueryRecord): QueriesRow;
+export declare const maybeVersionString: (v: CVRVersion | undefined) => string | null;
+//# sourceMappingURL=types.d.ts.map

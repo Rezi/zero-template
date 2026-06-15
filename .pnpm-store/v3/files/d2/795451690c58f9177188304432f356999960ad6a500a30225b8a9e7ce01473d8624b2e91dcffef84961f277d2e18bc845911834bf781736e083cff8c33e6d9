@@ -1,0 +1,36 @@
+import { createRemoteJWKSet, jwtVerify } from "jose";
+//#region ../zero-cache/src/auth/jwt.ts
+var remoteKeyset;
+function getRemoteKeyset(jwksUrl) {
+	if (remoteKeyset === void 0) remoteKeyset = createRemoteJWKSet(new URL(jwksUrl));
+	return remoteKeyset;
+}
+/** @deprecated */
+var tokenConfigOptions = (config) => {
+	return [
+		"jwk",
+		"secret",
+		"jwksUrl"
+	].filter((key) => config[key] !== void 0);
+};
+/** @deprecated */
+async function verifyToken(config, token, verifyOptions) {
+	if (config.jwk !== void 0) return verifyTokenImpl(token, loadJwk(config.jwk), verifyOptions);
+	if (config.secret !== void 0) return verifyTokenImpl(token, loadSecret(config.secret), verifyOptions);
+	if (config.jwksUrl !== void 0) return (await jwtVerify(token, getRemoteKeyset(config.jwksUrl), verifyOptions)).payload;
+	throw new Error("verifyToken was called but no auth options (one of: jwk, secret, jwksUrl) were configured.");
+}
+function loadJwk(jwkString) {
+	return JSON.parse(jwkString);
+}
+function loadSecret(secret) {
+	return new TextEncoder().encode(secret);
+}
+async function verifyTokenImpl(token, verifyKey, verifyOptions) {
+	const { payload } = await jwtVerify(token, verifyKey, verifyOptions);
+	return payload;
+}
+//#endregion
+export { tokenConfigOptions, verifyToken };
+
+//# sourceMappingURL=jwt.js.map

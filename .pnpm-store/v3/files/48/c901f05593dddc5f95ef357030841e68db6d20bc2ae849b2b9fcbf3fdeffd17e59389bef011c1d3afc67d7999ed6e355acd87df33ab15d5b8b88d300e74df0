@@ -1,0 +1,23 @@
+import { valita_exports } from "../../shared/src/valita.js";
+import { conditionSchema } from "../../zero-protocol/src/ast.js";
+//#region ../zero-schema/src/compiled-permissions.ts
+var ruleSchema = valita_exports.tuple([valita_exports.literal("allow"), conditionSchema]);
+var policySchema = valita_exports.array(ruleSchema);
+var assetSchema = valita_exports.object({
+	select: policySchema.optional(),
+	insert: policySchema.optional(),
+	update: valita_exports.object({
+		preMutation: policySchema.optional(),
+		postMutation: policySchema.optional()
+	}).optional(),
+	delete: policySchema.optional()
+});
+var tablePermissionsSchema = valita_exports.record(valita_exports.object({
+	row: assetSchema.optional(),
+	cell: valita_exports.record(assetSchema).optional()
+}));
+var permissionsConfigSchema = valita_exports.object({ tables: tablePermissionsSchema.optional() });
+//#endregion
+export { permissionsConfigSchema };
+
+//# sourceMappingURL=compiled-permissions.js.map

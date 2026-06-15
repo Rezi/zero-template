@@ -1,0 +1,13 @@
+import type { AST } from '../../zero-protocol/src/ast.ts';
+/**
+ * Converts an AST to the equivalent query builder code.
+ * This is useful for debugging and understanding queries.
+ *
+ * @example
+ * ```
+ * const ast = query.issue.where('id', '=', 123)[astSymbol];
+ * console.log(astToZQL(ast)); // outputs: .where('id', '=', 123)
+ * ```
+ */
+export declare function astToZQL(ast: AST): string;
+//# sourceMappingURL=ast-to-zql.d.ts.map

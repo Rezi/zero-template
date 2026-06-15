@@ -1,0 +1,24 @@
+import { valita_exports } from "../../shared/src/valita.js";
+import { pushFailedBodySchema } from "./error.js";
+import { mutationResponseSchema } from "./mutation.js";
+import { pushErrorSchema } from "./push.js";
+//#region ../zero-protocol/src/mutate-server.ts
+var legacyPushSuccessSchema = valita_exports.object({ mutations: valita_exports.array(mutationResponseSchema) });
+var legacyPushResponseSchema = valita_exports.union(legacyPushSuccessSchema, pushErrorSchema, pushFailedBodySchema);
+var mutateSuccessSchema = valita_exports.object({
+	kind: valita_exports.literal("MutateResponse"),
+	userID: valita_exports.string().nullable().optional(),
+	mutations: valita_exports.array(mutationResponseSchema)
+});
+var mutateResponseSchema = valita_exports.union(mutateSuccessSchema, pushFailedBodySchema, legacyPushResponseSchema);
+/**
+* The schema for the querystring parameters of the custom mutate endpoint.
+*/
+var mutateParamsSchema = valita_exports.object({
+	schema: valita_exports.string(),
+	appID: valita_exports.string()
+});
+//#endregion
+export { mutateParamsSchema, mutateResponseSchema };
+
+//# sourceMappingURL=mutate-server.js.map

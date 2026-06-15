@@ -1,0 +1,45 @@
+import type { Database } from '../../../../../zqlite/src/db.ts';
+import type { Identifier, TableMetadata } from '../../change-source/protocol/current.ts';
+/**
+ * Table-level controls for handling replicated data.
+ *
+ * ### Columns
+ *
+ * `minRowVersion`: the minimum `_0_version` value to apply to
+ *   all rows in the table. This overrides any per-row
+ *   `_0_version` value that is smaller (i.e. earlier).
+ *   The `minRowVersion` column is used to force a re-download
+ *   of all rows after a table-wide schema change (by giving
+ *   each row a version that's newer than what's in any CVR).
+ *   The naive, brute-force method of updating all of the rows
+ *   requires re-writing the entire table into the WAL as one
+ *   SQLite operation, which is too costly from both latency
+ *   and storage space.
+ *
+ * `upstreamMetadata`: the replica-level analog of tableMetadata in
+ *   change-streamer/schema. Per the requirement of the backfill
+ *   protocol, backfill metadata must be tracked outside of the
+ *   change source (otherwise the change source would have to be
+ *   able to compute the state of the metadata at arbitrary points
+ *   in the past).
+ *
+ * `metadata`: the previous name of the `upstreamMetadata` column,
+ *   kept for backwards compatibility.
+ *
+ * This tracking is done:
+ * 1. at the Change DB level, by the change-streamer
+ * 2. at the replica level, in order to support the eventual configuration
+ *    of ephemeral Change DBs (on SQLite) that are initialized from data
+ *    in the replica.
+ */
+export declare const CREATE_TABLE_METADATA_TABLE = "\n  CREATE TABLE \"_zero.tableMetadata\" (\n    \"schema\"           TEXT NOT NULL,\n    \"table\"            TEXT NOT NULL,\n    \"minRowVersion\"    TEXT NOT NULL DEFAULT \"00\",\n    \"upstreamMetadata\" TEXT,\n    \"metadata\"         TEXT,  -- deprecated\n    PRIMARY KEY (\"schema\", \"table\")\n  );\n";
+export declare class TableMetadataTracker {
+    #private;
+    constructor(db: Database);
+    setUpstreamMetadata({ schema, name }: Identifier, metadata: TableMetadata): void;
+    setMinRowVersion({ schema, name }: Identifier, version: string): void;
+    getMinRowVersions(): Map<string, string>;
+    rename(oldTable: Identifier, newTable: Identifier): void;
+    drop({ schema, name }: Identifier): void;
+}
+//# sourceMappingURL=table-metadata.d.ts.map

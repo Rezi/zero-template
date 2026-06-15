@@ -1,0 +1,97 @@
+import { assertObject } from "../../../shared/src/asserts.js";
+import { deepFreeze } from "../frozen-json.js";
+import { compareUTF8 } from "compare-utf8";
+//#region ../replicache/src/sync/patch.ts
+/**
+* Optimizes a patch array by:
+* 1. Dropping all operations before the last 'clear'
+* 2. For each key: put/del replace all previous operations
+* 3. Removing standalone 'del' operations after a clear (deleting from empty tree)
+* 4. Update are not used in Zero/Replicache so just return original patch.
+* Note: Order is preserved for operations on the same key, but operations
+* on different keys can be reordered.
+*/
+function optimizePatch(patch) {
+	if (patch.length === 0) return [];
+	const result = [];
+	let i = 0;
+	let clearIndex = -1;
+	for (i = patch.length - 1; i >= 0; i--) if (patch[i].op === "clear") {
+		result.push(patch[i]);
+		clearIndex = i;
+		break;
+	}
+	i++;
+	const keyOps = /* @__PURE__ */ new Map();
+	for (; i < patch.length; i++) {
+		const p = patch[i];
+		switch (p.op) {
+			case "put":
+			case "del":
+				keyOps.set(p.key, p);
+				break;
+			case "update": return clearIndex === -1 ? patch : patch.slice(clearIndex);
+		}
+	}
+	for (const op of keyOps.values()) {
+		if (clearIndex !== -1 && op.op === "del") continue;
+		result.push(op);
+	}
+	return result.sort((a, b) => {
+		if (a.op === "clear") return -1;
+		if (b.op === "clear") return 1;
+		return compareUTF8(a.key, b.key);
+	});
+}
+async function apply(lc, dbWrite, patch) {
+	const optimized = optimizePatch(patch);
+	let i = 0;
+	if (optimized.length > 0 && optimized[0].op === "clear") {
+		await dbWrite.clear();
+		i = 1;
+	}
+	const bulkLoadStart = i;
+	while (i < optimized.length && optimized[i].op === "put") i++;
+	if (i > bulkLoadStart) await bulkLoadPuts(lc, dbWrite, optimized.slice(bulkLoadStart, i));
+	for (; i < optimized.length; i++) {
+		const op = optimized[i];
+		switch (op.op) {
+			case "put": {
+				const frozen = deepFreeze(op.value);
+				await dbWrite.put(lc, op.key, frozen);
+				break;
+			}
+			case "update": {
+				const existing = await dbWrite.get(op.key);
+				if (existing !== void 0) assertObject(existing);
+				const frozen = mergeUpdate(op, existing);
+				await dbWrite.put(lc, op.key, frozen);
+				break;
+			}
+			case "del":
+				if (await dbWrite.get(op.key) !== void 0) await dbWrite.del(lc, op.key);
+				break;
+		}
+	}
+}
+function mergeUpdate(op, existing) {
+	const entries = [];
+	const addToEntries = (toAdd) => {
+		for (const [key, value] of Object.entries(toAdd)) if (!op.constrain || op.constrain.length === 0 || op.constrain.includes(key)) entries.push([key, value]);
+	};
+	if (existing !== void 0) addToEntries(existing);
+	if (op.merge) addToEntries(op.merge);
+	return deepFreeze(Object.fromEntries(entries));
+}
+async function bulkLoadPuts(lc, dbWrite, puts) {
+	if (puts.length === 0) return;
+	const entries = puts.map((p) => {
+		if (p.op !== "put") throw new Error("Expected put operation");
+		return [p.key, deepFreeze(p.value)];
+	});
+	await dbWrite.putMany(lc, entries);
+}
+//#endregion
+export { apply };
+
+//# sourceMappingURL=patch.js.map

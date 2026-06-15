@@ -1,0 +1,18 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { Store } from '../dag/store.ts';
+import type { ClientID } from '../sync/ids.ts';
+import type { OnClientsDeleted } from './clients.ts';
+import { type ClientMap } from './clients.ts';
+/**
+ * The maximum time a client can be inactive before it is garbage collected.
+ * This means that this is the maximum time a tab can be in the background
+ * (frozen) and still be able to sync when it comes back to the foreground.
+ */
+export declare const CLIENT_MAX_INACTIVE_TIME: number;
+/**
+ * How frequently to try to garbage collect clients.
+ */
+export declare const GC_INTERVAL: number;
+export declare function getLatestGCUpdate(): Promise<ClientMap> | undefined;
+export declare function initClientGC(clientID: ClientID, dagStore: Store, clientMaxInactiveTime: number, gcInterval: number, onClientsDeleted: OnClientsDeleted, lc: LogContext, signal: AbortSignal): void;
+//# sourceMappingURL=client-gc.d.ts.map

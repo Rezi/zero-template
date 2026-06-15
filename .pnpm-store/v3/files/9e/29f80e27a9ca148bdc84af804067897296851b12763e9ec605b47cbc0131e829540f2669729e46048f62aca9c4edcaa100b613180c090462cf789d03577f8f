@@ -1,0 +1,9 @@
+//#region ../replicache/src/version.ts
+/**
+* The current version of Replicache.
+*/
+var version = "15.2.1";
+//#endregion
+export { version };
+
+//# sourceMappingURL=version.js.map

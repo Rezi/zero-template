@@ -1,0 +1,26 @@
+import type { CreateStore } from '../kv/store.ts';
+export declare const PROFILE_ID_KEY = "profileId";
+export type IndexedDBName = string;
+export type IndexedDBDatabase = {
+    readonly name: IndexedDBName;
+    readonly replicacheName: string;
+    readonly replicacheFormatVersion: number;
+    readonly schemaVersion: string;
+    /** @deprecated No longer used. Kept for backwards compatibility when reading old data. */
+    readonly lastOpenedTimestampMS?: number | undefined;
+};
+export type IndexedDBDatabaseRecord = {
+    readonly [name: IndexedDBName]: IndexedDBDatabase;
+};
+export declare class IDBDatabasesStore {
+    #private;
+    constructor(createKVStore: CreateStore);
+    putDatabase(db: IndexedDBDatabase): Promise<IndexedDBDatabaseRecord>;
+    putDatabaseForTesting(db: IndexedDBDatabase): Promise<IndexedDBDatabaseRecord>;
+    clearDatabases(): Promise<void>;
+    deleteDatabases(names: Iterable<IndexedDBName>): Promise<void>;
+    getDatabases(): Promise<IndexedDBDatabaseRecord>;
+    close(): Promise<void>;
+    getProfileID(): Promise<string>;
+}
+//# sourceMappingURL=idb-databases-store.d.ts.map

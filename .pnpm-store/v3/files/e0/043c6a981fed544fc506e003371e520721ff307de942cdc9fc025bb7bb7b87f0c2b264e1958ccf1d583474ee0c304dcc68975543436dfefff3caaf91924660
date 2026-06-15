@@ -1,0 +1,9 @@
+import { readonly, readonlyRecord, valita_exports } from "../../shared/src/valita.js";
+//#region ../zero-protocol/src/primary-key.ts
+var primaryKeySchema = readonly(valita_exports.tuple([valita_exports.string()]).concat(valita_exports.array(valita_exports.string())));
+var primaryKeyValueSchema = valita_exports.union(valita_exports.string(), valita_exports.number(), valita_exports.boolean());
+var primaryKeyValueRecordSchema = readonlyRecord(primaryKeyValueSchema);
+//#endregion
+export { primaryKeySchema, primaryKeyValueRecordSchema, primaryKeyValueSchema };
+
+//# sourceMappingURL=primary-key.js.map

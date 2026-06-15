@@ -1,0 +1,274 @@
+import { assert } from "../../shared/src/asserts.js";
+import { literalUnion, readonly, readonlyArray, readonlyObject, valita_exports } from "../../shared/src/valita.js";
+import { defined } from "../../shared/src/arrays.js";
+import { must } from "../../shared/src/must.js";
+import { rowSchema } from "./data.js";
+import { compareUTF8 } from "compare-utf8";
+//#region ../zero-protocol/src/ast.ts
+/**
+* Wire-format representation of the zql AST interface.
+*
+* `v.Type<...>` types are explicitly declared to facilitate Typescript verification
+* that the schemas satisfy the zql type definitions. (Incidentally, explicit types
+* are also required for recursive schema definitions.)
+*/
+var SUBQ_PREFIX = "zsubq_";
+var selectorSchema = valita_exports.string();
+var toStaticParam = Symbol();
+var planIdSymbol = Symbol("planId");
+var orderingSchema = readonlyArray(readonly(valita_exports.tuple([selectorSchema, literalUnion("asc", "desc")])));
+valita_exports.union(valita_exports.string(), valita_exports.number(), valita_exports.boolean(), valita_exports.null());
+var equalityOpsSchema = literalUnion("=", "!=", "IS", "IS NOT");
+var orderOpsSchema = literalUnion("<", ">", "<=", ">=");
+var likeOpsSchema = literalUnion("LIKE", "NOT LIKE", "ILIKE", "NOT ILIKE");
+var inOpsSchema = literalUnion("IN", "NOT IN");
+var simpleOperatorSchema = valita_exports.union(equalityOpsSchema, orderOpsSchema, likeOpsSchema, inOpsSchema);
+var literalReferenceSchema = readonlyObject({
+	type: valita_exports.literal("literal"),
+	value: valita_exports.union(valita_exports.string(), valita_exports.number(), valita_exports.boolean(), valita_exports.null(), readonlyArray(valita_exports.union(valita_exports.string(), valita_exports.number(), valita_exports.boolean())))
+});
+var columnReferenceSchema = readonlyObject({
+	type: valita_exports.literal("column"),
+	name: valita_exports.string()
+});
+/**
+* A parameter is a value that is not known at the time the query is written
+* and is resolved at runtime.
+*
+* Static parameters refer to something provided by the caller.
+* Static parameters are injected when the query pipeline is built from the AST
+* and do not change for the life of that pipeline.
+*
+* An example static parameter is the current authentication data.
+* When a user is authenticated, queries on the server have access
+* to the user's authentication data in order to evaluate authorization rules.
+* Authentication data doesn't change over the life of a query as a change
+* in auth data would represent a log-in / log-out of the user.
+*
+* AncestorParameters refer to rows encountered while running the query.
+* They are used by subqueries to refer to rows emitted by parent queries.
+*/
+var parameterReferenceSchema = readonlyObject({
+	type: valita_exports.literal("static"),
+	anchor: literalUnion("authData", "preMutationRow"),
+	field: valita_exports.union(valita_exports.string(), valita_exports.array(valita_exports.string()))
+});
+var conditionValueSchema = valita_exports.union(literalReferenceSchema, columnReferenceSchema, parameterReferenceSchema);
+var simpleConditionSchema = readonlyObject({
+	type: valita_exports.literal("simple"),
+	op: simpleOperatorSchema,
+	left: conditionValueSchema,
+	right: valita_exports.union(parameterReferenceSchema, literalReferenceSchema)
+});
+var correlatedSubqueryConditionOperatorSchema = literalUnion("EXISTS", "NOT EXISTS");
+var correlatedSubqueryConditionSchema = readonlyObject({
+	type: valita_exports.literal("correlatedSubquery"),
+	related: valita_exports.lazy(() => correlatedSubquerySchema),
+	op: correlatedSubqueryConditionOperatorSchema,
+	flip: valita_exports.boolean().optional(),
+	scalar: valita_exports.boolean().optional()
+});
+var conditionSchema = valita_exports.union(simpleConditionSchema, valita_exports.lazy(() => conjunctionSchema), valita_exports.lazy(() => disjunctionSchema), correlatedSubqueryConditionSchema);
+var conjunctionSchema = readonlyObject({
+	type: valita_exports.literal("and"),
+	conditions: readonlyArray(conditionSchema)
+});
+var disjunctionSchema = readonlyObject({
+	type: valita_exports.literal("or"),
+	conditions: readonlyArray(conditionSchema)
+});
+function mustCompoundKey(field) {
+	assert(Array.isArray(field) && field.length >= 1, "Expected non-empty array for compound key");
+	return field;
+}
+var compoundKeySchema = readonly(valita_exports.tuple([valita_exports.string()]).concat(valita_exports.array(valita_exports.string())));
+var correlatedSubquerySchema = readonlyObject({
+	correlation: readonlyObject({
+		parentField: compoundKeySchema,
+		childField: compoundKeySchema
+	}),
+	hidden: valita_exports.boolean().optional(),
+	system: literalUnion("permissions", "client", "test").optional()
+}).extend({ subquery: valita_exports.lazy(() => astSchema) });
+var astSchema = readonlyObject({
+	schema: valita_exports.string().optional(),
+	table: valita_exports.string(),
+	alias: valita_exports.string().optional(),
+	where: conditionSchema.optional(),
+	related: readonlyArray(correlatedSubquerySchema).optional(),
+	limit: valita_exports.number().optional(),
+	orderBy: orderingSchema.optional(),
+	start: valita_exports.object({
+		row: rowSchema,
+		exclusive: valita_exports.boolean()
+	}).optional()
+});
+function transformAST(ast, transform) {
+	const { tableName, columnName } = transform;
+	const colName = (c) => columnName(ast.table, c);
+	const key = (table, k) => {
+		return mustCompoundKey(k.map((col) => columnName(table, col)));
+	};
+	const where = ast.where ? transform.where(ast.where) : void 0;
+	return {
+		schema: ast.schema,
+		table: tableName(ast.table),
+		alias: ast.alias,
+		where: where ? transformWhere(where, ast.table, transform) : void 0,
+		related: ast.related ? transform.related(ast.related.map((r) => ({
+			correlation: {
+				parentField: key(ast.table, r.correlation.parentField),
+				childField: key(r.subquery.table, r.correlation.childField)
+			},
+			hidden: r.hidden,
+			subquery: transformAST(r.subquery, transform),
+			system: r.system
+		}))) : void 0,
+		start: ast.start ? {
+			...ast.start,
+			row: Object.fromEntries(Object.entries(ast.start.row).map(([col, val]) => [colName(col), val]))
+		} : void 0,
+		limit: ast.limit,
+		orderBy: ast.orderBy?.map(([col, dir]) => [colName(col), dir])
+	};
+}
+function transformWhere(where, table, transform) {
+	const { columnName } = transform;
+	const condValue = (c) => c.type !== "column" ? c : {
+		...c,
+		name: columnName(table, c.name)
+	};
+	const key = (table, k) => {
+		return mustCompoundKey(k.map((col) => columnName(table, col)));
+	};
+	if (where.type === "simple") return {
+		...where,
+		left: condValue(where.left)
+	};
+	else if (where.type === "correlatedSubquery") {
+		const { correlation, subquery } = where.related;
+		return {
+			...where,
+			related: {
+				...where.related,
+				correlation: {
+					parentField: key(table, correlation.parentField),
+					childField: key(subquery.table, correlation.childField)
+				},
+				subquery: transformAST(subquery, transform)
+			}
+		};
+	}
+	return {
+		type: where.type,
+		conditions: transform.conditions(where.conditions.map((c) => transformWhere(c, table, transform)))
+	};
+}
+var normalizeCache = /* @__PURE__ */ new WeakMap();
+var NORMALIZE_TRANSFORM = {
+	tableName: (t) => t,
+	columnName: (_, c) => c,
+	related: sortedRelated,
+	where: flattened,
+	conditions: (c) => c.sort(cmpCondition)
+};
+function normalizeAST(ast) {
+	let normalized = normalizeCache.get(ast);
+	if (!normalized) {
+		normalized = transformAST(ast, NORMALIZE_TRANSFORM);
+		normalizeCache.set(ast, normalized);
+	}
+	return normalized;
+}
+function mapAST(ast, mapper) {
+	return transformAST(ast, {
+		tableName: (table) => mapper.tableName(table),
+		columnName: (table, col) => mapper.columnName(table, col),
+		related: (r) => r,
+		where: (w) => w,
+		conditions: (c) => c
+	});
+}
+function mapCondition(cond, table, mapper) {
+	return transformWhere(cond, table, {
+		tableName: (table) => mapper.tableName(table),
+		columnName: (table, col) => mapper.columnName(table, col),
+		related: (r) => r,
+		where: (w) => w,
+		conditions: (c) => c
+	});
+}
+function sortedRelated(related) {
+	return related.sort(cmpRelated);
+}
+function cmpCondition(a, b) {
+	if (a.type === "simple") {
+		if (b.type !== "simple") return -1;
+		return compareValuePosition(a.left, b.left) || compareUTF8MaybeNull(a.op, b.op) || compareValuePosition(a.right, b.right);
+	}
+	if (b.type === "simple") return 1;
+	if (a.type === "correlatedSubquery") {
+		if (b.type !== "correlatedSubquery") return -1;
+		return cmpRelated(a.related, b.related) || compareUTF8MaybeNull(a.op, b.op) || cmpOptionalBool(a.flip, b.flip) || cmpOptionalBool(a.scalar, b.scalar);
+	}
+	if (b.type === "correlatedSubquery") return -1;
+	const val = compareUTF8MaybeNull(a.type, b.type);
+	if (val !== 0) return val;
+	for (let l = 0, r = 0; l < a.conditions.length && r < b.conditions.length; l++, r++) {
+		const val = cmpCondition(a.conditions[l], b.conditions[r]);
+		if (val !== 0) return val;
+	}
+	return a.conditions.length - b.conditions.length;
+}
+function compareValuePosition(a, b) {
+	if (a.type !== b.type) return compareUTF8(a.type, b.type);
+	switch (a.type) {
+		case "literal":
+			assert(b.type === "literal", "Expected literal type for comparison");
+			return compareUTF8(String(a.value), String(b.value));
+		case "column":
+			assert(b.type === "column", "Expected column type for comparison");
+			return compareUTF8(a.name, b.name);
+		case "static": throw new Error("Static parameters should be resolved before normalization");
+	}
+}
+function cmpRelated(a, b) {
+	return compareUTF8(must(a.subquery.alias), must(b.subquery.alias));
+}
+/**
+* Returns a flattened version of the Conditions in which nested Conjunctions with
+* the same operation ('AND' or 'OR') are flattened to the same level. e.g.
+*
+* ```
+* ((a AND b) AND (c AND (d OR (e OR f)))) -> (a AND b AND c AND (d OR e OR f))
+* ```
+*
+* Also flattens singleton Conjunctions regardless of operator, and removes
+* empty Conjunctions.
+*/
+function flattened(cond) {
+	if (cond.type === "simple" || cond.type === "correlatedSubquery") return cond;
+	const conditions = defined(cond.conditions.flatMap((c) => c.type === cond.type ? c.conditions.map((c) => flattened(c)) : flattened(c)));
+	switch (conditions.length) {
+		case 0: return;
+		case 1: return conditions[0];
+		default: return {
+			type: cond.type,
+			conditions
+		};
+	}
+}
+function compareUTF8MaybeNull(a, b) {
+	if (a !== null && b !== null) return compareUTF8(a, b);
+	if (b !== null) return -1;
+	if (a !== null) return 1;
+	return 0;
+}
+function cmpOptionalBool(a, b) {
+	const toNum = (v) => v === void 0 ? 0 : v ? 2 : 1;
+	return toNum(a) - toNum(b);
+}
+//#endregion
+export { SUBQ_PREFIX, astSchema, compoundKeySchema, conditionSchema, mapAST, mapCondition, normalizeAST, orderingSchema, planIdSymbol, toStaticParam };
+
+//# sourceMappingURL=ast.js.map

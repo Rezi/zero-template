@@ -1,0 +1,28 @@
+export type TypeParser = (val: string) => unknown;
+import type { TypeParsers } from '../../../../db/pg-type-parser.ts';
+import type { Message, MessageRelation } from './pgoutput.types.ts';
+export declare class PgoutputParser {
+    #private;
+    _typeCache: Map<number, {
+        typeSchema: string;
+        typeName: string;
+    }>;
+    _relationCache: Map<number, MessageRelation>;
+    constructor(typeParsers: TypeParsers);
+    parse(buf: Buffer): Message;
+    private msgBegin;
+    private msgOrigin;
+    private msgType;
+    private msgRelation;
+    private readRelationReplicaIdentity;
+    private readRelationColumn;
+    private msgInsert;
+    private msgUpdate;
+    private msgDelete;
+    private readKeyTuple;
+    private readTuple;
+    private msgTruncate;
+    private msgMessage;
+    private msgCommit;
+}
+//# sourceMappingURL=pgoutput-parser.d.ts.map

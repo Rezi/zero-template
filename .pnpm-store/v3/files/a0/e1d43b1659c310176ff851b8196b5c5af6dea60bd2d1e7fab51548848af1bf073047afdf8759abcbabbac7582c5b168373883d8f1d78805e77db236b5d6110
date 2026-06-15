@@ -1,0 +1,101 @@
+import { DEFAULT_HEAD_NAME, assertSnapshotCommitDD31, baseSnapshotFromCommit, baseSnapshotFromHash, baseSnapshotFromHead, commitFromHash, commitFromHead, compareCookiesForSnapshots, localMutationsGreaterThan } from "../db/commit.js";
+import { diffCommits } from "../sync/diff.js";
+import { withRead, withWrite } from "../with-transactions.js";
+import { ClientStateNotFoundError, assertClientV6, getClientGroupForClient, mustGetClient, setClient } from "./clients.js";
+import { rebaseMutationAndPutCommit } from "../db/rebase.js";
+import { GatherNotCachedVisitor } from "./gather-not-cached-visitor.js";
+//#region ../replicache/src/persist/refresh.ts
+var GATHER_SIZE_LIMIT = 5 * 2 ** 20;
+/**
+* This returns the diff between the state of the btree before and after
+* refresh. It returns `undefined` if the refresh was aborted.
+*/
+async function refresh(lc, memdag, perdag, clientID, mutators, diffConfig, closed, formatVersion, zero) {
+	if (closed()) return;
+	const memdagBaseSnapshot = await withRead(memdag, (memdagRead) => baseSnapshotFromHead(DEFAULT_HEAD_NAME, memdagRead));
+	assertSnapshotCommitDD31(memdagBaseSnapshot);
+	const result = await memdag.withSuspendedSourceCacheEvictsAndDeletes(async () => {
+		const perdagWriteResult = await withWrite(perdag, async (perdagWrite) => {
+			const clientGroup = await getClientGroupForClient(clientID, perdagWrite);
+			if (!clientGroup) throw new ClientStateNotFoundError(clientID);
+			const perdagClientGroupHeadHash = clientGroup.headHash;
+			const perdagLmid = await (await commitFromHash(perdagClientGroupHeadHash, perdagWrite)).getMutationID(clientID, perdagWrite);
+			const client = await mustGetClient(clientID, perdagWrite);
+			assertClientV6(client);
+			const perdagClientGroupBaseSnapshot = await baseSnapshotFromHash(perdagClientGroupHeadHash, perdagWrite);
+			assertSnapshotCommitDD31(perdagClientGroupBaseSnapshot);
+			if (shouldAbortRefresh(memdagBaseSnapshot, perdagClientGroupBaseSnapshot, perdagClientGroupHeadHash)) return;
+			const visitor = new GatherNotCachedVisitor(perdagWrite, memdag, GATHER_SIZE_LIMIT);
+			await visitor.visit(perdagClientGroupHeadHash);
+			const { gatheredChunks } = visitor;
+			const refreshHashesSet = new Set(client.refreshHashes);
+			refreshHashesSet.add(perdagClientGroupHeadHash);
+			await setClient(clientID, {
+				...client,
+				refreshHashes: [...refreshHashesSet]
+			}, perdagWrite);
+			return [
+				perdagClientGroupHeadHash,
+				perdagClientGroupBaseSnapshot,
+				perdagLmid,
+				gatheredChunks,
+				client.refreshHashes
+			];
+		});
+		if (closed() || !perdagWriteResult) return { type: "aborted" };
+		const [perdagClientGroupHeadHash, perdagClientGroupBaseSnapshot, perdagLmid, gatheredChunks, refreshHashesForRevert] = perdagWriteResult;
+		return withWrite(memdag, async (memdagWrite) => {
+			const memdagHeadCommit = await commitFromHead(DEFAULT_HEAD_NAME, memdagWrite);
+			const memdagBaseSnapshot = await baseSnapshotFromCommit(memdagHeadCommit, memdagWrite);
+			assertSnapshotCommitDD31(memdagBaseSnapshot);
+			if (shouldAbortRefresh(memdagBaseSnapshot, perdagClientGroupBaseSnapshot, perdagClientGroupHeadHash)) return {
+				type: "aborted",
+				refreshHashesForRevert
+			};
+			const newMemdagMutations = await localMutationsGreaterThan(memdagHeadCommit, { [clientID]: perdagLmid }, memdagWrite);
+			const ps = [];
+			for (const { chunk, size } of gatheredChunks.values()) ps.push(memdagWrite.putChunk(chunk, size));
+			await Promise.all(ps);
+			let newMemdagHeadHash = perdagClientGroupHeadHash;
+			if (newMemdagMutations.length > 0) {
+				const zeroData = await zero?.getTxData?.(newMemdagHeadHash, { openLazyRead: memdagWrite });
+				for (let i = newMemdagMutations.length - 1; i >= 0; i--) newMemdagHeadHash = (await rebaseMutationAndPutCommit(newMemdagMutations[i], memdagWrite, newMemdagHeadHash, mutators, lc, newMemdagMutations[i].meta.clientID, formatVersion, zeroData)).chunk.hash;
+			}
+			const diffs = await diffCommits(memdagHeadCommit, await commitFromHash(newMemdagHeadHash, memdagWrite), memdagWrite, diffConfig, formatVersion);
+			await memdagWrite.setHead(DEFAULT_HEAD_NAME, newMemdagHeadHash);
+			return {
+				type: "complete",
+				diffs,
+				oldHead: memdagHeadCommit.chunk.hash,
+				newHead: newMemdagHeadHash,
+				newPerdagClientHeadHash: perdagClientGroupHeadHash
+			};
+		});
+	});
+	if (closed()) return;
+	const setRefreshHashes = (refreshHashes) => withWrite(perdag, async (perdagWrite) => {
+		await setClient(clientID, {
+			...await mustGetClient(clientID, perdagWrite),
+			refreshHashes
+		}, perdagWrite);
+	});
+	if (result.type === "aborted") {
+		if (result.refreshHashesForRevert) await setRefreshHashes(result.refreshHashesForRevert);
+		return;
+	}
+	zero?.advance(result.oldHead, result.newHead, result.diffs.get("") ?? []);
+	await setRefreshHashes([result.newPerdagClientHeadHash]);
+	return {
+		oldHead: result.oldHead,
+		newHead: result.newHead,
+		diffs: result.diffs
+	};
+}
+function shouldAbortRefresh(memdagBaseSnapshot, perdagClientGroupBaseSnapshot, perdagClientGroupHeadHash) {
+	const baseSnapshotCookieCompareResult = compareCookiesForSnapshots(memdagBaseSnapshot, perdagClientGroupBaseSnapshot);
+	return baseSnapshotCookieCompareResult > 0 || baseSnapshotCookieCompareResult === 0 && perdagClientGroupHeadHash === perdagClientGroupBaseSnapshot.chunk.hash;
+}
+//#endregion
+export { refresh };
+
+//# sourceMappingURL=refresh.js.map

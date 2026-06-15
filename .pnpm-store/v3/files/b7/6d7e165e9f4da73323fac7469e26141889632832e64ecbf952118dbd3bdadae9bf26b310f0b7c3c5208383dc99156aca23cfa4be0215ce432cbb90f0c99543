@@ -1,0 +1,10 @@
+export declare class URLParams {
+    readonly url: URL;
+    constructor(url: URL);
+    get(name: string, required: true): string;
+    get(name: string, required: boolean): string | null;
+    getInteger(name: string, required: true): number;
+    getInteger(name: string, required: boolean): number | null;
+    getBoolean(name: string): boolean;
+}
+//# sourceMappingURL=url-params.d.ts.map

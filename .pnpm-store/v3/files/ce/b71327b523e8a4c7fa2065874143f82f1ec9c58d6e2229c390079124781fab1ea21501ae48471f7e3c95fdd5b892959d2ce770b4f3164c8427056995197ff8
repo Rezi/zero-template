@@ -1,0 +1,266 @@
+import * as v from '../../shared/src/valita.ts';
+export declare const rowCountsByQuerySchema: v.Type<Record<string, number>>;
+export type RowCountsByQuery = v.Infer<typeof rowCountsByQuerySchema>;
+export declare const rowCountsBySourceSchema: v.Type<Record<string, Record<string, number>>>;
+export type RowCountsBySource = v.Infer<typeof rowCountsBySourceSchema>;
+export declare const rowsByQuerySchema: v.Type<Record<string, Readonly<Record<string, import("../../shared/src/json.ts").ReadonlyJSONValue | undefined>>[]>>;
+export type RowsByQuery = v.Infer<typeof rowsByQuerySchema>;
+export declare const rowsBySourceSchema: v.Type<Record<string, Record<string, Readonly<Record<string, import("../../shared/src/json.ts").ReadonlyJSONValue | undefined>>[]>>>;
+export type RowsBySource = v.Infer<typeof rowsBySourceSchema>;
+declare const attemptStartEventJSONSchema: v.ObjectType<{
+    type: v.Type<"attempt-start">;
+    attemptNumber: v.Type<number>;
+    totalAttempts: v.Type<number>;
+}, undefined>;
+declare const connectionSelectedEventJSONSchema: v.ObjectType<{
+    type: v.Type<"connection-selected">;
+    attemptNumber: v.Type<number>;
+    connection: v.Type<string>;
+    cost: v.Type<number>;
+    isRoot: v.Type<boolean>;
+}, undefined>;
+declare const planFailedEventJSONSchema: v.ObjectType<{
+    type: v.Type<"plan-failed">;
+    attemptNumber: v.Type<number>;
+    reason: v.Type<string>;
+}, undefined>;
+declare const bestPlanSelectedEventJSONSchema: v.ObjectType<{
+    type: v.Type<"best-plan-selected">;
+    bestAttemptNumber: v.Type<number>;
+    totalCost: v.Type<number>;
+    flipPattern: v.Type<number>;
+    joinStates: v.ArrayType<v.ObjectType<{
+        join: v.Type<string>;
+        type: v.UnionType<[v.Type<"semi">, v.Type<"flipped">, v.Type<"unflippable">]>;
+    }, undefined>>;
+}, undefined>;
+declare const nodeConstraintEventJSONSchema: v.ObjectType<{
+    type: v.Type<"node-constraint">;
+    attemptNumber: v.Optional<number>;
+    nodeType: v.UnionType<[v.Type<"connection">, v.Type<"join">, v.Type<"fan-out">, v.Type<"fan-in">, v.Type<"terminus">]>;
+    node: v.Type<string>;
+    branchPattern: v.ArrayType<v.Type<number>>;
+    constraint: v.Optional<Record<string, unknown> | null>;
+    from: v.Type<string>;
+}, undefined>;
+declare const planDebugEventJSONSchema: v.UnionType<[v.ObjectType<{
+    type: v.Type<"attempt-start">;
+    attemptNumber: v.Type<number>;
+    totalAttempts: v.Type<number>;
+}, undefined>, v.ObjectType<{
+    type: v.Type<"connection-costs">;
+    attemptNumber: v.Type<number>;
+    costs: v.ArrayType<v.ObjectType<{
+        connection: v.Type<string>;
+        cost: v.Type<number>;
+        costEstimate: v.ObjectType<{
+            startupCost: v.Type<number>;
+            scanEst: v.Type<number>;
+            cost: v.Type<number>;
+            returnedRows: v.Type<number>;
+            selectivity: v.Type<number>;
+            limit: v.Optional<number>;
+        }, undefined>;
+        pinned: v.Type<boolean>;
+        constraints: v.Type<Record<string, Record<string, unknown> | null>>;
+        constraintCosts: v.Type<Record<string, {
+            limit?: number | undefined;
+            startupCost: number;
+            scanEst: number;
+            cost: number;
+            returnedRows: number;
+            selectivity: number;
+        }>>;
+    }, undefined>>;
+}, undefined>, v.ObjectType<{
+    type: v.Type<"connection-selected">;
+    attemptNumber: v.Type<number>;
+    connection: v.Type<string>;
+    cost: v.Type<number>;
+    isRoot: v.Type<boolean>;
+}, undefined>, v.ObjectType<{
+    type: v.Type<"constraints-propagated">;
+    attemptNumber: v.Type<number>;
+    connectionConstraints: v.ArrayType<v.ObjectType<{
+        connection: v.Type<string>;
+        constraints: v.Type<Record<string, Record<string, unknown> | null>>;
+        constraintCosts: v.Type<Record<string, {
+            limit?: number | undefined;
+            startupCost: number;
+            scanEst: number;
+            cost: number;
+            returnedRows: number;
+            selectivity: number;
+        }>>;
+    }, undefined>>;
+}, undefined>, v.ObjectType<{
+    type: v.Type<"plan-complete">;
+    attemptNumber: v.Type<number>;
+    totalCost: v.Type<number>;
+    flipPattern: v.Type<number>;
+    joinStates: v.ArrayType<v.ObjectType<{
+        join: v.Type<string>;
+        type: v.UnionType<[v.Type<"semi">, v.Type<"flipped">, v.Type<"unflippable">]>;
+    }, undefined>>;
+}, undefined>, v.ObjectType<{
+    type: v.Type<"plan-failed">;
+    attemptNumber: v.Type<number>;
+    reason: v.Type<string>;
+}, undefined>, v.ObjectType<{
+    type: v.Type<"best-plan-selected">;
+    bestAttemptNumber: v.Type<number>;
+    totalCost: v.Type<number>;
+    flipPattern: v.Type<number>;
+    joinStates: v.ArrayType<v.ObjectType<{
+        join: v.Type<string>;
+        type: v.UnionType<[v.Type<"semi">, v.Type<"flipped">, v.Type<"unflippable">]>;
+    }, undefined>>;
+}, undefined>, v.ObjectType<{
+    type: v.Type<"node-cost">;
+    attemptNumber: v.Optional<number>;
+    nodeType: v.UnionType<[v.Type<"connection">, v.Type<"join">, v.Type<"fan-out">, v.Type<"fan-in">, v.Type<"terminus">]>;
+    node: v.Type<string>;
+    branchPattern: v.ArrayType<v.Type<number>>;
+    downstreamChildSelectivity: v.Type<number>;
+    costEstimate: v.ObjectType<{
+        startupCost: v.Type<number>;
+        scanEst: v.Type<number>;
+        cost: v.Type<number>;
+        returnedRows: v.Type<number>;
+        selectivity: v.Type<number>;
+        limit: v.Optional<number>;
+    }, undefined>;
+    filters: v.Optional<import("./ast.ts").Condition>;
+    ordering: v.Optional<readonly (readonly [string, "desc" | "asc"])[]>;
+    joinType: v.Optional<"semi" | "flipped" | "unflippable">;
+}, undefined>, v.ObjectType<{
+    type: v.Type<"node-constraint">;
+    attemptNumber: v.Optional<number>;
+    nodeType: v.UnionType<[v.Type<"connection">, v.Type<"join">, v.Type<"fan-out">, v.Type<"fan-in">, v.Type<"terminus">]>;
+    node: v.Type<string>;
+    branchPattern: v.ArrayType<v.Type<number>>;
+    constraint: v.Optional<Record<string, unknown> | null>;
+    from: v.Type<string>;
+}, undefined>]>;
+export type PlanDebugEventJSON = v.Infer<typeof planDebugEventJSONSchema>;
+export { attemptStartEventJSONSchema, connectionSelectedEventJSONSchema, planFailedEventJSONSchema, bestPlanSelectedEventJSONSchema, nodeConstraintEventJSONSchema, };
+export declare const analyzeQueryResultSchema: v.ObjectType<{
+    warnings: v.ArrayType<v.Type<string>>;
+    syncedRows: v.Optional<Record<string, Readonly<Record<string, import("../../shared/src/json.ts").ReadonlyJSONValue | undefined>>[]>>;
+    syncedRowCount: v.Type<number>;
+    start: v.Type<number>;
+    /** @deprecated Use start + elapsed instead */
+    end: v.Type<number>;
+    elapsed: v.Optional<number>;
+    afterPermissions: v.Optional<string>;
+    /** @deprecated Use readRowCountsByQuery */
+    vendedRowCounts: v.Optional<Record<string, Record<string, number>>>;
+    /** @deprecated Use readRows */
+    vendedRows: v.Optional<Record<string, Record<string, Readonly<Record<string, import("../../shared/src/json.ts").ReadonlyJSONValue | undefined>>[]>>>;
+    sqlitePlans: v.Optional<Record<string, string[]>>;
+    readRows: v.Optional<Record<string, Record<string, Readonly<Record<string, import("../../shared/src/json.ts").ReadonlyJSONValue | undefined>>[]>>>;
+    readRowCountsByQuery: v.Optional<Record<string, Record<string, number>>>;
+    readRowCount: v.Optional<number>;
+    dbScansByQuery: v.Optional<Record<string, Record<string, number>>>;
+    joinPlans: v.Optional<({
+        type: "attempt-start";
+        attemptNumber: number;
+        totalAttempts: number;
+    } | {
+        type: "connection-costs";
+        attemptNumber: number;
+        costs: {
+            connection: string;
+            cost: number;
+            costEstimate: {
+                limit?: number | undefined;
+                startupCost: number;
+                scanEst: number;
+                cost: number;
+                returnedRows: number;
+                selectivity: number;
+            };
+            pinned: boolean;
+            constraints: Record<string, Record<string, unknown> | null>;
+            constraintCosts: Record<string, {
+                limit?: number | undefined;
+                startupCost: number;
+                scanEst: number;
+                cost: number;
+                returnedRows: number;
+                selectivity: number;
+            }>;
+        }[];
+    } | {
+        type: "connection-selected";
+        attemptNumber: number;
+        connection: string;
+        cost: number;
+        isRoot: boolean;
+    } | {
+        type: "constraints-propagated";
+        attemptNumber: number;
+        connectionConstraints: {
+            connection: string;
+            constraints: Record<string, Record<string, unknown> | null>;
+            constraintCosts: Record<string, {
+                limit?: number | undefined;
+                startupCost: number;
+                scanEst: number;
+                cost: number;
+                returnedRows: number;
+                selectivity: number;
+            }>;
+        }[];
+    } | {
+        type: "plan-complete";
+        attemptNumber: number;
+        totalCost: number;
+        flipPattern: number;
+        joinStates: {
+            join: string;
+            type: "semi" | "flipped" | "unflippable";
+        }[];
+    } | {
+        type: "plan-failed";
+        attemptNumber: number;
+        reason: string;
+    } | {
+        type: "best-plan-selected";
+        bestAttemptNumber: number;
+        totalCost: number;
+        flipPattern: number;
+        joinStates: {
+            join: string;
+            type: "semi" | "flipped" | "unflippable";
+        }[];
+    } | {
+        attemptNumber?: number | undefined;
+        filters?: import("./ast.ts").Condition | undefined;
+        ordering?: readonly (readonly [string, "desc" | "asc"])[] | undefined;
+        joinType?: "semi" | "flipped" | "unflippable" | undefined;
+        type: "node-cost";
+        nodeType: "join" | "connection" | "fan-out" | "fan-in" | "terminus";
+        node: string;
+        branchPattern: number[];
+        downstreamChildSelectivity: number;
+        costEstimate: {
+            limit?: number | undefined;
+            startupCost: number;
+            scanEst: number;
+            cost: number;
+            returnedRows: number;
+            selectivity: number;
+        };
+    } | {
+        attemptNumber?: number | undefined;
+        constraint?: Record<string, unknown> | null | undefined;
+        type: "node-constraint";
+        nodeType: "join" | "connection" | "fan-out" | "fan-in" | "terminus";
+        node: string;
+        branchPattern: number[];
+        from: string;
+    })[]>;
+}, undefined>;
+export type AnalyzeQueryResult = v.Infer<typeof analyzeQueryResultSchema>;
+//# sourceMappingURL=analyze-query-result.d.ts.map

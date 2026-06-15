@@ -1,0 +1,5 @@
+export declare function otelEnabled(): string | undefined;
+export declare function otelMetricsEnabled(): string | undefined;
+export declare function otelLogsEnabled(): string | undefined;
+export declare function otelTracesEnabled(): string | undefined;
+//# sourceMappingURL=enabled.d.ts.map

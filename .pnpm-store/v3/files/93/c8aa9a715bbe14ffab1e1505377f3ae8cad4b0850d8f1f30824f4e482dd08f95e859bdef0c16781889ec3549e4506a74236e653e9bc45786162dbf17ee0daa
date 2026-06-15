@@ -1,0 +1,10 @@
+/**
+ * Returns `arr` as is if none of the elements are `undefined`.
+ * Otherwise returns a new array with only defined elements in `arr`.
+ */
+export declare function defined<T>(arr: (T | undefined)[]): T[];
+export declare function areEqual<T>(arr1: readonly T[], arr2: readonly T[]): boolean;
+export declare function zip<T1, T2>(a1: readonly T1[], a2: readonly T2[]): [T1, T2][];
+export declare function last<T>(arr: T[]): T | undefined;
+export declare function groupBy<T, K>(arr: readonly T[], keyFn: (el: T) => K): Map<K, T[]>;
+//# sourceMappingURL=arrays.d.ts.map

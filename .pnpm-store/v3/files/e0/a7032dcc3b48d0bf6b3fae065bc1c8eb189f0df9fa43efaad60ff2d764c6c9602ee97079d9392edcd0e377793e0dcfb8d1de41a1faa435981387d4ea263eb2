@@ -1,0 +1,31 @@
+//#region ../zero-cache/src/types/url-params.ts
+var URLParams = class {
+	url;
+	constructor(url) {
+		this.url = url;
+	}
+	get(name, required) {
+		const value = this.url.searchParams.get(name);
+		if (value === "" || value === null) {
+			if (required) throw new Error(`invalid querystring - missing ${name}`);
+			return null;
+		}
+		return value;
+	}
+	getInteger(name, required) {
+		const value = this.get(name, required);
+		if (value === null) return null;
+		const int = parseInt(value);
+		if (isNaN(int)) throw new Error(`invalid querystring parameter ${name}, got: ${value}, url: ${this.url}`);
+		return int;
+	}
+	getBoolean(name) {
+		const value = this.get(name, false);
+		if (value === null) return false;
+		return value === "true";
+	}
+};
+//#endregion
+export { URLParams };
+
+//# sourceMappingURL=url-params.js.map

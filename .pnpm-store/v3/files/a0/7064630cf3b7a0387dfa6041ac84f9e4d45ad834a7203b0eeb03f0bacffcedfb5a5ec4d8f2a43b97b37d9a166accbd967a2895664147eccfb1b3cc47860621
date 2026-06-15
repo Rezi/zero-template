@@ -1,0 +1,13 @@
+import type { SQLQuery } from '@databases/sql';
+/**
+ * Compiles a SQL query with values inlined directly into the SQL string.
+ *
+ * WARNING: This should ONLY be used for cost estimation in the query planner.
+ * Never use this for user-facing queries - always use the standard `compile()`
+ * function from sql.ts which uses parameterized queries.
+ *
+ * @param sql The SQL query to compile
+ * @returns SQL string with values inlined
+ */
+export declare function compileInline(sql: SQLQuery): string;
+//# sourceMappingURL=sql-inline.d.ts.map

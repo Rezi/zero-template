@@ -1,0 +1,87 @@
+import * as v from '../../shared/src/valita.ts';
+/**
+ * Mutation results are stored ephemerally in the client
+ * hence why we only have the `put` operation.
+ *
+ * On put the mutation promise is resolved/rejected
+ * and reference released.
+ */
+export declare const putOpSchema: v.ObjectType<{
+    op: v.Type<"put">;
+    mutation: v.ObjectType<{
+        id: v.ObjectType<{
+            id: v.Type<number>;
+            clientID: v.Type<string>;
+        }, undefined>;
+        result: v.UnionType<[v.ObjectType<{
+            data: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>, v.UnionType<[v.ObjectType<{
+            error: v.Type<"app">;
+            message: v.Optional<string>;
+            details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>, v.ObjectType<{
+            error: v.UnionType<[v.Type<"oooMutation">, v.Type<"alreadyProcessed">]>;
+            details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>]>]>;
+    }, undefined>;
+}, undefined>;
+export declare const delOpSchema: v.ObjectType<{
+    op: v.Type<"del">;
+    id: v.ObjectType<{
+        id: v.Type<number>;
+        clientID: v.Type<string>;
+    }, undefined>;
+}, undefined>;
+declare const patchOpSchema: v.UnionType<[v.ObjectType<{
+    op: v.Type<"put">;
+    mutation: v.ObjectType<{
+        id: v.ObjectType<{
+            id: v.Type<number>;
+            clientID: v.Type<string>;
+        }, undefined>;
+        result: v.UnionType<[v.ObjectType<{
+            data: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>, v.UnionType<[v.ObjectType<{
+            error: v.Type<"app">;
+            message: v.Optional<string>;
+            details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>, v.ObjectType<{
+            error: v.UnionType<[v.Type<"oooMutation">, v.Type<"alreadyProcessed">]>;
+            details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>]>]>;
+    }, undefined>;
+}, undefined>, v.ObjectType<{
+    op: v.Type<"del">;
+    id: v.ObjectType<{
+        id: v.Type<number>;
+        clientID: v.Type<string>;
+    }, undefined>;
+}, undefined>]>;
+export declare const mutationsPatchSchema: v.ArrayType<v.UnionType<[v.ObjectType<{
+    op: v.Type<"put">;
+    mutation: v.ObjectType<{
+        id: v.ObjectType<{
+            id: v.Type<number>;
+            clientID: v.Type<string>;
+        }, undefined>;
+        result: v.UnionType<[v.ObjectType<{
+            data: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>, v.UnionType<[v.ObjectType<{
+            error: v.Type<"app">;
+            message: v.Optional<string>;
+            details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>, v.ObjectType<{
+            error: v.UnionType<[v.Type<"oooMutation">, v.Type<"alreadyProcessed">]>;
+            details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>]>]>;
+    }, undefined>;
+}, undefined>, v.ObjectType<{
+    op: v.Type<"del">;
+    id: v.ObjectType<{
+        id: v.Type<number>;
+        clientID: v.Type<string>;
+    }, undefined>;
+}, undefined>]>>;
+export type MutationPatch = v.Infer<typeof patchOpSchema>;
+export {};
+//# sourceMappingURL=mutations-patch.d.ts.map

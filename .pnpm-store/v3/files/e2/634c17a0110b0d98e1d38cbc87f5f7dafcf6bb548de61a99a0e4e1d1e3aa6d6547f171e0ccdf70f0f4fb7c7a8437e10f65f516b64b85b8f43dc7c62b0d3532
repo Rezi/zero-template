@@ -1,0 +1,17 @@
+import type { Chunk } from '../dag/chunk.ts';
+import type { LazyStore } from '../dag/lazy-store.ts';
+import type { Read } from '../dag/store.ts';
+import { Visitor } from '../dag/visitor.ts';
+import type { Hash } from '../hash.ts';
+export type ChunkWithSize = {
+    chunk: Chunk;
+    size: number;
+};
+export declare class GatherNotCachedVisitor extends Visitor {
+    #private;
+    constructor(dagRead: Read, lazyStore: LazyStore, gatherSizeLimit: number, getSizeOfChunk?: (chunk: Chunk) => number);
+    get gatheredChunks(): ReadonlyMap<Hash, ChunkWithSize>;
+    visit(h: Hash): Promise<void>;
+    visitChunk(chunk: Chunk): Promise<void>;
+}
+//# sourceMappingURL=gather-not-cached-visitor.d.ts.map

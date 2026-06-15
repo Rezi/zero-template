@@ -1,0 +1,70 @@
+import { executePostgresQuery } from "../pg-query-executor.js";
+import { ZQLDatabase } from "../zql-database.js";
+import postgres from "postgres";
+//#region ../zero-server/src/adapters/postgresjs.ts
+var PostgresJSConnection = class {
+	#pg;
+	constructor(pg) {
+		this.#pg = pg;
+	}
+	transaction(fn) {
+		return this.#pg.begin((pgTx) => fn(new PostgresJsTransactionInternal(pgTx)));
+	}
+};
+var PostgresJsTransactionInternal = class {
+	wrappedTransaction;
+	constructor(pgTx) {
+		this.wrappedTransaction = pgTx;
+	}
+	query(sql, params) {
+		return this.wrappedTransaction.unsafe(sql, params);
+	}
+	runQuery(ast, format, schema, serverSchema) {
+		return executePostgresQuery(this, ast, format, schema, serverSchema);
+	}
+};
+/**
+* Wrap a `postgres` client for Zero ZQL.
+*
+* Provides ZQL querying plus access to the underlying postgres.js transaction.
+* Use {@link PostgresJsTransaction} to type your server mutator transaction.
+*
+* @param schema - Zero schema.
+* @param pg - `postgres` client or connection string.
+*
+* @example
+* ```ts
+* import postgres from 'postgres';
+* import {defineMutator, defineMutators} from '@rocicorp/zero';
+* import {zeroPostgresJS} from '@rocicorp/zero/server/adapters/postgresjs';
+* import {z} from 'zod/mini';
+*
+* const sql = postgres(process.env.ZERO_UPSTREAM_DB!);
+* const zql = zeroPostgresJS(schema, sql);
+*
+* export const serverMutators = defineMutators({
+*   user: {
+*     create: defineMutator(
+*       z.object({id: z.string(), name: z.string()}),
+*       async ({tx, args}) => {
+*         if (tx.location !== 'server') {
+*           throw new Error('Server-only mutator');
+*         }
+*         await tx.dbTransaction.wrappedTransaction`
+*           INSERT INTO "user" (id, name, status)
+*           VALUES (${args.id}, ${args.name}, ${'active'})
+*         `;
+*       },
+*     ),
+*   },
+* });
+* ```
+*/
+function zeroPostgresJS(schema, pg) {
+	if (typeof pg === "string") pg = postgres(pg, { connection: { ["application_name"]: "zero-server" } });
+	return new ZQLDatabase(new PostgresJSConnection(pg), schema);
+}
+//#endregion
+export { PostgresJSConnection, PostgresJsTransactionInternal, zeroPostgresJS };
+
+//# sourceMappingURL=postgresjs.js.map

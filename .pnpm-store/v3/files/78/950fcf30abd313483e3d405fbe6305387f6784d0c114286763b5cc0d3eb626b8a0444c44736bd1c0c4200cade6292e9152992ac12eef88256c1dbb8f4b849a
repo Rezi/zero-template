@@ -1,0 +1,26 @@
+import { literalUnion, valita_exports } from "../../shared/src/valita.js";
+//#region ../otel/src/log-options.ts
+var logLevel = literalUnion("debug", "info", "warn", "error");
+var logOptions = {
+	level: logLevel.default("info"),
+	format: {
+		type: literalUnion("text", "json").default("text"),
+		desc: [`Use {bold text} for developer-friendly console logging`, `and {bold json} for consumption by structured-logging services`]
+	},
+	slowRowThreshold: {
+		type: valita_exports.number().default(2),
+		desc: [`The number of ms a row must take to fetch from table-source before it is considered slow.`]
+	},
+	slowHydrateThreshold: {
+		type: valita_exports.number().default(100),
+		desc: [`The number of milliseconds a query hydration must take to print a slow warning.`]
+	},
+	ivmSampling: {
+		type: valita_exports.number().default(5e3),
+		desc: [`How often to collect IVM metrics. 1 out of N requests will be sampled where N is this value.`]
+	}
+};
+//#endregion
+export { logLevel, logOptions };
+
+//# sourceMappingURL=log-options.js.map

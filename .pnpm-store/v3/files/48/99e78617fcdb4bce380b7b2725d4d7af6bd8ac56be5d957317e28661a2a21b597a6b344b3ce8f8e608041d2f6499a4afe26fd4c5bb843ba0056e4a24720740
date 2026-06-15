@@ -1,0 +1,9 @@
+import { type Accessor } from 'solid-js';
+/**
+ * Tracks the online status of the current Zero instance.
+ *
+ * @returns An accessor — call `online()` to get a reactive `boolean`.
+ * @deprecated Use {@linkcode useConnectionState} instead, which provides more detailed connection state.
+ */
+export declare function useZeroOnline(): Accessor<boolean>;
+//# sourceMappingURL=use-zero-online.d.ts.map

@@ -1,0 +1,25 @@
+import { ClientGroup } from "./client-group.js";
+//#region ../zero-client/src/client/inspector/client.ts
+var Client = class {
+	#delegate;
+	id;
+	clientGroup;
+	constructor(delegate, clientID, clientGroupID) {
+		this.#delegate = delegate;
+		this.id = clientID;
+		this.clientGroup = new ClientGroup(this.#delegate, clientGroupID);
+	}
+	async queries() {
+		return (await this.#delegate.lazy).clientQueries(this.#delegate, this.id);
+	}
+	async map() {
+		return (await this.#delegate.lazy).clientMap(this.#delegate, this.id);
+	}
+	async rows(tableName) {
+		return (await this.#delegate.lazy).clientRows(this.#delegate, this.id, tableName);
+	}
+};
+//#endregion
+export { Client };
+
+//# sourceMappingURL=client.js.map

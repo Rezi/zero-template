@@ -1,0 +1,26 @@
+//#region ../zero-cache/src/types/sql.ts
+/**
+* Escapes the identifier with double quotes, as per:
+*
+* https://www.postgresql.org/docs/16/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS
+*/
+function id(name) {
+	return "\"" + name.replace(/"/g, "\"\"") + "\"";
+}
+/**
+* Escapes and comma-separates a list of identifiers.
+*/
+function idList(names) {
+	return Array.from(names, (name) => id(name)).join(",");
+}
+/**
+* Escapes a string literal with single quotes, as per:
+* https://www.postgresql.org/docs/16/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS
+*/
+function lit(value) {
+	return "'" + value.replace(/'/g, "''") + "'";
+}
+//#endregion
+export { id, idList, lit };
+
+//# sourceMappingURL=sql.js.map

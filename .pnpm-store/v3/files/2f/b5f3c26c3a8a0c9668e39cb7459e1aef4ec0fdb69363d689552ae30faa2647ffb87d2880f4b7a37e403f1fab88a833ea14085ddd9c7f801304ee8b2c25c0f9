@@ -1,0 +1,13 @@
+export declare function transactionError(): Error;
+export declare function throwIfStoreClosed(store: {
+    readonly closed: boolean;
+}): void;
+export declare function throwIfTransactionClosed(transaction: {
+    readonly closed: boolean;
+}): void;
+export declare function transactionIsClosedRejection(): Promise<never>;
+export declare function maybeTransactionIsClosedRejection(transaction: {
+    readonly closed: boolean;
+}): Promise<never> | undefined;
+export declare function storeIsClosedRejection(): Promise<never>;
+//# sourceMappingURL=throw-if-closed.d.ts.map

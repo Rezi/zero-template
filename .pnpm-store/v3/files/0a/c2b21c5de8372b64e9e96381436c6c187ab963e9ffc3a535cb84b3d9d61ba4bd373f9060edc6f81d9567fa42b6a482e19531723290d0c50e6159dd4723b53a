@@ -1,0 +1,222 @@
+import { BigIntJSON } from "../../../shared/src/bigint-json.js";
+import { randInt } from "../../../shared/src/rand.js";
+import { ConfigurationError } from "./configuration-error.js";
+import { DATE, JSONB, NUMERIC, TIME, TIMESTAMP, TIMESTAMPTZ, TIMETZ } from "./pg-types.js";
+import postgres from "postgres";
+import { PG_CONFIGURATION_LIMIT_EXCEEDED, PG_CONNECTION_DOES_NOT_EXIST, PG_CONNECTION_EXCEPTION, PG_CONNECTION_FAILURE, PG_INSUFFICIENT_PRIVILEGE, PG_INVALID_AUTHORIZATION_SPECIFICATION, PG_INVALID_CATALOG_NAME, PG_INVALID_PASSWORD, PG_SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION, PG_TOO_MANY_CONNECTIONS } from "@drdgvhbh/postgres-error-codes";
+import { PreciseDate } from "@google-cloud/precise-date";
+import { OID } from "@postgresql-typed/oids";
+//#region ../zero-cache/src/types/pg.ts
+var pgTimestampRe = /^(\d+)-(\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}(?:\.\d+)?)([+-]\d{1,2}(?::\d{2})?)?(?: BC)?$/;
+function timestampToFpMillis(timestamp) {
+	if (timestamp === "infinity") return Infinity;
+	if (timestamp === "-infinity") return -Infinity;
+	const match = timestamp.match(pgTimestampRe);
+	if (!match) throw new Error(`Error parsing ${timestamp}`);
+	const [, yearStr, monthDay, time, tz] = match;
+	const bc = timestamp.endsWith(" BC");
+	let year = Number(yearStr);
+	if (bc) year = -(year - 1);
+	let isoYear;
+	if (year >= 0 && year <= 9999) isoYear = String(year).padStart(4, "0");
+	else if (year >= 0) isoYear = "+" + String(year).padStart(6, "0");
+	else isoYear = "-" + String(Math.abs(year)).padStart(6, "0");
+	const utcString = `${isoYear}-${monthDay}T${time}Z`;
+	try {
+		const fullTime = new PreciseDate(utcString).getFullTime();
+		const ret = Number(fullTime / 1000000n) + Number(fullTime % 1000000n) * 1e-6;
+		if (tz) {
+			const positiveOffset = tz.startsWith("+");
+			const [hours, minutes] = tz.split(":");
+			const offsetMillis = (Math.abs(Number(hours)) * 60 + (minutes ? Number(minutes) : 0)) * 60 * 1e3;
+			return positiveOffset ? ret - offsetMillis : ret + offsetMillis;
+		}
+		return ret;
+	} catch (e) {
+		throw new Error(`Error parsing ${timestamp}`, { cause: e });
+	}
+}
+function serializeTimestamp(val) {
+	switch (typeof val) {
+		case "string": return val;
+		case "number":
+			if (Number.isInteger(val)) return new PreciseDate(val).toISOString();
+			return new PreciseDate(1000000n * BigInt(Math.trunc(val)) + BigInt(Math.trunc(val % 1 * 1e6))).toISOString();
+		default: if (val instanceof Date) return val.toISOString();
+	}
+	throw new Error(`Unsupported type "${typeof val}" for timestamp: ${val}`);
+}
+var MILLISECONDS_PER_DAY = 1440 * 60 * 1e3;
+function serializeTime(x, type) {
+	switch (typeof x) {
+		case "string": return x;
+		case "number": return millisecondsToPostgresTime(x);
+	}
+	throw new Error(`Unsupported type "${typeof x}" for ${type}: ${x}`);
+}
+function millisecondsToPostgresTime(milliseconds) {
+	if (milliseconds < 0) throw new Error("Milliseconds cannot be negative");
+	if (milliseconds >= MILLISECONDS_PER_DAY) throw new Error(`Milliseconds cannot exceed 24 hours (${MILLISECONDS_PER_DAY}ms)`);
+	milliseconds = Math.floor(milliseconds);
+	const totalSeconds = Math.floor(milliseconds / 1e3);
+	const hours = Math.floor(totalSeconds / 3600);
+	const minutes = Math.floor(totalSeconds % 3600 / 60);
+	const seconds = totalSeconds % 60;
+	const ms = milliseconds % 1e3;
+	return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}.${ms.toString().padStart(3, "0")}+00`;
+}
+var timeRegex = /^(\d{1,2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?(?:([+-])(\d{1,2})(?::(\d{2}))?)?$/;
+function postgresTimeToMilliseconds(timeString) {
+	if (!timeString || typeof timeString !== "string") throw new Error("Invalid time string: must be a non-empty string");
+	const match = timeString.match(timeRegex);
+	if (!match) throw new Error(`Invalid time format: "${timeString}". Expected HH:MM:SS[.mmm][+|-HH[:MM]]`);
+	const hours = parseInt(match[1], 10);
+	const minutes = parseInt(match[2], 10);
+	const seconds = parseInt(match[3], 10);
+	let milliseconds = 0;
+	if (match[4]) {
+		const msString = match[4].padEnd(6, "0");
+		milliseconds = parseInt(msString.slice(0, 3), 10);
+	}
+	if (hours < 0 || hours > 24) throw new Error(`Invalid hours: ${hours}. Must be between 0 and 24 (24 means end of day)`);
+	if (minutes < 0 || minutes >= 60) throw new Error(`Invalid minutes: ${minutes}. Must be between 0 and 59`);
+	if (seconds < 0 || seconds >= 60) throw new Error(`Invalid seconds: ${seconds}. Must be between 0 and 59`);
+	if (milliseconds < 0 || milliseconds >= 1e3) throw new Error(`Invalid milliseconds: ${milliseconds}. Must be between 0 and 999`);
+	if (hours === 24 && (minutes !== 0 || seconds !== 0 || milliseconds !== 0)) throw new Error("Invalid time: when hours is 24, minutes, seconds, and milliseconds must be 0");
+	let totalMs = hours * 36e5 + minutes * 6e4 + seconds * 1e3 + milliseconds;
+	if (match[5]) {
+		const sign = match[5] === "+" ? 1 : -1;
+		const tzHours = parseInt(match[6], 10);
+		const tzMinutes = match[7] ? parseInt(match[7], 10) : 0;
+		const offsetMs = sign * (tzHours * 36e5 + tzMinutes * 6e4);
+		totalMs -= offsetMs;
+	}
+	if (totalMs > MILLISECONDS_PER_DAY || totalMs < 0) return (totalMs % MILLISECONDS_PER_DAY + MILLISECONDS_PER_DAY) % MILLISECONDS_PER_DAY;
+	return totalMs;
+}
+function dateToUTCMidnight(date) {
+	if (date === "infinity") return Infinity;
+	if (date === "-infinity") return -Infinity;
+	const d = new Date(date);
+	return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+/**
+* Configures types for the Postgres.js client library (`postgres`).
+*
+* @param jsonAsString Keep JSON / JSONB values as strings instead of parsing.
+*/
+var postgresTypeConfig = ({ sendStringAsJson } = {}) => ({ types: {
+	bigint: postgres.BigInt,
+	json: {
+		to: 114,
+		from: [114, JSONB],
+		serialize: sendStringAsJson ? (x) => typeof x === "string" ? x : BigIntJSON.stringify(x) : BigIntJSON.stringify,
+		parse: BigIntJSON.parse
+	},
+	timestamp: {
+		to: TIMESTAMP,
+		from: [TIMESTAMP, TIMESTAMPTZ],
+		serialize: serializeTimestamp,
+		parse: timestampToFpMillis
+	},
+	time: {
+		to: TIME,
+		from: [TIME, TIMETZ],
+		serialize: (x) => serializeTime(x, "time"),
+		parse: postgresTimeToMilliseconds
+	},
+	timetz: {
+		to: TIMETZ,
+		from: [TIME, TIMETZ],
+		serialize: (x) => serializeTime(x, "timetz"),
+		parse: postgresTimeToMilliseconds
+	},
+	date: {
+		to: DATE,
+		from: [DATE],
+		serialize: (x) => (x instanceof Date ? x : new Date(x)).toISOString(),
+		parse: dateToUTCMidnight
+	},
+	numeric: {
+		to: NUMERIC,
+		from: [NUMERIC],
+		serialize: (x) => String(x),
+		parse: (x) => Number(x)
+	}
+} });
+function pgClient(lc, connectionURI, applicationName, options, opts) {
+	applicationName = `zero-${applicationName}`;
+	const onnotice = (n) => {
+		switch (n.severity) {
+			case "NOTICE": return;
+			case "DEBUG":
+				lc.debug?.(n);
+				return;
+			case "WARNING":
+				lc.warn?.(n);
+				return;
+			case "EXCEPTION":
+				lc.error?.(n);
+				return;
+			default: lc.info?.(n);
+		}
+	};
+	const url = new URL(connectionURI);
+	const sslFlag = url.searchParams.get("ssl") ?? url.searchParams.get("sslmode") ?? "prefer";
+	let ssl;
+	if (sslFlag === "disable" || sslFlag === "false") ssl = false;
+	else if (sslFlag === "no-verify") ssl = { rejectUnauthorized: false };
+	else ssl = sslFlag;
+	const maxLifetimeSeconds = randInt(300, 600);
+	const providedConnection = options?.connection ?? {};
+	return postgres(connectionURI, {
+		...postgresTypeConfig(opts),
+		onnotice,
+		["max_lifetime"]: maxLifetimeSeconds,
+		ssl,
+		...options,
+		connection: {
+			...providedConnection,
+			["application_name"]: applicationName
+		}
+	});
+}
+async function connectPgClient(...args) {
+	const db = pgClient(...args);
+	try {
+		await db`SELECT 1`.simple().execute();
+		return db;
+	} catch (e) {
+		if (isPostgresConfigError(e)) throw new ConfigurationError("Unable to connect to Postgres. Check your database configuration.", { cause: e });
+		throw e;
+	}
+}
+Object.freeze(Object.fromEntries(Object.entries(OID).map(([name, oid]) => [oid, name.startsWith("_") ? `${name.substring(1)}[]` : name])));
+function isPostgresError(e, ...codes) {
+	return e instanceof postgres.PostgresError && codes.includes(e.code);
+}
+function isPostgresStartupConnectionError(e) {
+	if (!(e instanceof Error) || !("code" in e)) return false;
+	const { code } = e;
+	return typeof code === "string" && [
+		"CONNECT_TIMEOUT",
+		"ECONNREFUSED",
+		"ECONNRESET",
+		"EHOSTUNREACH",
+		"ENETUNREACH",
+		"ENOTFOUND",
+		"EAI_AGAIN",
+		"ETIMEDOUT",
+		"ERR_TLS_CERT_ALTNAME_INVALID",
+		"SELF_SIGNED_CERT_IN_CHAIN",
+		"DEPTH_ZERO_SELF_SIGNED_CERT",
+		"UNABLE_TO_VERIFY_LEAF_SIGNATURE"
+	].includes(code);
+}
+function isPostgresConfigError(e) {
+	return isPostgresStartupConnectionError(e) || isPostgresError(e, PG_CONNECTION_EXCEPTION, PG_SQLCLIENT_UNABLE_TO_ESTABLISH_SQLCONNECTION, PG_CONNECTION_DOES_NOT_EXIST, PG_CONNECTION_FAILURE, PG_INVALID_AUTHORIZATION_SPECIFICATION, PG_INVALID_PASSWORD, PG_INVALID_CATALOG_NAME, PG_INSUFFICIENT_PRIVILEGE, PG_TOO_MANY_CONNECTIONS, PG_CONFIGURATION_LIMIT_EXCEEDED);
+}
+//#endregion
+export { connectPgClient, isPostgresError, pgClient };
+
+//# sourceMappingURL=pg.js.map

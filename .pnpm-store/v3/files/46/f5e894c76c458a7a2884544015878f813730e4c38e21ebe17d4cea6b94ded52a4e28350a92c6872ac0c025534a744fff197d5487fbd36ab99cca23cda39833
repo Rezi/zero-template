@@ -1,0 +1,8 @@
+import type { Mutation } from '../../../zero-protocol/src/mutation.ts';
+export type ClientID = string;
+export type ClientState = {
+    socket: WebSocket;
+    pending: Mutation[];
+    clockBehindByMs: number | undefined;
+};
+//# sourceMappingURL=client-state.d.ts.map

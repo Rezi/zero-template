@@ -1,0 +1,1242 @@
+import { assert, unreachable } from "../../../../shared/src/asserts.js";
+import { must } from "../../../../shared/src/must.js";
+import { Internal, InvalidConnectionRequest, InvalidConnectionRequestBaseCookie, Rehome } from "../../../../zero-protocol/src/error-kind-enum.js";
+import { ZeroCache } from "../../../../zero-protocol/src/error-origin-enum.js";
+import { ProtocolError, isProtocolError } from "../../../../zero-protocol/src/error.js";
+import { MAX_TTL_MS, clampTTL } from "../../../../zql/src/query/ttl.js";
+import { stringify } from "../../../../shared/src/bigint-json.js";
+import { manualSpan, startAsyncSpan, startSpan } from "../../../../otel/src/span.js";
+import { ZERO_VERSION_COLUMN_NAME } from "../replicator/schema/constants.js";
+import { transformAndHashQuery } from "../../auth/read-authorizer.js";
+import { getOrCreateCounter, getOrCreateLatencyHistogram, getOrCreateUpDownCounter } from "../../observability/metrics.js";
+import { rowIDString } from "../../types/row-key.js";
+import "../replicator/schema/replication-state.js";
+import { parseSignature } from "./row-set-signature.js";
+import { ResetPipelinesSignal } from "./snapshotter.js";
+import "./pipeline-driver.js";
+import { randInt } from "../../../../shared/src/rand.js";
+import { Subscription } from "../../types/subscription.js";
+import { CustomKeyMap } from "../../../../shared/src/custom-key-map.js";
+import { ttlClockAsNumber, ttlClockFromNumber } from "./ttl-clock.js";
+import { EMPTY_CVR_VERSION, cmpVersions, versionFromString, versionString, versionToCookie } from "./schema/types.js";
+import { ProtocolErrorWithLevel, getLogLevel, wrapWithProtocolError } from "../../types/error-with-level.js";
+import { isAuthErrorBody } from "../../auth/auth.js";
+import { ClientHandler, startPoke } from "./client-handler.js";
+import { tracer } from "./tracer.js";
+import { CVRStore, ClientNotFoundError } from "./cvr-store.js";
+import { CVRConfigDrivenUpdater, CVRQueryDrivenUpdater, nextEvictionTime } from "./cvr.js";
+import { handleInspect } from "./inspect-handler.js";
+import { resolver } from "@rocicorp/resolver";
+import { Lock } from "@rocicorp/lock";
+//#region ../zero-cache/src/services/view-syncer/view-syncer.ts
+var PROTOCOL_VERSION_ATTR = "protocol.version";
+var DEFAULT_KEEPALIVE_MS = 5e3;
+function randomID() {
+	return randInt(1, Number.MAX_SAFE_INTEGER).toString(36);
+}
+function shutdownBeforeInitializationError() {
+	return new ProtocolErrorWithLevel({
+		kind: Internal,
+		message: "shut down before initialization completed",
+		origin: ZeroCache
+	}, "warn");
+}
+/**
+* We update the ttlClock in flush that writes to the CVR but
+* some flushes do not write to the CVR and in those cases we
+* use a timer to update the ttlClock every minute.
+*/
+var TTL_CLOCK_INTERVAL = 6e4;
+var ViewSyncerService = class {
+	id;
+	connContextManager;
+	#shard;
+	#lc;
+	#pipelines;
+	#stateChanges;
+	#drainCoordinator;
+	#keepaliveMs;
+	#slowHydrateThreshold;
+	#lastConnectTime = Date.now();
+	/**
+	* The TTL clock is used to determine the time at which queries are considered
+	* expired.
+	*/
+	#ttlClock;
+	/**
+	* The base time for the TTL clock. This is used to compute the current TTL
+	* clock value. The first time a connection is made, this is set to the
+	* current time. On subsequent connections, the TTL clock is computed as the
+	* difference between the current time and this base time.
+	*
+	* Every time we write the ttlClock this is update to the current time. That
+	* way we can compute how much time has passed since the last time we set the
+	* ttlClock. When we set the ttlClock we just increment it by the amount of
+	* time that has passed since the last time we set it.
+	*/
+	#ttlClockBase = Date.now();
+	/**
+	* We update the ttlClock every minute to ensure that it is not too much
+	* out of sync with the current time.
+	*/
+	#ttlClockInterval = 0;
+	#clients = /* @__PURE__ */ new Map();
+	#lock = new Lock();
+	#cvrStore;
+	#stopped = resolver();
+	#initialized = resolver();
+	#cvr;
+	#pipelinesSynced = false;
+	#expiredQueriesTimer = 0;
+	#authMaintenanceTimer = 0;
+	#setTimeout;
+	#customQueryTransformer;
+	#queryReplacements = /* @__PURE__ */ new Map();
+	#activeClients = getOrCreateUpDownCounter("sync", "active-clients", "Number of active sync clients");
+	#hydrations = getOrCreateCounter("sync", "hydration", "Number of query hydrations");
+	#hydrationTime = getOrCreateLatencyHistogram("sync", "hydration-time", "Time to hydrate a query.");
+	#transactionAdvanceTime = getOrCreateLatencyHistogram("sync", "advance-time", "Time to advance all queries for a given client group after applying a new transaction to the replica.");
+	#queryTransformations = getOrCreateCounter("sync", "query.transformations", "Number of query transformations performed");
+	#queryTransformationTime = getOrCreateLatencyHistogram("sync", "query.transformation-time", "Time to transform custom queries via API server.");
+	#queryTransformationHashChanges = getOrCreateCounter("sync", "query.transformation-hash-changes", "Number of times query transformation hash changed");
+	#queryTransformationNoOps = getOrCreateCounter("sync", "query.transformation-no-ops", "Number of times query transformation resulted in no-op (hash unchanged)");
+	#lockWaitTime = getOrCreateLatencyHistogram("sync", "lock-wait-time", "Time spent waiting to acquire the ViewSyncer lock.");
+	#pipelineResets = getOrCreateCounter("sync", "pipeline-resets", "Number of pipeline resets");
+	#rowSetSignatureDrifts = getOrCreateCounter("sync", "query.row-set-signature-drifts", "Number of times re-hydration of an unchanged query produced a different row-set signature than what is stored in the CVR (forcing a configVersion bump and full re-execution). Expected to be near-zero in steady state; persistent non-zero values indicate non-deterministic query execution (e.g. Cap operator picking different N-row subsets).");
+	#inspectorDelegate;
+	#config;
+	#runPriorityOp;
+	constructor(config, lc, shard, taskID, clientGroupID, cvrDb, pipelineDriver, versionChanges, drainCoordinator, slowHydrateThreshold, inspectorDelegate, connContextManager, customQueryTransformer, runPriorityOp, keepaliveMs = DEFAULT_KEEPALIVE_MS, setTimeoutFn = setTimeout.bind(globalThis)) {
+		this.#config = config;
+		this.id = clientGroupID;
+		this.connContextManager = connContextManager;
+		this.#shard = shard;
+		this.#lc = lc;
+		this.#pipelines = pipelineDriver;
+		this.#stateChanges = versionChanges;
+		this.#drainCoordinator = drainCoordinator;
+		this.#keepaliveMs = keepaliveMs;
+		this.#slowHydrateThreshold = slowHydrateThreshold;
+		this.#inspectorDelegate = inspectorDelegate;
+		this.#customQueryTransformer = customQueryTransformer;
+		this.#cvrStore = new CVRStore(lc, cvrDb, shard, taskID, clientGroupID, () => this.#stateChanges.cancel());
+		this.#setTimeout = setTimeoutFn;
+		this.#runPriorityOp = runPriorityOp;
+		this.keepalive();
+	}
+	#runInLockWithCVR(fn) {
+		const rid = randomID();
+		this.#lc.debug?.("about to acquire lock for cvr ", rid);
+		const lockWaitStart = performance.now();
+		return this.#lock.withLock(async () => {
+			this.#lockWaitTime.recordMs(performance.now() - lockWaitStart);
+			this.#lc.debug?.("acquired lock in #runInLockWithCVR ", rid);
+			const lc = this.#lc.withContext("lock", rid);
+			if (!this.#stateChanges.active) {
+				this.#lc.debug?.("state changes are inactive");
+				clearTimeout(this.#expiredQueriesTimer);
+				throw new ProtocolErrorWithLevel({
+					kind: Rehome,
+					message: "Reconnect required",
+					origin: ZeroCache
+				}, "info");
+			}
+			if (await this.#checkForShutdownConditionsInLock()) {
+				this.#lc.info?.(`closing clientGroupID=${this.id}`);
+				this.#initialized.reject(shutdownBeforeInitializationError());
+				this.#stateChanges.cancel();
+				return;
+			}
+			if (!this.#cvr) {
+				this.#lc.debug?.("loading cvr");
+				this.#cvr = await this.#runPriorityOp(lc, "loading cvr", () => this.#cvrStore.load(lc, this.#lastConnectTime));
+				this.#ttlClock = this.#cvr.ttlClock;
+				this.#ttlClockBase = Date.now();
+			} else {
+				const now = Date.now();
+				this.#cvr = {
+					...this.#cvr,
+					ttlClock: this.#getTTLClock(now)
+				};
+			}
+			try {
+				await fn(lc, this.#cvr);
+			} catch (e) {
+				this.#cvr = void 0;
+				throw e;
+			} finally {
+				this.#scheduleAuthMaintenance(lc);
+			}
+		});
+	}
+	readyState() {
+		return Promise.race([this.#initialized.promise, this.#drainCoordinator.draining]);
+	}
+	async run() {
+		try {
+			if (await this.readyState() === "draining") {
+				this.#lc.debug?.(`draining view-syncer ${this.id} before running`);
+				this.stop();
+			}
+			for await (const { state } of this.#stateChanges) {
+				if (this.#drainCoordinator.shouldDrain()) {
+					this.#lc.debug?.(`draining view-syncer ${this.id} (elective)`);
+					break;
+				}
+				assert(state === "version-ready", "state should be version-ready");
+				await this.#runInLockWithCVR(async (lc, cvr) => {
+					const clientSchema = must(cvr.clientSchema, "cvr.clientSchema missing after initialization");
+					if (!this.#pipelines.initialized()) this.#pipelines.init(clientSchema);
+					if (cvr.replicaVersion !== null && cvr.version.stateVersion !== "00" && this.#pipelines.replicaVersion < cvr.replicaVersion) {
+						const message = `Cannot sync from older replica: CVR=${cvr.replicaVersion}, DB=${this.#pipelines.replicaVersion}`;
+						lc.info?.(`resetting CVR: ${message}`);
+						throw new ClientNotFoundError(message);
+					}
+					if (this.#pipelinesSynced) {
+						const result = await this.#advancePipelines(lc, cvr);
+						if (result === "success") return;
+						lc.info?.(`resetting pipelines: ${result.message}`);
+						this.#pipelineResets.add(1, { reason: result.reason });
+						this.#pipelines.reset(clientSchema);
+						this.#pipelinesSynced = false;
+						this.connContextManager.setSharedRetransformReady(false);
+					}
+					const version = this.#pipelines.advanceWithoutDiff();
+					const cvrVer = versionString(cvr.version);
+					if (version < cvr.version.stateVersion) {
+						lc.debug?.(`replica@${version} is behind cvr@${cvrVer}`);
+						return;
+					}
+					lc.info?.(`init pipelines@${version} (cvr@${cvrVer})`);
+					const driftedQueryIDs = await this.#hydrateUnchangedQueries(lc, cvr);
+					await this.#syncQueryPipelineSet(lc, cvr, "missing", void 0, driftedQueryIDs);
+					this.#pipelinesSynced = true;
+					this.connContextManager.setSharedRetransformReady(true);
+				});
+			}
+			if (this.#drainCoordinator.shouldDrain()) this.#drainCoordinator.drainNextIn(this.#totalHydrationTimeMs());
+			await this.#cleanup();
+		} catch (e) {
+			this.#lc[getLogLevel(e)]?.(`stopping view-syncer ${this.id}: ${String(e)}`, e);
+			await this.#cleanup(e);
+		} finally {
+			await this.#cvrStore.flushed(this.#lc).catch((e) => this.#lc[getLogLevel(e)]?.(e));
+			this.#lc.info?.(`view-syncer ${this.id} finished`);
+			this.#stopped.resolve();
+		}
+	}
+	#removeExpiredQueries = async (lc, cvr) => {
+		if (hasExpiredQueries(cvr)) {
+			lc = lc.withContext("method", "#removeExpiredQueries");
+			lc.debug?.("Queries have expired");
+			if (this.#pipelinesSynced) await this.#syncQueryPipelineSet(lc, cvr, "missing", void 0);
+		}
+		this.#scheduleExpireEviction(lc, cvr);
+	};
+	#totalHydrationTimeMs() {
+		return this.#pipelines.totalHydrationTimeMs();
+	}
+	get queryCount() {
+		return this.#pipelines.initialized() ? this.#pipelines.queries().size : 0;
+	}
+	get rowCount() {
+		return this.#cvrStore.rowCount;
+	}
+	#keepAliveUntil = 0;
+	/**
+	* Guarantees that the ViewSyncer will remain running for at least
+	* its configured `keepaliveMs`. This is called when establishing a
+	* new connection to ensure that its associated ViewSyncer isn't
+	* shutdown before it receives the connection.
+	*
+	* @return `true` if the ViewSyncer will stay alive, `false` if the
+	*         ViewSyncer is shutting down.
+	*/
+	keepalive() {
+		if (!this.#stateChanges.active) return false;
+		this.#keepAliveUntil = Date.now() + this.#keepaliveMs;
+		return true;
+	}
+	#shutdownTimer = null;
+	#scheduleShutdown(delayMs = 0) {
+		this.#shutdownTimer ??= this.#setTimeout(() => {
+			this.#shutdownTimer = null;
+			this.#runInLockWithCVR(() => {}).catch((e) => this.#stateChanges.fail(e));
+		}, delayMs);
+	}
+	async #checkForShutdownConditionsInLock() {
+		if (this.#clients.size > 0) return false;
+		await this.#cvrStore.flushed(this.#lc);
+		if (Date.now() <= this.#keepAliveUntil) {
+			this.#scheduleShutdown(this.#keepaliveMs);
+			return false;
+		}
+		return this.#clients.size === 0;
+	}
+	#deleteClientDueToDisconnect(clientID, client) {
+		this.connContextManager.closeConnection({
+			clientID,
+			wsID: client.wsID
+		});
+		if (this.#clients.get(clientID) === client) {
+			this.#clients.delete(clientID);
+			if (this.#clients.size === 0) {
+				if (this.#ttlClock !== void 0) this.#updateTTLClockInCVRWithoutLock(this.#lc);
+				this.#stopExpireTimer();
+				this.#scheduleShutdown();
+			}
+		}
+	}
+	#stopExpireTimer() {
+		this.#lc.debug?.("Stopping expired queries timer");
+		clearTimeout(this.#expiredQueriesTimer);
+		this.#expiredQueriesTimer = 0;
+	}
+	#stopAuthMaintenanceTimer() {
+		if (this.#authMaintenanceTimer !== 0) this.#lc.debug?.("Stopping auth maintenance timer");
+		clearTimeout(this.#authMaintenanceTimer);
+		this.#authMaintenanceTimer = 0;
+	}
+	/**
+	* Schedules the auth maintenance wakeup from coordinator-derived
+	* deadlines. The timer plumbing is intentionally separate from the actual
+	* revalidation/retransform work so future policy changes only need to update
+	* the maintenance workers, not the wakeup logic.
+	*/
+	#scheduleAuthMaintenance(lc) {
+		this.#stopAuthMaintenanceTimer();
+		const plan = this.connContextManager.planMaintenance();
+		if (plan.earliestDeadlineAt === void 0) {
+			lc.debug?.("No auth maintenance wakeup scheduled");
+			return;
+		}
+		const delay = Math.max(0, plan.earliestDeadlineAt - Date.now());
+		lc.debug?.(`Scheduling auth maintenance timer at ${new Date(plan.earliestDeadlineAt).toISOString()}`, {
+			delay,
+			earliestDeadlineAt: plan.earliestDeadlineAt
+		});
+		this.#authMaintenanceTimer = this.#setTimeout(async () => {
+			try {
+				this.#authMaintenanceTimer = 0;
+				await this.#runInLockWithCVR((lc, cvr) => this.#runAuthMaintenance(lc, cvr));
+			} catch (e) {
+				this.#stateChanges.fail(e instanceof Error ? e : new Error(String(e)));
+			}
+		}, delay);
+	}
+	async #runAuthMaintenance(lc, _cvr) {
+		const plan = this.connContextManager.planMaintenance();
+		if (plan.dueRevalidations.length === 0 && !plan.dueRetransform) {
+			lc.debug?.("Auth maintenance woke up with no due work");
+			return;
+		}
+		lc.debug?.("Auth maintenance woke up with pending work", {
+			dueRevalidations: plan.dueRevalidations.length,
+			dueRetransform: plan.dueRetransform
+		});
+		for (const connCtx of plan.dueRevalidations) try {
+			await this.#validateConnection(connCtx);
+		} catch (e) {
+			if (isProtocolError(e) && isTransformFailedError(e)) {
+				lc.warn?.("Scheduled auth revalidation failed; deferring auth maintenance", {
+					clientID: connCtx.clientID,
+					wsID: connCtx.wsID,
+					message: e.message
+				});
+				this.connContextManager.deferMaintenance("revalidate");
+				return;
+			}
+			throw e;
+		}
+		if (this.connContextManager.planMaintenance().dueRetransform) await this.#runBackgroundRetransform(lc);
+	}
+	initConnection(selector, initConnectionMessage) {
+		this.#lc.debug?.("viewSyncer.initConnection");
+		return startSpan(tracer, "vs.initConnection", () => {
+			const connCtx = this.connContextManager.mustGetConnectionContext(selector);
+			const lc = this.#lc.withContext("clientID", connCtx.clientID).withContext("wsID", connCtx.wsID);
+			const downstream = Subscription.create({ cleanup: (_, err) => {
+				err ? lc[getLogLevel(err)]?.(`client closed with error`, err) : lc.info?.("client closed");
+				this.#deleteClientDueToDisconnect(connCtx.clientID, newClient);
+				this.#activeClients.add(-1, { [PROTOCOL_VERSION_ATTR]: connCtx.protocolVersion });
+			} });
+			this.#activeClients.add(1, { [PROTOCOL_VERSION_ATTR]: connCtx.protocolVersion });
+			if (this.#clients.size === 0) this.#ttlClockBase = Date.now();
+			const newClient = new ClientHandler(lc, this.id, connCtx.clientID, connCtx.wsID, this.#shard, connCtx.baseCookie, downstream);
+			this.#clients.get(connCtx.clientID)?.close(`replaced by wsID: ${connCtx.wsID}`);
+			this.#clients.set(connCtx.clientID, newClient);
+			startAsyncSpan(tracer, "vs.initConnection.async", () => this.#runInLockForClient(connCtx, initConnectionMessage, async (lc, clientID, msg, cvr) => {
+				if (cvr.clientSchema === null && !msg.clientSchema) throw new ProtocolErrorWithLevel({
+					kind: InvalidConnectionRequest,
+					message: "The initConnection message for a new client group must include client schema.",
+					origin: ZeroCache
+				}, "warn");
+				if (!await this.#validateConnection(connCtx)) return;
+				await this.#handleConfigUpdate(lc, clientID, msg, cvr, "all", connCtx.profileID ?? `cg${this.id}`, connCtx);
+				this.#initialized.resolve("initialized");
+			}, newClient)).catch((e) => newClient.fail(e));
+			return downstream;
+		});
+	}
+	async changeDesiredQueries(selector, msg) {
+		await this.#runInLockForClient(selector, msg, (lc, clientID, msg, cvr) => this.#handleConfigUpdate(lc, clientID, msg, cvr, "missing", void 0, this.connContextManager.mustGetConnectionContext(selector)));
+	}
+	async updateAuth(selector, msg, authRevisionChanged) {
+		await this.#runInLockForClient(selector, msg, async (lc, clientID, _, cvr) => {
+			if (!authRevisionChanged) {
+				lc.debug?.("Auth unchanged, skipping query re-transformation");
+				return;
+			}
+			lc.debug?.("Auth changed, re-validating and re-transforming queries");
+			const connCtx = this.connContextManager.mustGetConnectionContext(selector);
+			if (!this.#pipelinesSynced) {
+				if (!await this.#validateConnection(connCtx)) return;
+			}
+			return await this.#handleConfigUpdate(lc, clientID, {}, cvr, "all", void 0, connCtx);
+		});
+	}
+	async deleteClients(selector, msg) {
+		return await this.#runInLockForClient(selector, [msg[0], { deleted: msg[1] }], (lc, clientID, msg, cvr) => this.#handleConfigUpdate(lc, clientID, msg, cvr, "missing", void 0, this.connContextManager.mustGetConnectionContext(selector))) ?? [];
+	}
+	#getTTLClock(now) {
+		const delta = now - this.#ttlClockBase;
+		assert(this.#ttlClock !== void 0, "ttlClock should be defined");
+		const ttlClock = ttlClockFromNumber(ttlClockAsNumber(this.#ttlClock) + delta);
+		assert(ttlClockAsNumber(ttlClock) <= now, "ttlClock should be less than or equal to now");
+		this.#ttlClock = ttlClock;
+		this.#ttlClockBase = now;
+		return ttlClock;
+	}
+	#flushUpdater(lc, updater) {
+		return startAsyncSpan(tracer, "vs.#flushUpdater", () => this.#runPriorityOp(lc, "flushing cvr", async () => {
+			const now = Date.now();
+			const ttlClock = this.#getTTLClock(now);
+			const { cvr, flushed } = await updater.flush(lc, this.#lastConnectTime, now, ttlClock);
+			if (flushed) this.#startTTLClockInterval(lc);
+			return cvr;
+		}));
+	}
+	#startTTLClockInterval(lc) {
+		this.#stopTTLClockInterval();
+		this.#ttlClockInterval = this.#setTimeout(() => {
+			this.#updateTTLClockInCVRWithoutLock(lc);
+			this.#startTTLClockInterval(lc);
+		}, TTL_CLOCK_INTERVAL);
+	}
+	#stopTTLClockInterval() {
+		clearTimeout(this.#ttlClockInterval);
+		this.#ttlClockInterval = 0;
+	}
+	#updateTTLClockInCVRWithoutLock(lc) {
+		const rid = randomID();
+		lc.debug?.("Syncing ttlClock", rid);
+		const start = Date.now();
+		const ttlClock = this.#getTTLClock(start);
+		this.#cvrStore.updateTTLClock(ttlClock, start).then(() => {
+			lc.debug?.("Synced ttlClock", rid, `in ${Date.now() - start} ms`);
+		}).catch((e) => {
+			lc.warn?.("failed to update TTL clock", rid, `after ${Date.now() - start} ms`, e);
+		});
+	}
+	async #updateCVRConfig(lc, cvr, clientID, customQueryTransformMode, connCtx, fn) {
+		const updater = new CVRConfigDrivenUpdater(this.#cvrStore, cvr, this.#shard);
+		updater.ensureClient(clientID);
+		const patches = fn(updater);
+		this.#cvr = await this.#flushUpdater(lc, updater);
+		if (cmpVersions(cvr.version, this.#cvr.version) < 0) {
+			const newCVR = this.#cvr;
+			await startAsyncSpan(tracer, "vs.#updateCVRConfig.pokeClients", async () => {
+				const pokers = startPoke(this.#getClients(cvr.version), newCVR.version);
+				for (const patch of patches) await pokers.addPatch(patch);
+				await pokers.end(newCVR.version);
+			});
+		}
+		if (this.#pipelinesSynced) await this.#syncQueryPipelineSet(lc, this.#cvr, customQueryTransformMode, connCtx);
+		return this.#cvr;
+	}
+	/**
+	* Runs the given `fn` to process the `msg` from within the `#lock`,
+	* optionally adding the `newClient` if supplied.
+	*/
+	#runInLockForClient(selector, msg, fn, newClient) {
+		this.#lc.debug?.("viewSyncer.#runInLockForClient");
+		const { clientID, wsID } = selector;
+		const [cmd, body] = msg;
+		if (newClient || !this.#clients.has(clientID)) this.#lastConnectTime = Date.now();
+		return startAsyncSpan(tracer, `vs.#runInLockForClient(${cmd})`, async (span) => {
+			span.setAttribute("clientGroupID", this.id);
+			span.setAttribute("clientID", clientID);
+			let client;
+			let result;
+			let connCtx;
+			try {
+				await this.#runInLockWithCVR(async (lc, cvr) => {
+					lc = lc.withContext("clientID", clientID).withContext("wsID", wsID).withContext("cmd", cmd);
+					lc.debug?.("acquired lock for cvr");
+					client = this.#clients.get(clientID);
+					if (client?.wsID !== wsID) {
+						lc.debug?.("mismatched wsID", client?.wsID, wsID);
+						return;
+					}
+					connCtx = this.connContextManager.getConnectionContext(selector);
+					if (newClient) {
+						assert(newClient === client, "newClient must match existing client");
+						checkClientAndCVRVersions(client.version(), cvr.version);
+					} else if (!this.#clients.has(clientID)) lc.warn?.(`Processing ${cmd} before initConnection was received`);
+					lc.debug?.(cmd, body);
+					result = await fn(lc, clientID, body, cvr);
+				});
+			} catch (e) {
+				this.#lc.withContext("clientID", clientID).withContext("wsID", wsID).withContext("cmd", cmd)[getLogLevel(e)]?.(`closing connection with error`, e);
+				if (connCtx) this.connContextManager.failConnection(selector, connCtx.revision);
+				if (client) client.fail(e);
+				else throw e;
+			}
+			return result;
+		});
+	}
+	#getClients(atVersion) {
+		const clients = [...this.#clients.values()];
+		return atVersion ? clients.filter((c) => cmpVersions(c.version() ?? EMPTY_CVR_VERSION, atVersion) === 0) : clients;
+	}
+	#handleConfigUpdate = (lc, clientID, { clientSchema, deleted, desiredQueriesPatch, activeClients }, cvr, customQueryTransformMode, profileID, connCtx) => startAsyncSpan(tracer, "vs.#handleConfigUpdate", async () => {
+		const deletedClientIDs = [];
+		const deletedClientGroupIDs = [];
+		cvr = await this.#updateCVRConfig(lc, cvr, clientID, customQueryTransformMode, connCtx, (updater) => {
+			const { ttlClock } = cvr;
+			const patches = [];
+			if (clientSchema) updater.setClientSchema(lc, clientSchema);
+			if (profileID) updater.setProfileID(lc, profileID);
+			lc.debug?.(`applying ${desiredQueriesPatch?.length ?? 0} query patches`);
+			if (desiredQueriesPatch?.length) for (const patch of desiredQueriesPatch) switch (patch.op) {
+				case "put":
+					patches.push(...updater.putDesiredQueries(clientID, [patch]));
+					break;
+				case "del":
+					patches.push(...updater.markDesiredQueriesAsInactive(clientID, [patch.hash], ttlClock));
+					break;
+				case "clear":
+					patches.push(...updater.clearDesiredQueries(clientID));
+					break;
+			}
+			const clientIDsToDelete = /* @__PURE__ */ new Set();
+			if (activeClients) {
+				const allClientIDs = Object.keys(cvr.clients);
+				const activeClientsSet = new Set(activeClients);
+				for (const id of allClientIDs) if (!activeClientsSet.has(id)) clientIDsToDelete.add(id);
+			}
+			if (deleted?.clientIDs?.length) for (const cid of deleted.clientIDs) {
+				assert(cid !== clientID, "cannot delete self");
+				clientIDsToDelete.add(cid);
+			}
+			for (const cid of clientIDsToDelete) {
+				const patchesDueToClient = updater.deleteClient(cid, ttlClock);
+				patches.push(...patchesDueToClient);
+				deletedClientIDs.push(cid);
+			}
+			if (deleted?.clientGroupIDs?.length) lc.debug?.(`ignoring ${deleted.clientGroupIDs.length} deprecated client group deletes`);
+			return patches;
+		});
+		if (deletedClientIDs.length && deleted?.clientIDs?.length || deletedClientGroupIDs.length) {
+			const clients = this.#getClients();
+			await startAsyncSpan(tracer, "vs.#handleConfigUpdate.sendDeleteClients", () => Promise.allSettled(clients.map((client) => client.sendDeleteClients(lc, deletedClientIDs, deletedClientGroupIDs))));
+		}
+		this.#scheduleExpireEviction(lc, cvr);
+		return deletedClientIDs;
+	});
+	#scheduleExpireEviction(lc, cvr) {
+		const { ttlClock } = cvr;
+		this.#stopExpireTimer();
+		const next = nextEvictionTime(cvr);
+		if (next === void 0) {
+			lc.debug?.("no inactive queries with ttl");
+			return;
+		}
+		const delay = Math.max(50, Math.min(ttlClockAsNumber(next) - ttlClockAsNumber(ttlClock) + 50, MAX_TTL_MS));
+		lc.debug?.("Scheduling eviction timer to run in ", delay, "ms");
+		this.#expiredQueriesTimer = this.#setTimeout(() => {
+			this.#expiredQueriesTimer = 0;
+			this.#runInLockWithCVR((lc, cvr) => this.#removeExpiredQueries(lc, cvr)).catch((e) => this.#stateChanges.fail(e));
+		}, delay);
+	}
+	/**
+	* Adds and hydrates pipelines for queries whose results are already
+	* recorded in the CVR. Namely:
+	*
+	* 1. The CVR state version and database version are the same.
+	* 2. The transformation hash of the queries equal those in the CVR.
+	*
+	* Note that by definition, only "got" queries can satisfy condition (2),
+	* as desired queries do not have a transformation hash.
+	*
+	* This is an initialization step that sets up pipeline state without
+	* the expensive of loading and diffing CVR row state.
+	*
+	* This must be called from within the #lock.
+	*/
+	async #hydrateUnchangedQueries(lc, cvr) {
+		assert(this.#pipelines.initialized(), "pipelines must be initialized");
+		const dbVersion = this.#pipelines.currentVersion();
+		const cvrVersion = cvr.version;
+		if (cvrVersion.stateVersion !== dbVersion) {
+			lc.info?.(`CVR (${versionToCookie(cvrVersion)}) is behind db ${dbVersion}`);
+			return /* @__PURE__ */ new Set();
+		}
+		const gotQueries = Object.entries(cvr.queries).filter(([_, state]) => state.transformationHash !== void 0);
+		const customQueries = /* @__PURE__ */ new Map();
+		const otherQueries = [];
+		let inactivatedCount = 0;
+		for (const [, query] of gotQueries) {
+			if (query.type !== "internal" && Object.values(query.clientState).every(({ inactivatedAt }) => inactivatedAt !== void 0)) {
+				inactivatedCount++;
+				continue;
+			}
+			if (query.type === "custom") customQueries.set(query.id, query);
+			else otherQueries.push(query);
+		}
+		const transformedQueries = [];
+		let customErrorCount = 0;
+		let customHashMismatchCount = 0;
+		let otherHashMismatchCount = 0;
+		if (customQueries.size > 0 && !this.#customQueryTransformer) lc.warn?.("Custom/named queries were requested but no `ZERO_QUERY_URL` is configured for Zero Cache.");
+		const backgroundContext = this.connContextManager.mustGetBackgroundConnectionContext();
+		const customQueryTransformer = this.#customQueryTransformer;
+		if (customQueryTransformer && customQueries.size > 0) {
+			const transformedCustomQueries = await this.#runPriorityOp(lc, "#hydrateUnchangedQueries transforming custom queries", () => customQueryTransformer.transform(backgroundContext, customQueries.values()));
+			if (transformedCustomQueries.kind === "success" && !transformedCustomQueries.cached) this.connContextManager.validateConnection(backgroundContext, backgroundContext.revision, transformedCustomQueries.validation);
+			if (Array.isArray(transformedCustomQueries.result)) for (const q of transformedCustomQueries.result) if ("error" in q) customErrorCount++;
+			else if (q.transformationHash !== customQueries.get(q.id)?.transformationHash) customHashMismatchCount++;
+			else transformedQueries.push(q);
+		}
+		for (const q of otherQueries) {
+			const transformed = transformAndHashQuery(lc, q.id, q.ast, must(this.#pipelines.currentPermissions()).permissions ?? { tables: {} }, backgroundContext.auth?.type === "jwt" ? backgroundContext.auth : void 0, q.type === "internal");
+			if (transformed.transformationHash === q.transformationHash) transformedQueries.push(transformed);
+			else otherHashMismatchCount++;
+		}
+		lc.info?.(`hydrateUnchangedQueries: ${gotQueries.length} got queries, ${inactivatedCount} inactivated, ${customErrorCount} custom transform errors, ${customHashMismatchCount} custom hash mismatches, ${otherHashMismatchCount} other hash mismatches, ${transformedQueries.length} hydrated`);
+		const driftedQueryIDs = /* @__PURE__ */ new Set();
+		for (const { id: queryID, transformationHash, transformedAst } of transformedQueries) {
+			const timer = new TimeSliceTimer(lc);
+			let count = 0;
+			await startAsyncSpan(tracer, "vs.#hydrateUnchangedQueries.addQuery", async (span) => {
+				span.setAttribute("queryHash", queryID);
+				span.setAttribute("transformationHash", transformationHash);
+				span.setAttribute("table", transformedAst.table);
+				for (const change of this.#pipelines.addQuery(transformationHash, queryID, transformedAst, await timer.start())) if (change === "yield") await timer.yieldProcess("yield in hydrateUnchangedQueries");
+				else count++;
+			});
+			const elapsed = timer.totalElapsed();
+			this.#hydrations.add(1);
+			this.#hydrationTime.recordMs(elapsed);
+			this.#addQueryMaterializationServerMetric(transformationHash, elapsed);
+			this.#inspectorDelegate.addQuery(transformationHash, transformedAst);
+			lc.debug?.(`hydrated ${count} rows for ${queryID} (${elapsed} ms)`);
+			const storedSigHex = cvr.queries[queryID]?.rowSetSignature;
+			if (storedSigHex !== void 0 && storedSigHex !== null) {
+				const priorSig = parseSignature(storedSigHex);
+				const candidateSig = this.#pipelines.rowSetSignature(queryID) ?? 0n;
+				if (priorSig !== candidateSig) {
+					lc.warn?.(`rowSetSignature drift for query ${queryID}: prior=${priorSig.toString(16)} new=${candidateSig.toString(16)} (${count} rows). Removing from pipelines for full re-execution.`);
+					this.#rowSetSignatureDrifts.add(1);
+					this.#pipelines.removeQuery(queryID);
+					driftedQueryIDs.add(queryID);
+				}
+			}
+		}
+		return driftedQueryIDs;
+	}
+	#processTransformedCustomQueries(lc, transformedCustomQueries, cb, customQueryMap) {
+		if ("kind" in transformedCustomQueries) {
+			this.#sendQueryTransformErrorToClients(customQueryMap, transformedCustomQueries);
+			return transformedCustomQueries.queryIDs;
+		}
+		const appQueryErrors = [];
+		for (const q of transformedCustomQueries) {
+			if ("error" in q) {
+				const errorMessage = `Error transforming custom query ${q.name}: ${q.error}${q.details ? ` ${JSON.stringify(q.details)}` : ""}`;
+				lc.warn?.(errorMessage, q);
+				appQueryErrors.push(q);
+				continue;
+			}
+			cb(q);
+		}
+		this.#sendQueryTransformErrorToClients(customQueryMap, appQueryErrors);
+		return appQueryErrors.map((q) => q.id);
+	}
+	#sendQueryTransformErrorToClients(customQueryMap, errorOrErrors) {
+		const getAffectedClientIDs = (queryIDs) => {
+			const clientIds = /* @__PURE__ */ new Set();
+			for (const queryID of queryIDs) {
+				const q = customQueryMap.get(queryID);
+				assert(q, `got an error for query ${queryID} that does not map back to a custom query`);
+				Object.keys(q.clientState).forEach((id) => clientIds.add(id));
+			}
+			return clientIds;
+		};
+		if ("queryIDs" in errorOrErrors) {
+			for (const clientId of getAffectedClientIDs(errorOrErrors.queryIDs)) this.#clients.get(clientId)?.sendQueryTransformFailedError(errorOrErrors);
+			return;
+		}
+		const appErrorGroups = /* @__PURE__ */ new Map();
+		for (const err of errorOrErrors) for (const clientId of getAffectedClientIDs([err.id])) {
+			const group = appErrorGroups.get(clientId) ?? [];
+			group.push(err);
+			appErrorGroups.set(clientId, group);
+		}
+		for (const [clientId, errors] of appErrorGroups) this.#clients.get(clientId)?.sendQueryTransformApplicationErrors(errors);
+	}
+	#addQueryMaterializationServerMetric(queryID, elapsed) {
+		this.#inspectorDelegate.addMetric("query-materialization-server", elapsed, queryID);
+	}
+	/**
+	* Adds and/or removes queries to/from the PipelineDriver to bring it
+	* in sync with the set of queries in the CVR (both got and desired).
+	* If queries are added, removed, or queried due to a new state version,
+	* a new CVR version is created and pokes sent to connected clients.
+	*
+	* This must be called from within the #lock.
+	*/
+	#syncQueryPipelineSet(lc, cvr, customQueryTransformMode, connCtx, driftedQueryIDs = /* @__PURE__ */ new Set()) {
+		return startAsyncSpan(tracer, "vs.#syncQueryPipelineSet", async (span) => {
+			span.setAttribute("clientGroupID", this.id);
+			assert(this.#pipelines.initialized(), "pipelines must be initialized (syncQueryPipelineSet)");
+			if (this.#ttlClock === void 0) this.#ttlClock = cvr.ttlClock;
+			const now = Date.now();
+			const ttlClock = this.#getTTLClock(now);
+			const cvrQueryEntires = Object.entries(cvr.queries);
+			const customQueries = /* @__PURE__ */ new Map();
+			const otherQueries = [];
+			const transformedQueries = [];
+			const resolvedConnCtx = connCtx ?? this.connContextManager.mustGetBackgroundConnectionContext();
+			for (const [id, query] of cvrQueryEntires) if (query.type === "custom") {
+				assert(id === query.id, "custom query id mismatch");
+				customQueries.set(id, query);
+			} else otherQueries.push({
+				id,
+				query
+			});
+			for (const { id, query: origQuery } of otherQueries) {
+				assert(id === origQuery.id, "query id mismatch");
+				const transformed = transformAndHashQuery(lc, origQuery.id, origQuery.ast, must(this.#pipelines.currentPermissions()).permissions ?? { tables: {} }, resolvedConnCtx.auth?.type === "jwt" ? resolvedConnCtx.auth : void 0, origQuery.type === "internal");
+				transformedQueries.push({
+					id,
+					origQuery,
+					transformed
+				});
+			}
+			if (customQueries.size > 0 && !this.#customQueryTransformer) lc.warn?.("Custom/named queries were requested but no `ZERO_QUERY_URL` is configured for Zero Cache.");
+			let erroredQueryIDs;
+			const customQueriesToTransform = customQueryTransformMode === "all" ? [...customQueries.values()] : customQueryTransformMode && [...customQueries.values()].filter((q) => !this.#pipelines.queries().has(q.id));
+			const customQueryTransformer = this.#customQueryTransformer;
+			if (customQueryTransformer && customQueriesToTransform.length > 0) {
+				const transformStart = performance.now();
+				let transformedCustomQueries;
+				try {
+					transformedCustomQueries = await this.#runPriorityOp(lc, "#syncQueryPipelineSet transforming custom queries", () => customQueryTransformer.transform(resolvedConnCtx, customQueriesToTransform));
+					if (transformedCustomQueries.kind === "failed") throw new ProtocolErrorWithLevel(transformedCustomQueries.result, "warn");
+					else {
+						if (!transformedCustomQueries.cached) this.connContextManager.validateConnection(resolvedConnCtx, resolvedConnCtx.revision, transformedCustomQueries.validation);
+						this.#queryTransformations.add(1, { result: "success" });
+					}
+				} catch (e) {
+					this.#queryTransformations.add(1, { result: "error" });
+					throw e;
+				} finally {
+					const transformDuration = performance.now() - transformStart;
+					this.#queryTransformationTime.recordMs(transformDuration);
+				}
+				const successfullyTransformedCustomQueries = /* @__PURE__ */ new Map();
+				erroredQueryIDs = this.#processTransformedCustomQueries(lc, transformedCustomQueries.result, (q) => {
+					const origQuery = customQueries.get(q.id);
+					if (origQuery) {
+						successfullyTransformedCustomQueries.set(q.id, q);
+						transformedQueries.push({
+							id: q.id,
+							origQuery,
+							transformed: q
+						});
+					}
+				}, customQueries);
+				for (const [queryID, newTransform] of successfullyTransformedCustomQueries) {
+					const existingTransformHash = cvr.queries[queryID]?.transformationHash;
+					if (existingTransformHash) {
+						const oldHash = existingTransformHash;
+						const newHash = newTransform.transformationHash;
+						if (oldHash !== newHash) {
+							lc.info?.(`Query ${queryID} transformation changed: ${oldHash} -> ${newHash}`);
+							this.#checkForThrashing(queryID);
+							this.#queryTransformationHashChanges.add(1);
+						} else this.#queryTransformationNoOps.add(1);
+					}
+				}
+			}
+			const removeQueriesQueryIds = new Set([...Object.values(cvr.queries).filter((q) => expired(ttlClock, q)).map((q) => q.id), ...erroredQueryIDs || []]);
+			const addQueries = transformedQueries.map(({ id, origQuery, transformed }) => ({
+				id,
+				ast: transformed.transformedAst,
+				transformationHash: transformed.transformationHash,
+				name: origQuery.type === "custom" ? origQuery.name : void 0
+			})).filter((q) => !removeQueriesQueryIds.has(q.id) && this.#pipelines.queries().get(q.id)?.transformationHash !== q.transformationHash);
+			lc.info?.(`syncQueryPipelineSet: ${cvrQueryEntires.length} CVR queries, ${customQueriesToTransform.length} custom re-transformed, ${erroredQueryIDs?.length ?? 0} errored, ${removeQueriesQueryIds.size} to remove, ${addQueries.length} to add`);
+			for (const q of addQueries) {
+				const orig = cvr.queries[q.id];
+				lc.debug?.("ViewSyncer adding query", q.ast, "transformed from", orig.type === "custom" ? orig.name : orig.ast);
+			}
+			if (addQueries.length > 0 || removeQueriesQueryIds.size > 0) await this.#addAndRemoveQueries(lc, cvr, addQueries, Array.from(removeQueriesQueryIds, (id) => ({ id })), driftedQueryIDs);
+			else await this.#catchupClients(lc, cvr);
+		});
+	}
+	/**
+	* Check if a query is being replaced too frequently (thrashing).
+	* Logs a warning if the query has been replaced more than 3 times in 60 seconds.
+	*/
+	#checkForThrashing(queryID) {
+		const THRASH_WINDOW_MS = 6e4;
+		const THRASH_THRESHOLD = 3;
+		const now = Date.now();
+		let record = this.#queryReplacements.get(queryID);
+		if (!record) {
+			record = {
+				count: 1,
+				windowStart: now
+			};
+			this.#queryReplacements.set(queryID, record);
+			return;
+		}
+		if (now - record.windowStart > THRASH_WINDOW_MS) {
+			this.#queryReplacements.delete(queryID);
+			this.#queryReplacements.set(queryID, {
+				count: 1,
+				windowStart: now
+			});
+			return;
+		}
+		record.count++;
+		if (record.count >= THRASH_THRESHOLD) this.#lc.warn?.(`Query thrashing detected for query ${queryID}. ${record.count} replacements in 60s. This may indicate clients with different auth contexts connecting to the same client group.`);
+	}
+	#addAndRemoveQueries(lc, cvr, addQueries, removeQueries, driftedQueryIDs = /* @__PURE__ */ new Set()) {
+		return startAsyncSpan(tracer, "vs.#addAndRemoveQueries", async () => {
+			assert(addQueries.length > 0 || removeQueries.length > 0, "Must have queries to add or remove");
+			const start = performance.now();
+			const stateVersion = this.#pipelines.currentVersion();
+			lc = lc.withContext("stateVersion", stateVersion);
+			lc.info?.(`hydrating ${addQueries.length} queries`);
+			const updater = new CVRQueryDrivenUpdater(this.#cvrStore, cvr, stateVersion, this.#pipelines.replicaVersion, (queryID) => this.#pipelines.rowSetSignature(queryID));
+			if (addQueries.some((q) => driftedQueryIDs.has(q.id))) updater.ensureNewVersion();
+			const { queryPatches, newVersion } = updater.trackQueries(lc, addQueries, removeQueries);
+			const pokers = startPoke(this.#getClients(), newVersion);
+			for (const patch of queryPatches) await pokers.addPatch(patch);
+			for (const q of removeQueries) {
+				this.#pipelines.removeQuery(q.id);
+				this.#inspectorDelegate.removeQuery(q.id);
+				this.#queryReplacements.delete(q.id);
+			}
+			let totalProcessTime = 0;
+			const timer = new TimeSliceTimer(lc);
+			const pipelines = this.#pipelines;
+			const hydrations = this.#hydrations;
+			const hydrationTime = this.#hydrationTime;
+			const self = this;
+			await yieldProcess(lc);
+			function* generateRowChanges(slowHydrateThreshold) {
+				for (const q of addQueries) {
+					lc = lc.withContext("hash", q.id).withContext("transformationHash", q.transformationHash);
+					lc.debug?.(`adding pipeline for query`, q.ast);
+					yield* pipelines.addQuery(q.transformationHash, q.id, q.ast, timer.startWithoutYielding());
+					const elapsed = timer.stop();
+					totalProcessTime += elapsed;
+					self.#addQueryMaterializationServerMetric(q.id, elapsed);
+					self.#inspectorDelegate.addQuery(q.id, q.ast);
+					if (elapsed > slowHydrateThreshold) lc.warn?.("Slow query materialization", elapsed, q.ast);
+					manualSpan(tracer, "vs.addAndConsumeQuery", elapsed, {
+						hash: q.id,
+						transformationHash: q.transformationHash,
+						...q.name !== void 0 && { name: q.name }
+					});
+				}
+				hydrations.add(1);
+				hydrationTime.recordMs(totalProcessTime);
+			}
+			await this.#processChanges(lc, timer, generateRowChanges(this.#slowHydrateThreshold), updater, pokers);
+			await startAsyncSpan(tracer, "vs.#syncQueryPipelineSet.deleteUnreferencedRows", async () => {
+				for (const patch of await updater.deleteUnreferencedRows(lc)) await pokers.addPatch(patch);
+			});
+			this.#cvr = await this.#flushUpdater(lc, updater);
+			const finalVersion = this.#cvr.version;
+			await this.#catchupClients(lc, cvr, finalVersion, addQueries.map((q) => q.id), pokers);
+			await startAsyncSpan(tracer, "vs.#syncQueryPipelineSet.pokeEnd", () => pokers.end(finalVersion));
+			const wallTime = performance.now() - start;
+			lc.info?.(`finished processing queries (process: ${totalProcessTime} ms, wall: ${wallTime} ms)`);
+		});
+	}
+	/**
+	* @param cvr The CVR to which clients should be caught up to. This does
+	*     not necessarily need to be the current CVR.
+	* @param current The expected current CVR version. Before performing
+	*     catchup, the snapshot read will verify that the CVR has not been
+	*     concurrently modified. Note that this only needs to be done for
+	*     catchup because it is the only time data from the CVR DB is
+	*     "exported" without being gated by a CVR flush (which provides
+	*     concurrency protection in all other cases).
+	*
+	*     If unspecified, the version of the `cvr` is used.
+	* @param excludeQueryHashes Exclude patches from rows associated with
+	*     the specified queries.
+	* @param usePokers If specified, sends pokes on existing PokeHandlers,
+	*     in which case the caller is responsible for sending the `pokeEnd`
+	*     messages. If unspecified, the pokes will be started and ended
+	*     using the version from the supplied `cvr`.
+	*/
+	#catchupClients(lc, cvr, current, excludeQueryHashes = [], usePokers) {
+		return startAsyncSpan(tracer, "vs.#catchupClients", async (span) => {
+			current ??= cvr.version;
+			const clients = this.#getClients();
+			const pokers = usePokers ?? startPoke(clients, cvr.version);
+			span.setAttribute("numClients", clients.length);
+			const catchupFrom = clients.map((c) => c.version()).reduce((a, b) => cmpVersions(a, b) < 0 ? a : b, cvr.version);
+			const rowPatches = this.#cvrStore.catchupRowPatches(lc, catchupFrom, cvr, current, excludeQueryHashes);
+			const configPatches = this.#cvrStore.catchupConfigPatches(lc, catchupFrom, cvr, current);
+			configPatches.catch(() => {});
+			let rowPatchCount = 0;
+			for await (const rows of rowPatches) for (const row of rows) {
+				const { schema, table } = row;
+				const rowKey = row.rowKey;
+				const toVersion = versionFromString(row.patchVersion);
+				const id = {
+					schema,
+					table,
+					rowKey
+				};
+				let patch;
+				if (!row.refCounts) patch = {
+					type: "row",
+					op: "del",
+					id
+				};
+				else {
+					const { contents } = contentsAndVersion(must(this.#pipelines.getRow(table, rowKey), `Missing row ${table}:${stringify(rowKey)}`));
+					patch = {
+						type: "row",
+						op: "put",
+						id,
+						contents
+					};
+				}
+				const patchToVersion = {
+					patch,
+					toVersion
+				};
+				await pokers.addPatch(patchToVersion);
+				rowPatchCount++;
+			}
+			span.setAttribute("rowPatchCount", rowPatchCount);
+			if (rowPatchCount) lc.debug?.(`sent ${rowPatchCount} row patches`);
+			for (const patch of await configPatches) await pokers.addPatch(patch);
+			if (!usePokers) await pokers.end(cvr.version);
+		});
+	}
+	#processChanges(lc, timer, changes, updater, pokers) {
+		return startAsyncSpan(tracer, "vs.#processChanges", async () => {
+			const start = performance.now();
+			const rows = new CustomKeyMap(rowIDString);
+			let total = 0;
+			const processBatch = () => startAsyncSpan(tracer, "processBatch", async () => {
+				const wallElapsed = performance.now() - start;
+				total += rows.size;
+				lc.debug?.(`processing ${rows.size} (of ${total}) rows (${wallElapsed} ms)`);
+				const patches = await updater.received(lc, rows);
+				await startAsyncSpan(tracer, "processBatch.flushToClient", async (span) => {
+					span.setAttribute("patches", patches.length);
+					for (const patch of patches) await pokers.addPatch(patch);
+				});
+				rows.clear();
+			});
+			await startAsyncSpan(tracer, "loopingChanges", async (span) => {
+				for (const change of changes) {
+					if (change === "yield") {
+						await timer.yieldProcess("yield in processChanges");
+						continue;
+					}
+					const { type, queryID, table, rowKey, row } = change;
+					const rowID = {
+						schema: "",
+						table,
+						rowKey
+					};
+					let parsedRow = rows.get(rowID);
+					if (!parsedRow) {
+						parsedRow = { refCounts: {} };
+						rows.set(rowID, parsedRow);
+					}
+					parsedRow.refCounts[queryID] ??= 0;
+					const updateVersion = (row) => {
+						const { version, contents } = contentsAndVersion(row);
+						parsedRow.version = version;
+						parsedRow.contents = contents;
+					};
+					switch (type) {
+						case 0:
+							updateVersion(row);
+							parsedRow.refCounts[queryID]++;
+							break;
+						case 2:
+							updateVersion(row);
+							break;
+						case 1:
+							parsedRow.refCounts[queryID]--;
+							break;
+						default: unreachable(type);
+					}
+					if (rows.size % CURSOR_PAGE_SIZE === 0) await processBatch();
+				}
+				if (rows.size) await processBatch();
+				span.setAttribute("totalRows", total);
+			});
+		});
+	}
+	/**
+	* Advance to the current snapshot of the replica and apply / send
+	* changes.
+	*
+	* Must be called from within the #lock.
+	*
+	* Returns false if the advancement failed due to a schema change.
+	*/
+	#advancePipelines(lc, cvr) {
+		return startAsyncSpan(tracer, "vs.#advancePipelines", async (span) => {
+			span.setAttribute("clientGroupID", this.id);
+			assert(this.#pipelines.initialized(), "pipelines must be initialized (advancePipelines");
+			const start = performance.now();
+			const timer = new TimeSliceTimer(lc);
+			const { version, numChanges, changes } = this.#pipelines.advance(timer);
+			lc = lc.withContext("newVersion", version);
+			const updater = new CVRQueryDrivenUpdater(this.#cvrStore, cvr, version, this.#pipelines.replicaVersion, (queryID) => this.#pipelines.rowSetSignature(queryID));
+			const pokers = startPoke(this.#getClients(cvr.version), updater.updatedVersion());
+			lc.debug?.(`applying ${numChanges} to advance to ${version}`);
+			try {
+				await this.#processChanges(lc, await timer.start(), changes, updater, pokers);
+			} catch (e) {
+				if (e instanceof ResetPipelinesSignal) {
+					await pokers.cancel();
+					return e;
+				}
+				throw e;
+			}
+			this.#cvr = await this.#flushUpdater(lc, updater);
+			const finalVersion = this.#cvr.version;
+			await startAsyncSpan(tracer, "vs.#advancePipelines.pokeEnd", () => pokers.end(finalVersion));
+			const wallTime = performance.now() - start;
+			const totalProcessTime = timer.totalElapsed();
+			lc.debug?.(`finished processing advancement of ${numChanges} changes ((process: ${totalProcessTime} ms, wall: ${wallTime} ms))`);
+			this.#transactionAdvanceTime.recordMs(totalProcessTime);
+			return "success";
+		});
+	}
+	async inspect(selector, msg) {
+		await this.#runInLockForClient(selector, msg, this.#handleInspect);
+	}
+	#handleInspect = async (lc, clientID, body, cvr) => {
+		const client = must(this.#clients.get(clientID));
+		const connCtx = this.connContextManager.mustGetConnectionContext({
+			clientID,
+			wsID: client.wsID
+		});
+		return handleInspect(lc, body, cvr, client, this.#inspectorDelegate, this.id, this.#cvrStore, this.#config, connCtx);
+	};
+	async #runBackgroundRetransform(lc) {
+		const attemptRetransform = async (connCtx) => {
+			await this.#syncQueryPipelineSet(lc, must(this.#cvr, "cvr missing during auth maintenance retransform"), "all", connCtx);
+			this.connContextManager.markBackgroundRetransformSuccess({
+				clientID: connCtx.clientID,
+				wsID: connCtx.wsID
+			}, connCtx.revision);
+		};
+		let backgroundConnCtx = this.connContextManager.getBackgroundConnectionContext();
+		if (!backgroundConnCtx) {
+			lc.debug?.("Skipping background retransform with no selected connection");
+			return;
+		}
+		for (;;) {
+			try {
+				await attemptRetransform(backgroundConnCtx);
+				return;
+			} catch (e) {
+				if (isProtocolError(e)) {
+					if (isAuthErrorBody(e.errorBody)) {
+						lc.warn?.("Background retransform auth failed; failing connection and searching for replacement", {
+							clientID: backgroundConnCtx.clientID,
+							message: e.message
+						});
+						this.#failMaintenanceConnection(backgroundConnCtx, e);
+					} else if (isTransformFailedError(e)) {
+						lc.warn?.("Background retransform failed; deferring auth maintenance", {
+							clientID: backgroundConnCtx.clientID,
+							message: e.message
+						});
+						this.connContextManager.deferMaintenance("retransform");
+						return;
+					}
+				} else throw e;
+			}
+			const replacementConnCtx = this.connContextManager.getBackgroundConnectionContext();
+			if (!replacementConnCtx) {
+				lc.debug?.("No replacement connection available for background retransform");
+				return;
+			}
+			lc.debug?.("Retrying background retransform with replacement connection", {
+				clientID: replacementConnCtx.clientID,
+				wsID: replacementConnCtx.wsID
+			});
+			backgroundConnCtx = replacementConnCtx;
+		}
+	}
+	async #validateConnection(connCtx) {
+		try {
+			let validation = void 0;
+			if (this.#customQueryTransformer) {
+				const response = await this.#customQueryTransformer.validate(connCtx);
+				if (response.kind === "TransformFailed") throw new ProtocolErrorWithLevel(response, "warn");
+				validation = response.validation;
+			} else validation = { kind: "client-fallback" };
+			this.connContextManager.validateConnection(connCtx, connCtx.revision, validation);
+			return true;
+		} catch (e) {
+			if (isProtocolError(e) && isAuthErrorBody(e.errorBody)) {
+				this.#lc.warn?.("Connection auth validation failed; invalidating connection", {
+					clientID: connCtx.clientID,
+					wsID: connCtx.wsID,
+					revision: connCtx.revision,
+					message: e.message
+				});
+				this.#failMaintenanceConnection(connCtx, e);
+				return false;
+			}
+			throw e;
+		}
+	}
+	#failMaintenanceConnection(connCtx, error) {
+		if (!this.connContextManager.failConnection(connCtx, connCtx.revision)) return;
+		const wrapped = wrapWithProtocolError(error);
+		const client = this.#clients.get(connCtx.clientID);
+		if (client?.wsID === connCtx.wsID) client.fail(wrapped);
+	}
+	stop() {
+		this.#lc.info?.("stopping view syncer");
+		this.connContextManager.setSharedRetransformReady(false);
+		this.#initialized.reject(shutdownBeforeInitializationError());
+		this.#stateChanges.cancel();
+		return this.#stopped.promise;
+	}
+	async #cleanup(err) {
+		this.connContextManager.setSharedRetransformReady(false);
+		this.#stopTTLClockInterval();
+		this.#stopExpireTimer();
+		this.#stopAuthMaintenanceTimer();
+		for (const client of this.#clients.values()) if (err) client.fail(err);
+		else client.close(`closed clientGroupID=${this.id}`);
+		await this.#lock.withLock(() => {});
+		this.#pipelines.destroy();
+	}
+	/**
+	* Test helper: Manually mark initialization as complete.
+	* This should only be used in tests that don't call initConnection().
+	*/
+	markInitialized() {
+		this.#initialized.resolve("initialized");
+	}
+};
+var CURSOR_PAGE_SIZE = 1e4;
+var timeSliceQueue = new Lock();
+function yieldProcess(_lc) {
+	return timeSliceQueue.withLock(() => new Promise(setImmediate));
+}
+function contentsAndVersion(row) {
+	const { [ZERO_VERSION_COLUMN_NAME]: version, ...contents } = row;
+	if (typeof version !== "string" || version.length === 0) throw new Error(`Invalid _0_version in ${stringify(row)}`);
+	return {
+		contents,
+		version
+	};
+}
+var NEW_CVR_VERSION = { stateVersion: "00" };
+function checkClientAndCVRVersions(client, cvr) {
+	if (cmpVersions(cvr, NEW_CVR_VERSION) === 0 && cmpVersions(client, NEW_CVR_VERSION) > 0) throw new ClientNotFoundError("Client not found");
+	if (cmpVersions(client, cvr) > 0) throw new ProtocolError({
+		kind: InvalidConnectionRequestBaseCookie,
+		message: `CVR is at version ${versionString(cvr)}`,
+		origin: ZeroCache
+	});
+}
+function isTransformFailedError(error) {
+	return error.errorBody.kind === "TransformFailed" && !isAuthErrorBody(error.errorBody);
+}
+/**
+* A query must be expired for all clients in order to be considered
+* expired.
+*/
+function expired(ttlClock, q) {
+	if (q.type === "internal") return false;
+	for (const clientState of Object.values(q.clientState)) {
+		const { ttl, inactivatedAt } = clientState;
+		if (inactivatedAt === void 0) return false;
+		const clampedTTL = clampTTL(ttl);
+		if (ttlClockAsNumber(inactivatedAt) + clampedTTL > ttlClockAsNumber(ttlClock)) return false;
+	}
+	return true;
+}
+function hasExpiredQueries(cvr) {
+	const { ttlClock } = cvr;
+	for (const q of Object.values(cvr.queries)) if (expired(ttlClock, q)) return true;
+	return false;
+}
+var TimeSliceTimer = class {
+	#total = 0;
+	#start = 0;
+	#lc;
+	constructor(lc) {
+		this.#lc = lc;
+	}
+	async start() {
+		await yieldProcess(this.#lc);
+		return this.startWithoutYielding();
+	}
+	startWithoutYielding() {
+		this.#total = 0;
+		this.#startLap();
+		return this;
+	}
+	async yieldProcess(_msgForTesting) {
+		this.#stopLap();
+		await yieldProcess(this.#lc);
+		this.#startLap();
+	}
+	#startLap() {
+		assert(this.#start === 0, "already running");
+		this.#start = performance.now();
+	}
+	elapsedLap() {
+		assert(this.#start !== 0, "not running");
+		return performance.now() - this.#start;
+	}
+	#stopLap() {
+		assert(this.#start !== 0, "not running");
+		this.#total += performance.now() - this.#start;
+		this.#start = 0;
+	}
+	/** @returns the total elapsed time */
+	stop() {
+		this.#stopLap();
+		return this.#total;
+	}
+	/**
+	* @returns the elapsed time. This can be called while the Timer is running
+	*          or after it has been stopped.
+	*/
+	totalElapsed() {
+		return this.#start === 0 ? this.#total : this.#total + performance.now() - this.#start;
+	}
+};
+//#endregion
+export { TimeSliceTimer, ViewSyncerService };
+
+//# sourceMappingURL=view-syncer.js.map

@@ -1,0 +1,30 @@
+import { type Accessor } from 'solid-js';
+import { type BaseDefaultContext, type BaseDefaultSchema, type DefaultContext, type DefaultSchema, type Falsy, type HumanReadable, type PullRow, type QueryOrQueryRequest, type QueryResultDetails, type ReadonlyJSONValue, type TTL } from './zero.ts';
+export type QueryResult<TReturn> = readonly [
+    Accessor<HumanReadable<TReturn>>,
+    Accessor<QueryResultDetails & {}>
+];
+/**
+ * Result type for "maybe queries" - queries that may be falsy.
+ * The data value can be undefined when the query is falsy/disabled.
+ */
+export type MaybeQueryResult<TReturn> = readonly [
+    Accessor<HumanReadable<TReturn> | undefined>,
+    Accessor<QueryResultDetails & {}>
+];
+/**
+ * @deprecated Use {@linkcode UseQueryOptions} instead.
+ */
+export type CreateQueryOptions = {
+    ttl?: TTL | undefined;
+};
+export type UseQueryOptions = {
+    ttl?: TTL | undefined;
+};
+/**
+ * @deprecated Use {@linkcode useQuery} instead.
+ */
+export declare function createQuery<TTable extends keyof TSchema['tables'] & string, TInput extends ReadonlyJSONValue | undefined, TOutput extends ReadonlyJSONValue | undefined, TSchema extends BaseDefaultSchema = DefaultSchema, TReturn = PullRow<TTable, TSchema>, TContext extends BaseDefaultContext = DefaultContext>(querySignal: Accessor<QueryOrQueryRequest<TTable, TInput, TOutput, TSchema, TReturn, TContext>>, options?: CreateQueryOptions | Accessor<CreateQueryOptions>): QueryResult<TReturn>;
+export declare function useQuery<TTable extends keyof TSchema['tables'] & string, TInput extends ReadonlyJSONValue | undefined, TOutput extends ReadonlyJSONValue | undefined, TSchema extends BaseDefaultSchema = DefaultSchema, TReturn = PullRow<TTable, TSchema>, TContext extends BaseDefaultContext = DefaultContext>(querySignal: Accessor<QueryOrQueryRequest<TTable, TInput, TOutput, TSchema, TReturn, TContext>>, options?: UseQueryOptions | Accessor<UseQueryOptions>): QueryResult<TReturn>;
+export declare function useQuery<TTable extends keyof TSchema['tables'] & string, TInput extends ReadonlyJSONValue | undefined, TOutput extends ReadonlyJSONValue | undefined, TSchema extends BaseDefaultSchema = DefaultSchema, TReturn = PullRow<TTable, TSchema>, TContext extends BaseDefaultContext = DefaultContext>(querySignal: Accessor<QueryOrQueryRequest<TTable, TInput, TOutput, TSchema, TReturn, TContext> | Falsy>, options?: UseQueryOptions | Accessor<UseQueryOptions>): MaybeQueryResult<TReturn>;
+//# sourceMappingURL=use-query.d.ts.map

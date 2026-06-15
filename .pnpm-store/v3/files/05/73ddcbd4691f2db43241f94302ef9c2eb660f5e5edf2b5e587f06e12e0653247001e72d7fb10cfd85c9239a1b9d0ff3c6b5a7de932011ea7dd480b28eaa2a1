@@ -1,0 +1,385 @@
+import * as v from '../../shared/src/valita.ts';
+import { mutationResponseSchema } from './mutation.ts';
+export declare const pushBodySchema: v.ObjectType<{
+    clientGroupID: v.Type<string>;
+    mutations: v.ArrayType<v.UnionType<[v.ObjectType<{
+        type: v.Type<"crud">;
+        id: v.Type<number>;
+        clientID: v.Type<string>;
+        name: v.Type<"_zero_crud">;
+        args: v.TupleType<[v.ObjectType<{
+            ops: v.ArrayType<v.UnionType<[v.ObjectType<{
+                op: v.Type<"insert">;
+                tableName: v.Type<string>;
+                primaryKey: v.Type<readonly [string, ...string[]]>;
+                value: v.Type<Readonly<Record<string, import("../../shared/src/json.ts").ReadonlyJSONValue | undefined>>>;
+            }, undefined>, v.ObjectType<{
+                op: v.Type<"upsert">;
+                tableName: v.Type<string>;
+                primaryKey: v.Type<readonly [string, ...string[]]>;
+                value: v.Type<Readonly<Record<string, import("../../shared/src/json.ts").ReadonlyJSONValue | undefined>>>;
+            }, undefined>, v.ObjectType<{
+                op: v.Type<"update">;
+                tableName: v.Type<string>;
+                primaryKey: v.Type<readonly [string, ...string[]]>;
+                value: v.Type<Readonly<Record<string, import("../../shared/src/json.ts").ReadonlyJSONValue | undefined>>>;
+            }, undefined>, v.ObjectType<{
+                op: v.Type<"delete">;
+                tableName: v.Type<string>;
+                primaryKey: v.Type<readonly [string, ...string[]]>;
+                value: v.Type<Readonly<Record<string, string | number | boolean>>>;
+            }, undefined>]>>;
+        }, undefined>]>;
+        timestamp: v.Type<number>;
+    }, undefined>, v.ObjectType<{
+        type: v.Type<"custom">;
+        id: v.Type<number>;
+        clientID: v.Type<string>;
+        name: v.Type<string>;
+        args: v.ArrayType<v.Type<import("../../shared/src/json.ts").ReadonlyJSONValue>>;
+        timestamp: v.Type<number>;
+    }, undefined>]>>;
+    pushVersion: v.Type<number>;
+    schemaVersion: v.Optional<number>;
+    timestamp: v.Type<number>;
+    requestID: v.Type<string>;
+    /**
+     * @deprecated auth is managed at client-group scope via connect/updateAuth
+     * and should not be included in push messages.
+     */
+    auth: v.Optional<string>;
+    /** W3C traceparent header for distributed tracing. */
+    traceparent: v.Optional<string>;
+}, undefined>;
+export declare const pushMessageSchema: v.TupleType<[v.Type<"push">, v.ObjectType<{
+    clientGroupID: v.Type<string>;
+    mutations: v.ArrayType<v.UnionType<[v.ObjectType<{
+        type: v.Type<"crud">;
+        id: v.Type<number>;
+        clientID: v.Type<string>;
+        name: v.Type<"_zero_crud">;
+        args: v.TupleType<[v.ObjectType<{
+            ops: v.ArrayType<v.UnionType<[v.ObjectType<{
+                op: v.Type<"insert">;
+                tableName: v.Type<string>;
+                primaryKey: v.Type<readonly [string, ...string[]]>;
+                value: v.Type<Readonly<Record<string, import("../../shared/src/json.ts").ReadonlyJSONValue | undefined>>>;
+            }, undefined>, v.ObjectType<{
+                op: v.Type<"upsert">;
+                tableName: v.Type<string>;
+                primaryKey: v.Type<readonly [string, ...string[]]>;
+                value: v.Type<Readonly<Record<string, import("../../shared/src/json.ts").ReadonlyJSONValue | undefined>>>;
+            }, undefined>, v.ObjectType<{
+                op: v.Type<"update">;
+                tableName: v.Type<string>;
+                primaryKey: v.Type<readonly [string, ...string[]]>;
+                value: v.Type<Readonly<Record<string, import("../../shared/src/json.ts").ReadonlyJSONValue | undefined>>>;
+            }, undefined>, v.ObjectType<{
+                op: v.Type<"delete">;
+                tableName: v.Type<string>;
+                primaryKey: v.Type<readonly [string, ...string[]]>;
+                value: v.Type<Readonly<Record<string, string | number | boolean>>>;
+            }, undefined>]>>;
+        }, undefined>]>;
+        timestamp: v.Type<number>;
+    }, undefined>, v.ObjectType<{
+        type: v.Type<"custom">;
+        id: v.Type<number>;
+        clientID: v.Type<string>;
+        name: v.Type<string>;
+        args: v.ArrayType<v.Type<import("../../shared/src/json.ts").ReadonlyJSONValue>>;
+        timestamp: v.Type<number>;
+    }, undefined>]>>;
+    pushVersion: v.Type<number>;
+    schemaVersion: v.Optional<number>;
+    timestamp: v.Type<number>;
+    requestID: v.Type<string>;
+    /**
+     * @deprecated auth is managed at client-group scope via connect/updateAuth
+     * and should not be included in push messages.
+     */
+    auth: v.Optional<string>;
+    /** W3C traceparent header for distributed tracing. */
+    traceparent: v.Optional<string>;
+}, undefined>]>;
+declare const pushOkSchema: v.ObjectType<{
+    mutations: v.ArrayType<v.ObjectType<{
+        id: v.ObjectType<{
+            id: v.Type<number>;
+            clientID: v.Type<string>;
+        }, undefined>;
+        result: v.UnionType<[v.ObjectType<{
+            data: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>, v.UnionType<[v.ObjectType<{
+            error: v.Type<"app">;
+            message: v.Optional<string>;
+            details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>, v.ObjectType<{
+            error: v.UnionType<[v.Type<"oooMutation">, v.Type<"alreadyProcessed">]>;
+            details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>]>]>;
+    }, undefined>>;
+}, undefined>;
+/**
+ * @deprecated push errors are now represented as ['error', { ... }] messages
+ */
+export declare const pushErrorSchema: v.UnionType<[v.ObjectType<{
+    /** @deprecated */
+    error: v.Type<"unsupportedPushVersion">;
+    /** @deprecated */
+    mutationIDs: v.Optional<{
+        id: number;
+        clientID: string;
+    }[]>;
+}, undefined>, v.ObjectType<{
+    /** @deprecated */
+    error: v.Type<"unsupportedSchemaVersion">;
+    /** @deprecated */
+    mutationIDs: v.Optional<{
+        id: number;
+        clientID: string;
+    }[]>;
+}, undefined>, v.ObjectType<{
+    /** @deprecated */
+    error: v.Type<"http">;
+    /** @deprecated */
+    status: v.Type<number>;
+    /** @deprecated */
+    details: v.Type<string>;
+    /** @deprecated */
+    mutationIDs: v.Optional<{
+        id: number;
+        clientID: string;
+    }[]>;
+}, undefined>, v.ObjectType<{
+    /** @deprecated */
+    error: v.Type<"zeroPusher">;
+    /** @deprecated */
+    details: v.Type<string>;
+    /** @deprecated */
+    mutationIDs: v.Optional<{
+        id: number;
+        clientID: string;
+    }[]>;
+}, undefined>]>;
+export declare const pushResponseBodySchema: v.UnionType<[v.ObjectType<{
+    mutations: v.ArrayType<v.ObjectType<{
+        id: v.ObjectType<{
+            id: v.Type<number>;
+            clientID: v.Type<string>;
+        }, undefined>;
+        result: v.UnionType<[v.ObjectType<{
+            data: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>, v.UnionType<[v.ObjectType<{
+            error: v.Type<"app">;
+            message: v.Optional<string>;
+            details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>, v.ObjectType<{
+            error: v.UnionType<[v.Type<"oooMutation">, v.Type<"alreadyProcessed">]>;
+            details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>]>]>;
+    }, undefined>>;
+}, undefined>, v.UnionType<[v.ObjectType<{
+    /** @deprecated */
+    error: v.Type<"unsupportedPushVersion">;
+    /** @deprecated */
+    mutationIDs: v.Optional<{
+        id: number;
+        clientID: string;
+    }[]>;
+}, undefined>, v.ObjectType<{
+    /** @deprecated */
+    error: v.Type<"unsupportedSchemaVersion">;
+    /** @deprecated */
+    mutationIDs: v.Optional<{
+        id: number;
+        clientID: string;
+    }[]>;
+}, undefined>, v.ObjectType<{
+    /** @deprecated */
+    error: v.Type<"http">;
+    /** @deprecated */
+    status: v.Type<number>;
+    /** @deprecated */
+    details: v.Type<string>;
+    /** @deprecated */
+    mutationIDs: v.Optional<{
+        id: number;
+        clientID: string;
+    }[]>;
+}, undefined>, v.ObjectType<{
+    /** @deprecated */
+    error: v.Type<"zeroPusher">;
+    /** @deprecated */
+    details: v.Type<string>;
+    /** @deprecated */
+    mutationIDs: v.Optional<{
+        id: number;
+        clientID: string;
+    }[]>;
+}, undefined>]>]>;
+export declare const pushResponseSchema: v.UnionType<[v.UnionType<[v.ObjectType<{
+    mutations: v.ArrayType<v.ObjectType<{
+        id: v.ObjectType<{
+            id: v.Type<number>;
+            clientID: v.Type<string>;
+        }, undefined>;
+        result: v.UnionType<[v.ObjectType<{
+            data: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>, v.UnionType<[v.ObjectType<{
+            error: v.Type<"app">;
+            message: v.Optional<string>;
+            details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>, v.ObjectType<{
+            error: v.UnionType<[v.Type<"oooMutation">, v.Type<"alreadyProcessed">]>;
+            details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>]>]>;
+    }, undefined>>;
+}, undefined>, v.UnionType<[v.ObjectType<{
+    /** @deprecated */
+    error: v.Type<"unsupportedPushVersion">;
+    /** @deprecated */
+    mutationIDs: v.Optional<{
+        id: number;
+        clientID: string;
+    }[]>;
+}, undefined>, v.ObjectType<{
+    /** @deprecated */
+    error: v.Type<"unsupportedSchemaVersion">;
+    /** @deprecated */
+    mutationIDs: v.Optional<{
+        id: number;
+        clientID: string;
+    }[]>;
+}, undefined>, v.ObjectType<{
+    /** @deprecated */
+    error: v.Type<"http">;
+    /** @deprecated */
+    status: v.Type<number>;
+    /** @deprecated */
+    details: v.Type<string>;
+    /** @deprecated */
+    mutationIDs: v.Optional<{
+        id: number;
+        clientID: string;
+    }[]>;
+}, undefined>, v.ObjectType<{
+    /** @deprecated */
+    error: v.Type<"zeroPusher">;
+    /** @deprecated */
+    details: v.Type<string>;
+    /** @deprecated */
+    mutationIDs: v.Optional<{
+        id: number;
+        clientID: string;
+    }[]>;
+}, undefined>]>]>, v.UnionType<[v.ObjectType<Omit<{
+    kind: v.Type<"PushFailed">;
+    details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+    mutationIDs: v.ArrayType<v.ObjectType<{
+        id: v.Type<number>;
+        clientID: v.Type<string>;
+    }, undefined>>;
+    message: v.Type<string>;
+}, "reason" | "origin"> & {
+    origin: v.Type<"server">;
+    reason: v.Type<"parse" | "database" | "internal" | "oooMutation" | "unsupportedPushVersion">;
+}, undefined>, v.ObjectType<Omit<{
+    kind: v.Type<"PushFailed">;
+    details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+    mutationIDs: v.ArrayType<v.ObjectType<{
+        id: v.Type<number>;
+        clientID: v.Type<string>;
+    }, undefined>>;
+    message: v.Type<string>;
+}, "reason" | "status" | "origin" | "bodyPreview"> & {
+    origin: v.Type<"zeroCache">;
+    reason: v.Type<"http">;
+    status: v.Type<number>;
+    bodyPreview: v.Optional<string>;
+}, undefined>, v.ObjectType<Omit<{
+    kind: v.Type<"PushFailed">;
+    details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+    mutationIDs: v.ArrayType<v.ObjectType<{
+        id: v.Type<number>;
+        clientID: v.Type<string>;
+    }, undefined>>;
+    message: v.Type<string>;
+}, "reason" | "origin"> & {
+    origin: v.Type<"zeroCache">;
+    reason: v.Type<"parse" | "internal" | "timeout">;
+}, undefined>]>]>;
+export declare const pushResponseMessageSchema: v.TupleType<[v.Type<"pushResponse">, v.UnionType<[v.ObjectType<{
+    mutations: v.ArrayType<v.ObjectType<{
+        id: v.ObjectType<{
+            id: v.Type<number>;
+            clientID: v.Type<string>;
+        }, undefined>;
+        result: v.UnionType<[v.ObjectType<{
+            data: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>, v.UnionType<[v.ObjectType<{
+            error: v.Type<"app">;
+            message: v.Optional<string>;
+            details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>, v.ObjectType<{
+            error: v.UnionType<[v.Type<"oooMutation">, v.Type<"alreadyProcessed">]>;
+            details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>]>]>;
+    }, undefined>>;
+}, undefined>, v.UnionType<[v.ObjectType<{
+    /** @deprecated */
+    error: v.Type<"unsupportedPushVersion">;
+    /** @deprecated */
+    mutationIDs: v.Optional<{
+        id: number;
+        clientID: string;
+    }[]>;
+}, undefined>, v.ObjectType<{
+    /** @deprecated */
+    error: v.Type<"unsupportedSchemaVersion">;
+    /** @deprecated */
+    mutationIDs: v.Optional<{
+        id: number;
+        clientID: string;
+    }[]>;
+}, undefined>, v.ObjectType<{
+    /** @deprecated */
+    error: v.Type<"http">;
+    /** @deprecated */
+    status: v.Type<number>;
+    /** @deprecated */
+    details: v.Type<string>;
+    /** @deprecated */
+    mutationIDs: v.Optional<{
+        id: number;
+        clientID: string;
+    }[]>;
+}, undefined>, v.ObjectType<{
+    /** @deprecated */
+    error: v.Type<"zeroPusher">;
+    /** @deprecated */
+    details: v.Type<string>;
+    /** @deprecated */
+    mutationIDs: v.Optional<{
+        id: number;
+        clientID: string;
+    }[]>;
+}, undefined>]>]>]>;
+export declare const ackMutationResponsesMessageSchema: v.TupleType<[v.Type<"ackMutationResponses">, v.ObjectType<{
+    id: v.Type<number>;
+    clientID: v.Type<string>;
+}, undefined>]>;
+export type PushBody = v.Infer<typeof pushBodySchema>;
+export type PushMessage = v.Infer<typeof pushMessageSchema>;
+export type PushResponseBody = v.Infer<typeof pushResponseBodySchema>;
+export type PushResponse = v.Infer<typeof pushResponseSchema>;
+export type PushResponseMessage = v.Infer<typeof pushResponseMessageSchema>;
+export type MutationResponse = v.Infer<typeof mutationResponseSchema>;
+/**
+ * @deprecated push errors are now represented as ['error', { ... }] messages
+ */
+export type PushError = v.Infer<typeof pushErrorSchema>;
+export type PushOk = v.Infer<typeof pushOkSchema>;
+export type AckMutationMessage = v.Infer<typeof ackMutationResponsesMessageSchema>;
+export {};
+//# sourceMappingURL=push.d.ts.map

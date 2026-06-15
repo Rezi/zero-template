@@ -1,0 +1,261 @@
+import { assert } from "../../../shared/src/asserts.js";
+import { omitFanout } from "./planner-node.js";
+import { mergeConstraints } from "./planner-constraint.js";
+//#region ../zql/src/planner/planner-join.ts
+/**
+* Translate constraints for a flipped join from parent space to child space.
+* Matches the runtime behavior of FlippedJoin.fetch() which translates
+* parent constraints to child constraints using index-based key mapping.
+*
+* Example:
+*   parentConstraint = {issueID: undefined, projectID: undefined}
+*   childConstraint = {id: undefined, projectID: undefined}
+*   incomingConstraint = {issueID: 5}
+*   result = {id: 5}  // issueID at index 0 maps to id at index 0
+*/
+function translateConstraintsForFlippedJoin(incomingConstraint, parentConstraint, childConstraint) {
+	if (!incomingConstraint) return void 0;
+	const parentKeys = Object.keys(parentConstraint);
+	const childKeys = Object.keys(childConstraint);
+	const translated = {};
+	for (const [key, value] of Object.entries(incomingConstraint)) {
+		const index = parentKeys.indexOf(key);
+		if (index !== -1) translated[childKeys[index]] = value;
+	}
+	return Object.keys(translated).length > 0 ? translated : void 0;
+}
+/**
+* Semi-join overhead multiplier.
+*
+* Semi-joins represent correlated subqueries (EXISTS checks) which have
+* execution overhead compared to flipped joins, even when logical row counts
+* are identical. This overhead comes from:
+* - Need to execute a separate correlation check for each parent row
+* - Cannot leverage combined constraint checking as effectively as flipped joins
+*
+* A multiplier of 1.5 means semi-joins are estimated to be ~50% more expensive
+* than equivalent flipped joins, which empirically matches observed performance
+* differences in production workloads (e.g., 1.7x in zbugs benchmarks).
+*
+* Flipped joins have a different overhead in that they become unlimited. This
+* is accounted for when propagating unlimits rather than here.
+*/
+/**
+* Represents a join between two data streams (parent and child).
+*
+* # Dual-State Pattern
+* Like all planner nodes, PlannerJoin separates:
+* 1. IMMUTABLE STRUCTURE: Parent/child nodes, constraints, flippability
+* 2. MUTABLE STATE: Join type (semi/flipped), pinned status
+*
+* # Join Flipping
+* A join can be in two states:
+* - 'semi': Parent is outer loop, child is inner (semi-join for EXISTS)
+* - 'flipped': Child is outer loop, parent is inner
+*
+* Flipping is the key optimization: choosing which table scans first.
+* NOT EXISTS joins cannot be flipped (#flippable = false).
+*
+* # Constraint Propagation
+* - Semi-join: Sends childConstraint to child, forwards received constraints to parent
+* - Flipped join: Sends undefined to child, merges parentConstraint with received to parent
+* - Unpinned join: Only forwards constraints to parent (doesn't constrain child yet)
+*
+* # Lifecycle
+* 1. Construct with immutable structure (parent, child, constraints, flippability)
+* 2. Wire to output node during graph construction
+* 3. Planning calls flipIfNeeded() based on connection selection order
+* 4. pin() locks the join type once chosen
+* 5. reset() clears mutable state (type → 'semi', pinned → false)
+*/
+var PlannerJoin = class {
+	kind = "join";
+	#parent;
+	#child;
+	#parentConstraint;
+	#childConstraint;
+	#flippable;
+	planId;
+	#output;
+	#type;
+	#initialType;
+	constructor(parent, child, parentConstraint, childConstraint, flippable, planId, initialType = "semi") {
+		this.#type = initialType;
+		this.#initialType = initialType;
+		this.#parent = parent;
+		this.#child = child;
+		this.#childConstraint = childConstraint;
+		this.#parentConstraint = parentConstraint;
+		this.#flippable = flippable;
+		this.planId = planId;
+	}
+	setOutput(node) {
+		this.#output = node;
+	}
+	get output() {
+		assert(this.#output !== void 0, "Output not set");
+		return this.#output;
+	}
+	closestJoinOrSource() {
+		return "join";
+	}
+	flipIfNeeded(input) {
+		if (input === this.#child) this.flip();
+		else assert(input === this.#parent, "Can only flip a join from one of its inputs");
+	}
+	flip() {
+		assert(this.#type === "semi", "Can only flip a semi-join");
+		if (!this.#flippable) throw new UnflippableJoinError("Cannot flip a non-flippable join (e.g., NOT EXISTS)");
+		this.#type = "flipped";
+	}
+	get type() {
+		return this.#type;
+	}
+	isFlippable() {
+		return this.#flippable;
+	}
+	/**
+	* Propagate unlimiting when this join is flipped.
+	* When a join is flipped:
+	* 1. Child becomes outer loop → produces all rows (unlimited)
+	* 2. Parent is fetched once per child row → effectively unlimited
+	*
+	* Example: If child produces 896 rows, parent is fetched 896 times.
+	* Even if each fetch returns 1 row, parent produces 896 total rows.
+	*
+	* Propagation rules:
+	* - Connection: call unlimit()
+	* - Semi-join: continue to parent (outer loop)
+	* - Flipped join: stop (already unlimited when it was flipped)
+	* - Fan-out/Fan-in: propagate to all inputs
+	*/
+	propagateUnlimit() {
+		assert(this.#type === "flipped", "Can only unlimit a flipped join");
+		this.#child.propagateUnlimitFromFlippedJoin();
+	}
+	/**
+	* Called when a parent join is flipped and this join is part of its child subgraph.
+	* Continue propagation to parent (the outer loop).
+	* If we are hitting a semi-join, the parent drives.
+	* If we are hitting a flip-join, well now we have to unlimit its parent too!
+	*/
+	propagateUnlimitFromFlippedJoin() {
+		this.#parent.propagateUnlimitFromFlippedJoin();
+	}
+	propagateConstraints(branchPattern, constraint, from, planDebugger) {
+		planDebugger?.log({
+			type: "node-constraint",
+			nodeType: "join",
+			node: this.getName(),
+			branchPattern,
+			constraint,
+			from: from ? getNodeName(from) : "unknown"
+		});
+		if (this.#type === "semi") {
+			this.#child.propagateConstraints(branchPattern, this.#childConstraint, this, planDebugger);
+			this.#parent.propagateConstraints(branchPattern, constraint, this, planDebugger);
+		} else if (this.#type === "flipped") {
+			const translatedConstraint = translateConstraintsForFlippedJoin(constraint, this.#parentConstraint, this.#childConstraint);
+			this.#child.propagateConstraints(branchPattern, translatedConstraint, this, planDebugger);
+			this.#parent.propagateConstraints(branchPattern, mergeConstraints(constraint, this.#parentConstraint), this, planDebugger);
+		}
+	}
+	reset() {
+		this.#type = this.#initialType;
+	}
+	estimateCost(downstreamChildSelectivity, branchPattern, planDebugger) {
+		/**
+		* downstreamChildSelectivity accumulates up a parent chain, not
+		* up child chains. Child chains represent independent sub-graphs.
+		* So we pass 1 for `downstreamChildSelectivity` when estimating child cost.
+		* Put another way, downstreamChildSelectivity impacts how many parent
+		* rows are returned.
+		*/
+		const child = this.#child.estimateCost(1, branchPattern, planDebugger);
+		const fanoutFactor = child.fanout(Object.keys(this.#childConstraint));
+		const scaledChildSelectivity = 1 - Math.pow(1 - child.selectivity, fanoutFactor.fanout);
+		/**
+		* How selective is the graph from this point forward?
+		* If we are _very_ selective then we must scan more parent rows
+		* before finding a match.
+		* E.g., if childSelectivity = 0.1 and downstreamChildSelectivity = 0.5
+		* then we only pass 5% of parent rows (0.1 * 0.5 = 0.05).
+		*
+		* This is used to estimate how many rows will be pulled from the parent
+		* when trying to satisfy downstream constraints and a limit.
+		*
+		* NOTE: We do not know if the probabilities are correlated so we assume independence.
+		* This is a fundamental limitation of the planner.
+		*/
+		const parent = this.#parent.estimateCost(this.#type === "flipped" ? 1 * downstreamChildSelectivity : scaledChildSelectivity * downstreamChildSelectivity, branchPattern, planDebugger);
+		let costEstimate;
+		if (this.type === "semi") costEstimate = {
+			startupCost: parent.startupCost,
+			scanEst: parent.limit === void 0 ? parent.returnedRows : Math.min(parent.returnedRows, downstreamChildSelectivity === 0 ? 0 : parent.limit / downstreamChildSelectivity),
+			cost: parent.cost + parent.scanEst * (child.startupCost + child.cost + child.scanEst),
+			returnedRows: parent.returnedRows * child.selectivity,
+			selectivity: child.selectivity * parent.selectivity,
+			limit: parent.limit,
+			fanout: parent.fanout
+		};
+		else costEstimate = {
+			startupCost: child.startupCost,
+			scanEst: parent.limit === void 0 ? parent.returnedRows * child.returnedRows : Math.min(parent.returnedRows * child.returnedRows, downstreamChildSelectivity === 0 ? 0 : parent.limit / downstreamChildSelectivity),
+			cost: child.cost + child.scanEst * (parent.startupCost + parent.cost + parent.scanEst),
+			returnedRows: parent.returnedRows * child.returnedRows,
+			selectivity: parent.selectivity * child.selectivity,
+			limit: parent.limit,
+			fanout: parent.fanout
+		};
+		if (planDebugger) planDebugger.log({
+			type: "node-cost",
+			nodeType: "join",
+			node: this.getName(),
+			branchPattern,
+			downstreamChildSelectivity,
+			costEstimate: omitFanout(costEstimate),
+			joinType: this.#type
+		});
+		return costEstimate;
+	}
+	/**
+	* Get a human-readable name for this join for debugging.
+	* Format: "parentName ⋈ childName"
+	*/
+	getName() {
+		return `${getNodeName(this.#parent)} ⋈ ${getNodeName(this.#child)}`;
+	}
+	/**
+	* Get debug information about this join's state.
+	*/
+	getDebugInfo() {
+		return {
+			name: this.getName(),
+			type: this.#type,
+			planId: this.planId
+		};
+	}
+};
+var UnflippableJoinError = class extends Error {
+	constructor(message) {
+		super(message);
+		this.name = "UnflippableJoinError";
+	}
+};
+/**
+* Get a human-readable name for any planner node.
+* Used for debugging and tracing.
+*/
+function getNodeName(node) {
+	switch (node.kind) {
+		case "connection": return node.name;
+		case "join": return node.getName();
+		case "fan-out": return "FO";
+		case "fan-in": return "FI";
+		case "terminus": return "terminus";
+	}
+}
+//#endregion
+export { PlannerJoin };
+
+//# sourceMappingURL=planner-join.js.map

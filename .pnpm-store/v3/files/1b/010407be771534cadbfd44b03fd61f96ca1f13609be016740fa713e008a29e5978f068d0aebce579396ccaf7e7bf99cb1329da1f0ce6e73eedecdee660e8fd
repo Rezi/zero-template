@@ -1,0 +1,54 @@
+import { must } from "../../../shared/src/must.js";
+//#region ../zql/src/ivm/fan-out.ts
+/**
+* Forks a stream into multiple streams.
+* Is meant to be paired with a `FanIn` operator which will
+* later merge the forks back together.
+*/
+var FanOut = class {
+	#input;
+	#outputs = [];
+	#fanIn;
+	#destroyCount = 0;
+	constructor(input) {
+		this.#input = input;
+		input.setFilterOutput(this);
+	}
+	setFanIn(fanIn) {
+		this.#fanIn = fanIn;
+	}
+	setFilterOutput(output) {
+		this.#outputs.push(output);
+	}
+	destroy() {
+		if (this.#destroyCount < this.#outputs.length) {
+			++this.#destroyCount;
+			if (this.#destroyCount === this.#outputs.length) this.#input.destroy();
+		} else throw new Error("FanOut already destroyed once for each output");
+	}
+	getSchema() {
+		return this.#input.getSchema();
+	}
+	beginFilter() {
+		for (const output of this.#outputs) output.beginFilter();
+	}
+	endFilter() {
+		for (const output of this.#outputs) output.endFilter();
+	}
+	*filter(node) {
+		let result = false;
+		for (const output of this.#outputs) {
+			result = (yield* output.filter(node)) || result;
+			if (result) return true;
+		}
+		return result;
+	}
+	*push(change) {
+		for (const out of this.#outputs) yield* out.push(change, this);
+		yield* must(this.#fanIn, "fan-out must have a corresponding fan-in set!").fanOutDonePushingToAllBranches(change[0]);
+	}
+};
+//#endregion
+export { FanOut };
+
+//# sourceMappingURL=fan-out.js.map

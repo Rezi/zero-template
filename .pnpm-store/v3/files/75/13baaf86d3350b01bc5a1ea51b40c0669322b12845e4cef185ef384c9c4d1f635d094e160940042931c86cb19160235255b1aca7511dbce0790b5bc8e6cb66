@@ -1,0 +1,110 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { MaybePromise } from '../../../shared/src/types.ts';
+import { type ZeroError } from './error.ts';
+export declare const DID_NOT_CONNECT_VALUE: number;
+export declare const REPORT_INTERVAL_MS = 5000;
+export declare function getLastConnectErrorValue(reason: ZeroError): `server_${string}` | `client_${string}`;
+/**
+ * Returns whether an error should be reported in metrics and
+ * increment the connect error count.
+ *
+ * Returns `true` for all server errors and client errors that represent actual
+ * connection problems. Returns `false` for expected client-side disconnections
+ * (user disconnect, client closed, hidden tab, clean/abrupt close).
+ */
+export declare function shouldReportConnectError(reason: ZeroError): boolean;
+type MetricsReporter = (metrics: Series[]) => MaybePromise<void>;
+export type MetricManagerOptions = {
+    reportIntervalMs: number;
+    host: string;
+    source: string;
+    reporter: MetricsReporter;
+    lc: LogContext;
+};
+/**
+ * MetricManager keeps track of the set of metrics in use and flushes them
+ * to a format suitable for reporting.
+ */
+export declare class MetricManager {
+    #private;
+    constructor(opts: MetricManagerOptions);
+    readonly timeToConnectMs: Gauge;
+    readonly lastConnectError: State;
+    setConnected(timeToConnectMs: number, totalTimeToConnectMs: number): void;
+    setDisconnectedWaitingForVisible(): void;
+    setConnectError(reason: ZeroError): void;
+    /**
+     * Tags to include in all metrics.
+     */
+    readonly tags: string[];
+    flush(): Promise<void>;
+    stop(): void;
+}
+/** Series is a time series of points for a single metric. */
+export type Series = {
+    host: string;
+    metric: string;
+    points: Point[];
+    tags?: string[];
+};
+/**
+ * A point is a second-resolution timestamp and a set of values for that
+ * timestamp. A point represents exactly one second in time and the values
+ * are those recorded for that second. The first element of this array
+ * is the timestamp and the second element is an array of values.
+ */
+export type Point = [number, number[]];
+type Flushable = {
+    flush(): Pick<Series, 'metric' | 'points'> | undefined;
+};
+/**
+ * Gauge is a metric type that represents a single value that can go up and
+ * down. It's typically used to track discrete values or counts eg the number
+ * of active users, number of connections, cpu load, etc. A gauge retains
+ * its value when flushed.
+ *
+ * We use a Gauge to sample at the client. If we are interested in tracking
+ * a metric value *per client*, the client can note the latest value in
+ * a Gauge metric. The metric is periodically reported via Reporter. On the
+ * server, we graph the value of the metric rolled up over the periodic
+ * reporting period, that is, counted over a span of time equal to the
+ * reporting period. The result is ~one point per client per reporting
+ * period.
+ */
+export declare class Gauge implements Flushable {
+    #private;
+    constructor(name: string);
+    set(value: number): void;
+    get(): number | undefined;
+    clear(): void;
+    flush(): {
+        metric: string;
+        points: Point[];
+    } | undefined;
+}
+/**
+ * State is a metric type that represents a specific state that the system is
+ * in, for example the state of a connection which may be 'open' or 'closed'.
+ * The state is given a name/prefix at construction time (eg 'connection') and
+ * then can be set to a specific state (eg 'open'). The prefix is prepended to
+ * the set state (eg, 'connection_open') and a value of 1 is reported.
+ * Unset/cleared states are not reported.
+ *
+ * Example:
+ *   const s = new State('connection');
+ *   s.set('open');
+ *   s.flush(); // returns {metric: 'connection_open', points: [[now(), [1]]]}
+ */
+export declare class State implements Flushable {
+    #private;
+    constructor(prefix: string, clearOnFlush?: boolean);
+    set(state: string): void;
+    get(): string | undefined;
+    clear(): void;
+    flush(): {
+        metric: string;
+        points: Point[];
+    } | undefined;
+}
+export {};
+//# sourceMappingURL=metrics.d.ts.map

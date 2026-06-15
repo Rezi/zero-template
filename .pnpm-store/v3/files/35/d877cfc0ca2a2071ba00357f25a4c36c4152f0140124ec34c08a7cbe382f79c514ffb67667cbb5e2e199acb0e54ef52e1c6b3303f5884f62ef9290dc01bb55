@@ -1,0 +1,8 @@
+import * as v from "@badrap/valita";
+//#region ../zero-cache/src/services/change-source/protocol/current/json.ts
+var jsonValueSchema = v.lazy(() => v.union(v.null(), v.string(), v.boolean(), v.number(), v.array(jsonValueSchema), jsonObjectSchema));
+var jsonObjectSchema = v.record(v.union(jsonValueSchema, v.undefined()));
+//#endregion
+export { jsonObjectSchema, jsonValueSchema };
+
+//# sourceMappingURL=json.js.map

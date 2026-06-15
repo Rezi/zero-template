@@ -1,0 +1,42 @@
+{
+  "name": "compare-utf8",
+  "version": "0.2.0",
+  "description": "Compares JS strings using UTF-8 bitwise semantics",
+  "type": "module",
+  "main": "src/index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rocicorp/compare-utf8.git"
+  },
+  "keywords": [
+    "UTF-8",
+    "UTF8",
+    "compare",
+    "string"
+  ],
+  "author": "arv@rocicorp.dev",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/rocicorp/compare-utf8/issues"
+  },
+  "homepage": "https://github.com/rocicorp/compare-utf8#readme",
+  "devDependencies": {
+    "@faker-js/faker": "^10.4.0",
+    "mitata": "^1.0.34",
+    "prettier": "^3.8.1",
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.2"
+  },
+  "exports": "./src/index.js",
+  "files": [
+    "src/index.js",
+    "src/index.d.ts"
+  ],
+  "scripts": {
+    "build-dts": "rm -f src/*.d.ts && tsc --emitDeclarationOnly && prettier src/*.d.ts --write",
+    "build": "pnpm run build-dts",
+    "format": "prettier *.json src/ --write",
+    "bench": "node src/bench.js",
+    "test": "vitest run"
+  }
+}

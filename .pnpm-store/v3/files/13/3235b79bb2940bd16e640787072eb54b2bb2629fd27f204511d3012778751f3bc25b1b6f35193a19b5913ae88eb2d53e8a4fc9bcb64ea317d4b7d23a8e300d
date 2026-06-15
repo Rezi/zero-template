@@ -1,0 +1,96 @@
+import type { LogContext } from '@rocicorp/logger';
+import { TransactionPool } from '../../db/transaction-pool.ts';
+import { type PostgresDB } from '../../types/pg.ts';
+import { type ShardID } from '../../types/shards.ts';
+import { type BackfillRequest, type Change } from '../change-source/protocol/current.ts';
+import { type ChangeStreamData, type Commit } from '../change-source/protocol/current/downstream.ts';
+import type { DownstreamStatusMessage, UpstreamStatusMessage } from '../change-source/protocol/current/status.ts';
+import type { ReplicatorMode } from '../replicator/replicator.ts';
+import type { Service } from '../service.ts';
+import type { Subscriber } from './subscriber.ts';
+export type TuningOptions = {
+    backPressureLimitHeapProportion: number;
+    statementTimeoutMs: number;
+};
+/**
+ * Handles the storage of changes and the catchup of subscribers
+ * that are behind.
+ *
+ * In the context of catchup and cleanup, it is the responsibility of the
+ * Storer to decide whether a client can be caught up, or whether the
+ * changes needed to catch a client up have been purged.
+ *
+ * **Maintained invariant**: The Change DB is only empty for a
+ * completely new replica (i.e. initial-sync with no changes from the
+ * replication stream).
+ * * In this case, all new subscribers are expected start from the
+ *   `replicaVersion`, which is the version at which initial sync
+ *   was performed, and any attempts to catchup from a different
+ *   point fail.
+ *
+ * Conversely, if non-initial changes have flowed through the system
+ * (i.e. via the replication stream), the ChangeDB must *not* be empty,
+ * and the earliest change in the `changeLog` represents the earliest
+ * "commit" from (after) which a subscriber can be caught up.
+ * * Any attempts to catchup from an earlier point must fail with
+ *   a `WatermarkTooOld` error.
+ * * Failure to do so could result in streaming changes to the
+ *   subscriber such that there is a gap in its replication history.
+ *
+ * Note: Subscribers (i.e. `incremental-syncer`) consider an "error" signal
+ * an unrecoverable error and shut down in response. This allows the
+ * production system to replace it with a new task and fresh copy of the
+ * replica backup.
+ */
+export declare class Storer implements Service {
+    #private;
+    readonly id = "storer";
+    constructor(lc: LogContext, shard: ShardID, taskID: string, discoveryAddress: string, discoveryProtocol: string, db: PostgresDB, replicaVersion: string, onConsumed: (c: Commit | UpstreamStatusMessage) => void, onFatal: (err: Error) => void, { backPressureLimitHeapProportion, statementTimeoutMs }: TuningOptions);
+    assumeOwnership(purgeLock?: PurgeLock | null): Promise<void>;
+    getStartStreamInitializationParameters(): Promise<{
+        lastWatermark: string;
+        backfillRequests: BackfillRequest[];
+    }>;
+    getMinWatermarkForCatchup(): Promise<string | null>;
+    purgeRecordsBefore(watermark: string): Promise<number>;
+    /**
+     * @returns The JSON stringified stream message to be sent downstream.
+     */
+    store(watermark: string, data: ChangeStreamData): string;
+    abort(): void;
+    status(s: DownstreamStatusMessage): void;
+    catchup(subscriber: Subscriber, mode: ReplicatorMode): void;
+    readyForMore(): Promise<void> | undefined;
+    /**
+     * Runs the storer loop until {@link stop()} is called, or an error is thrown.
+     * Once {@link run()} completes, it can be called again.
+     */
+    run(): Promise<void>;
+    /**
+     * Waits until all currently queued entries have been processed.
+     * This is only used in tests.
+     */
+    allProcessed(): Promise<void>;
+    stop(): Promise<void>;
+}
+/**
+ * Extracts the stringified change message from the stringified
+ * stream message (e.g. the second tuple element). This optimization
+ * facilitates stringifying (and sharing the result of) the stream
+ * message exactly once, but storing only the change message substring
+ * in the changeLog for backwards compatibility.
+ */
+export declare function extractChangeSubstring(streamMessageJSON: string, tag: Change['tag'] | undefined): string;
+export declare class PurgeLock {
+    #private;
+    readonly replicaVersion: string;
+    readonly minWatermark: string;
+    constructor(lc: LogContext, tx: TransactionPool, replicaVersion: string, watermark: string);
+    release(): Promise<void>;
+}
+export declare class PurgeLocker {
+    #private;
+    constructor(lc: LogContext, shard: ShardID, db: PostgresDB);
+    acquire(): Promise<PurgeLock | null>;
+}
+//# sourceMappingURL=storer.d.ts.map

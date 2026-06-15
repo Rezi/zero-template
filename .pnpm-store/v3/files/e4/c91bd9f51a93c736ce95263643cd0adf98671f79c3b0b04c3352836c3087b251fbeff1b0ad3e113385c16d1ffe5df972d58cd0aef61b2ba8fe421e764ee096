@@ -1,0 +1,41 @@
+import * as v from '../../shared/src/valita.ts';
+declare const changeDesiredQueriesBodySchema: v.ObjectType<{
+    desiredQueriesPatch: v.ArrayType<v.UnionType<[v.ObjectType<Omit<{
+        op: v.Type<"put">;
+        hash: v.Type<string>;
+        ttl: v.Optional<number>;
+    }, "name" | "ast" | "args"> & {
+        ast: v.Optional<import("./ast.ts").AST>;
+        name: v.Optional<string>;
+        args: v.Optional<readonly import("../../shared/src/json.ts").ReadonlyJSONValue[]>;
+    }, undefined>, v.ObjectType<{
+        op: v.Type<"del">;
+        hash: v.Type<string>;
+    }, undefined>, v.ObjectType<{
+        op: v.Type<"clear">;
+    }, undefined>]>>;
+    /** W3C traceparent header for distributed tracing. */
+    traceparent: v.Optional<string>;
+}, undefined>;
+export declare const changeDesiredQueriesMessageSchema: v.TupleType<[v.Type<"changeDesiredQueries">, v.ObjectType<{
+    desiredQueriesPatch: v.ArrayType<v.UnionType<[v.ObjectType<Omit<{
+        op: v.Type<"put">;
+        hash: v.Type<string>;
+        ttl: v.Optional<number>;
+    }, "name" | "ast" | "args"> & {
+        ast: v.Optional<import("./ast.ts").AST>;
+        name: v.Optional<string>;
+        args: v.Optional<readonly import("../../shared/src/json.ts").ReadonlyJSONValue[]>;
+    }, undefined>, v.ObjectType<{
+        op: v.Type<"del">;
+        hash: v.Type<string>;
+    }, undefined>, v.ObjectType<{
+        op: v.Type<"clear">;
+    }, undefined>]>>;
+    /** W3C traceparent header for distributed tracing. */
+    traceparent: v.Optional<string>;
+}, undefined>]>;
+export type ChangeDesiredQueriesBody = v.Infer<typeof changeDesiredQueriesBodySchema>;
+export type ChangeDesiredQueriesMessage = v.Infer<typeof changeDesiredQueriesMessageSchema>;
+export {};
+//# sourceMappingURL=change-desired-queries.d.ts.map

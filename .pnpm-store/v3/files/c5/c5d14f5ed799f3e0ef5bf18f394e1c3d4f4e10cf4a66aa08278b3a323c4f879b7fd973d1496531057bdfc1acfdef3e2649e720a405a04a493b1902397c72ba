@@ -1,0 +1,6 @@
+import type { Enum } from '../../shared/src/enum.ts';
+import * as FormatVersion from './format-version-enum.ts';
+type FormatVersion = Enum<typeof FormatVersion>;
+export declare function parseReplicacheFormatVersion(v: number): FormatVersion;
+export {};
+//# sourceMappingURL=format-version.d.ts.map

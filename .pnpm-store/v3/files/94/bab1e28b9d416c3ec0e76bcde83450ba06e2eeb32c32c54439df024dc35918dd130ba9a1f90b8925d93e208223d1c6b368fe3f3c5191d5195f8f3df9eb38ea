@@ -1,0 +1,35 @@
+import { getBrowserGlobal } from "../../../shared/src/browser-env.js";
+//#region ../zero-client/src/client/server-option.ts
+function validateServerParam(paramName, server) {
+	const expectedProtocol = "http";
+	const forExample = (path = "") => ` For example: "${expectedProtocol}s://myapp-myteam.zero.ms/${path}".`;
+	if (!server.startsWith(`${expectedProtocol}://`) && !server.startsWith(`${expectedProtocol}s://`)) throw new Error(`ZeroOptions.${paramName} must use the "${expectedProtocol}" or "${expectedProtocol}s" scheme.`);
+	let url;
+	try {
+		url = new URL(server);
+	} catch {
+		throw new Error(`ZeroOptions.${paramName} must be a valid URL.${forExample()}`);
+	}
+	const urlString = url.toString();
+	const pathComponents = url.pathname.split("/");
+	if (pathComponents[0] === "") pathComponents.shift();
+	if (pathComponents.at(-1) === "") pathComponents.pop();
+	if (pathComponents.length > 1) throw new Error(`ZeroOptions.${paramName} may have at most one path component.${forExample("zero")}`);
+	for (const [property, invalidEndsWith] of [["search", "?"], ["hash", "#"]]) if (url[property] || urlString.endsWith(invalidEndsWith)) throw new Error(`ZeroOptions.${paramName} must not contain a ${property} component.${forExample()}`);
+	return urlString;
+}
+function getServer(server) {
+	if (!getBrowserGlobal("WebSocket")) {
+		console.warn("Zero started in an unsupported environment, no data will be synced.");
+		return null;
+	}
+	if (server === void 0 || server === null) {
+		console.warn("Zero starting up with no server URL. No data will be synced.");
+		return null;
+	}
+	return validateServerParam("server", server);
+}
+//#endregion
+export { getServer };
+
+//# sourceMappingURL=server-option.js.map

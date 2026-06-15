@@ -1,0 +1,29 @@
+//#region ../zql/src/planner/planner-terminus.ts
+var PlannerTerminus = class {
+	kind = "terminus";
+	#input;
+	constructor(input) {
+		this.#input = input;
+	}
+	get pinned() {
+		return true;
+	}
+	closestJoinOrSource() {
+		return this.#input.closestJoinOrSource();
+	}
+	propagateConstraints(planDebugger) {
+		this.#input.propagateConstraints([], void 0, this, planDebugger);
+	}
+	estimateCost(planDebugger) {
+		return this.#input.estimateCost(1, [], planDebugger);
+	}
+	/**
+	* Propagate unlimiting when a parent join is flipped.
+	* Terminus doesn't participate in unlimiting.
+	*/
+	propagateUnlimitFromFlippedJoin() {}
+};
+//#endregion
+export { PlannerTerminus };
+
+//# sourceMappingURL=planner-terminus.js.map

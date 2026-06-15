@@ -1,0 +1,1 @@
+{"version":3,"file":"mutation-type-enum.d.ts","sourceRoot":"","sources":["../../../../zero-protocol/src/mutation-type-enum.ts"],"names":[],"mappings":"AAAA,eAAO,MAAM,IAAI,SAAS,CAAC;AAC3B,eAAO,MAAM,MAAM,WAAW,CAAC;AAC/B,MAAM,MAAM,YAAY,GAAG,OAAO,IAAI,GAAG,OAAO,MAAM,CAAC;AAEvD,MAAM,MAAM,IAAI,GAAG,OAAO,IAAI,CAAC;AAC/B,MAAM,MAAM,MAAM,GAAG,OAAO,MAAM,CAAC"}

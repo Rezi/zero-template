@@ -1,0 +1,25 @@
+type Primitive = undefined | null | boolean | string | number | symbol | bigint;
+/**
+ * A {@link Set} that uses a custom value transformation function to convert values
+ * to a primitive type that can be used as a {@link Set} value.
+ *
+ * This allows for using objects as values in a {@link Set} without worrying about
+ * reference equality.
+ */
+export declare class CustomKeySet<V> {
+    #private;
+    readonly [Symbol.toStringTag] = "CustomKeySet";
+    constructor(toKey: (value: V) => Primitive, iterable?: Iterable<V> | null);
+    add(value: V): this;
+    clear(): void;
+    delete(value: V): boolean;
+    forEach(callbackfn: (value: V, value2: V, set: CustomKeySet<V>) => void, thisArg?: any): void;
+    has(value: V): boolean;
+    get size(): number;
+    entries(): IterableIterator<[V, V]>;
+    keys(): IterableIterator<V>;
+    values(): IterableIterator<V>;
+    [Symbol.iterator](): IterableIterator<V>;
+}
+export {};
+//# sourceMappingURL=custom-key-set.d.ts.map

@@ -1,0 +1,165 @@
+import * as v from '../../shared/src/valita.ts';
+export declare const mutateSuccessSchema: v.ObjectType<{
+    kind: v.Type<"MutateResponse">;
+    userID: v.Optional<string | null>;
+    mutations: v.ArrayType<v.ObjectType<{
+        id: v.ObjectType<{
+            id: v.Type<number>;
+            clientID: v.Type<string>;
+        }, undefined>;
+        result: v.UnionType<[v.ObjectType<{
+            data: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>, v.UnionType<[v.ObjectType<{
+            error: v.Type<"app">;
+            message: v.Optional<string>;
+            details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>, v.ObjectType<{
+            error: v.UnionType<[v.Type<"oooMutation">, v.Type<"alreadyProcessed">]>;
+            details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>]>]>;
+    }, undefined>>;
+}, undefined>;
+export type MutateSuccess = v.Infer<typeof mutateSuccessSchema>;
+export declare const mutateResponseSchema: v.UnionType<[v.ObjectType<{
+    kind: v.Type<"MutateResponse">;
+    userID: v.Optional<string | null>;
+    mutations: v.ArrayType<v.ObjectType<{
+        id: v.ObjectType<{
+            id: v.Type<number>;
+            clientID: v.Type<string>;
+        }, undefined>;
+        result: v.UnionType<[v.ObjectType<{
+            data: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>, v.UnionType<[v.ObjectType<{
+            error: v.Type<"app">;
+            message: v.Optional<string>;
+            details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>, v.ObjectType<{
+            error: v.UnionType<[v.Type<"oooMutation">, v.Type<"alreadyProcessed">]>;
+            details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>]>]>;
+    }, undefined>>;
+}, undefined>, v.UnionType<[v.ObjectType<Omit<{
+    kind: v.Type<"PushFailed">;
+    details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+    mutationIDs: v.ArrayType<v.ObjectType<{
+        id: v.Type<number>;
+        clientID: v.Type<string>;
+    }, undefined>>;
+    message: v.Type<string>;
+}, "reason" | "origin"> & {
+    origin: v.Type<"server">;
+    reason: v.Type<"parse" | "database" | "internal" | "oooMutation" | "unsupportedPushVersion">;
+}, undefined>, v.ObjectType<Omit<{
+    kind: v.Type<"PushFailed">;
+    details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+    mutationIDs: v.ArrayType<v.ObjectType<{
+        id: v.Type<number>;
+        clientID: v.Type<string>;
+    }, undefined>>;
+    message: v.Type<string>;
+}, "reason" | "status" | "origin" | "bodyPreview"> & {
+    origin: v.Type<"zeroCache">;
+    reason: v.Type<"http">;
+    status: v.Type<number>;
+    bodyPreview: v.Optional<string>;
+}, undefined>, v.ObjectType<Omit<{
+    kind: v.Type<"PushFailed">;
+    details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+    mutationIDs: v.ArrayType<v.ObjectType<{
+        id: v.Type<number>;
+        clientID: v.Type<string>;
+    }, undefined>>;
+    message: v.Type<string>;
+}, "reason" | "origin"> & {
+    origin: v.Type<"zeroCache">;
+    reason: v.Type<"parse" | "internal" | "timeout">;
+}, undefined>]>, v.UnionType<[v.ObjectType<{
+    mutations: v.ArrayType<v.ObjectType<{
+        id: v.ObjectType<{
+            id: v.Type<number>;
+            clientID: v.Type<string>;
+        }, undefined>;
+        result: v.UnionType<[v.ObjectType<{
+            data: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>, v.UnionType<[v.ObjectType<{
+            error: v.Type<"app">;
+            message: v.Optional<string>;
+            details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>, v.ObjectType<{
+            error: v.UnionType<[v.Type<"oooMutation">, v.Type<"alreadyProcessed">]>;
+            details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+        }, undefined>]>]>;
+    }, undefined>>;
+}, undefined>, v.UnionType<[v.ObjectType<{
+    error: v.Type<"unsupportedPushVersion">;
+    mutationIDs: v.Optional<{
+        id: number;
+        clientID: string;
+    }[]>;
+}, undefined>, v.ObjectType<{
+    error: v.Type<"unsupportedSchemaVersion">;
+    mutationIDs: v.Optional<{
+        id: number;
+        clientID: string;
+    }[]>;
+}, undefined>, v.ObjectType<{
+    error: v.Type<"http">;
+    status: v.Type<number>;
+    details: v.Type<string>;
+    mutationIDs: v.Optional<{
+        id: number;
+        clientID: string;
+    }[]>;
+}, undefined>, v.ObjectType<{
+    error: v.Type<"zeroPusher">;
+    details: v.Type<string>;
+    mutationIDs: v.Optional<{
+        id: number;
+        clientID: string;
+    }[]>;
+}, undefined>]>, v.UnionType<[v.ObjectType<Omit<{
+    kind: v.Type<"PushFailed">;
+    details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+    mutationIDs: v.ArrayType<v.ObjectType<{
+        id: v.Type<number>;
+        clientID: v.Type<string>;
+    }, undefined>>;
+    message: v.Type<string>;
+}, "reason" | "origin"> & {
+    origin: v.Type<"server">;
+    reason: v.Type<"parse" | "database" | "internal" | "oooMutation" | "unsupportedPushVersion">;
+}, undefined>, v.ObjectType<Omit<{
+    kind: v.Type<"PushFailed">;
+    details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+    mutationIDs: v.ArrayType<v.ObjectType<{
+        id: v.Type<number>;
+        clientID: v.Type<string>;
+    }, undefined>>;
+    message: v.Type<string>;
+}, "reason" | "status" | "origin" | "bodyPreview"> & {
+    origin: v.Type<"zeroCache">;
+    reason: v.Type<"http">;
+    status: v.Type<number>;
+    bodyPreview: v.Optional<string>;
+}, undefined>, v.ObjectType<Omit<{
+    kind: v.Type<"PushFailed">;
+    details: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONValue>;
+    mutationIDs: v.ArrayType<v.ObjectType<{
+        id: v.Type<number>;
+        clientID: v.Type<string>;
+    }, undefined>>;
+    message: v.Type<string>;
+}, "reason" | "origin"> & {
+    origin: v.Type<"zeroCache">;
+    reason: v.Type<"parse" | "internal" | "timeout">;
+}, undefined>]>]>]>;
+export type MutateResponse = v.Infer<typeof mutateResponseSchema>;
+/**
+ * The schema for the querystring parameters of the custom mutate endpoint.
+ */
+export declare const mutateParamsSchema: v.ObjectType<{
+    schema: v.Type<string>;
+    appID: v.Type<string>;
+}, undefined>;
+//# sourceMappingURL=mutate-server.d.ts.map

@@ -1,0 +1,11 @@
+import { readonlyArray, readonlyObject, valita_exports } from "../../shared/src/valita.js";
+//#region ../zero-protocol/src/delete-clients.ts
+var deleteClientsBodySchema = valita_exports.union(readonlyObject({
+	clientIDs: readonlyArray(valita_exports.string()).optional(),
+	clientGroupIDs: readonlyArray(valita_exports.string()).optional()
+}));
+var deleteClientsMessageSchema = valita_exports.tuple([valita_exports.literal("deleteClients"), deleteClientsBodySchema]);
+//#endregion
+export { deleteClientsBodySchema, deleteClientsMessageSchema };
+
+//# sourceMappingURL=delete-clients.js.map

@@ -1,0 +1,314 @@
+import { assert } from "../../../shared/src/asserts.js";
+import { must } from "../../../shared/src/must.js";
+import { omitFanout } from "./planner-node.js";
+import { PlannerSource } from "./planner-source.js";
+//#region ../zql/src/planner/planner-graph.ts
+/**
+* Maximum number of flippable joins to attempt exhaustive enumeration.
+* With n flippable joins, we explore 2^n plans.
+* 10 joins = 1024 plans (~100-200ms), 12 joins = 4096 plans (~400ms - 1 second)
+*/
+var MAX_FLIPPABLE_JOINS = 9;
+var PlannerGraph = class {
+	#sources = /* @__PURE__ */ new Map();
+	#terminus = void 0;
+	joins = [];
+	fanOuts = [];
+	fanIns = [];
+	connections = [];
+	/**
+	* Reset all planning state back to initial values for another planning pass.
+	* Resets only mutable planning state - graph structure is unchanged.
+	*
+	* This allows replanning the same query graph with different strategies.
+	*/
+	resetPlanningState() {
+		for (const j of this.joins) j.reset();
+		for (const fo of this.fanOuts) fo.reset();
+		for (const fi of this.fanIns) fi.reset();
+		for (const c of this.connections) c.reset();
+	}
+	/**
+	* Create and register a source (table) in the graph.
+	*/
+	addSource(name, model) {
+		assert(!this.#sources.has(name), `Source ${name} already exists in the graph`);
+		const source = new PlannerSource(name, model);
+		this.#sources.set(name, source);
+		return source;
+	}
+	/**
+	* Get a source by table name.
+	*/
+	getSource(name) {
+		const source = this.#sources.get(name);
+		assert(source !== void 0, `Source ${name} not found in the graph`);
+		return source;
+	}
+	/**
+	* Check if a source exists by table name.
+	*/
+	hasSource(name) {
+		return this.#sources.has(name);
+	}
+	/**
+	* Set the terminus (final output) node of the graph.
+	* Constraint propagation starts from this node.
+	*/
+	setTerminus(terminus) {
+		this.#terminus = terminus;
+	}
+	/**
+	* Initiate constraint propagation from the terminus node.
+	* This sends constraints up through the graph to update
+	* connection cost estimates.
+	*/
+	propagateConstraints(planDebugger) {
+		assert(this.#terminus !== void 0, "Cannot propagate constraints without a terminus node");
+		this.#terminus.propagateConstraints(planDebugger);
+	}
+	/**
+	* Calculate total cost of the current plan.
+	* Total cost includes both startup cost (one-time, e.g., sorting) and running cost.
+	*/
+	getTotalCost(planDebugger) {
+		const estimate = must(this.#terminus).estimateCost(planDebugger);
+		return estimate.cost + estimate.startupCost;
+	}
+	/**
+	* Capture a lightweight snapshot of the current planning state.
+	* Used for backtracking during multi-start greedy search.
+	*
+	* Captures mutable state including pinned flags, join types, and
+	* constraint maps to avoid needing repropagation on restore.
+	*
+	* @returns A snapshot that can be restored via restorePlanningSnapshot()
+	*/
+	capturePlanningSnapshot() {
+		return {
+			connections: this.connections.map((c) => ({ limit: c.limit })),
+			joins: this.joins.map((j) => ({ type: j.type })),
+			fanOuts: this.fanOuts.map((fo) => ({ type: fo.type })),
+			fanIns: this.fanIns.map((fi) => ({ type: fi.type })),
+			connectionConstraints: this.connections.map((c) => c.captureConstraints())
+		};
+	}
+	/**
+	* Restore planning state from a previously captured snapshot.
+	* Used for backtracking when a planning attempt fails.
+	*
+	* Restores pinned flags, join types, and constraint maps, eliminating
+	* the need for repropagation.
+	*
+	* @param state - Snapshot created by capturePlanningSnapshot()
+	*/
+	restorePlanningSnapshot(state) {
+		this.#validateSnapshotShape(state);
+		this.#restoreConnections(state);
+		this.#restoreJoins(state);
+		this.#restoreFanNodes(state);
+	}
+	/**
+	* Validate that snapshot shape matches current graph structure.
+	*/
+	#validateSnapshotShape(state) {
+		assert(this.connections.length === state.connections.length, "Plan state mismatch: connections");
+		assert(this.joins.length === state.joins.length, "Plan state mismatch: joins");
+		assert(this.fanOuts.length === state.fanOuts.length, "Plan state mismatch: fanOuts");
+		assert(this.fanIns.length === state.fanIns.length, "Plan state mismatch: fanIns");
+		assert(this.connections.length === state.connectionConstraints.length, "Plan state mismatch: connectionConstraints");
+	}
+	/**
+	* Restore connection pinned flags, limits, and constraint maps.
+	*/
+	#restoreConnections(state) {
+		for (let i = 0; i < this.connections.length; i++) {
+			this.connections[i].limit = state.connections[i].limit;
+			this.connections[i].restoreConstraints(state.connectionConstraints[i]);
+		}
+	}
+	/**
+	* Restore join types and pinned flags.
+	*/
+	#restoreJoins(state) {
+		for (let i = 0; i < this.joins.length; i++) {
+			const join = this.joins[i];
+			const targetState = state.joins[i];
+			join.reset();
+			if (targetState.type === "flipped" && join.type !== "flipped") join.flip();
+			assert(targetState.type === join.type, "join is not in the correct state after reset");
+		}
+	}
+	/**
+	* Restore FanOut and FanIn types.
+	*/
+	#restoreFanNodes(state) {
+		for (let i = 0; i < this.fanOuts.length; i++) {
+			const fo = this.fanOuts[i];
+			if (state.fanOuts[i].type === "UFO" && fo.type === "FO") fo.convertToUFO();
+		}
+		for (let i = 0; i < this.fanIns.length; i++) {
+			const fi = this.fanIns[i];
+			if (state.fanIns[i].type === "UFI" && fi.type === "FI") fi.convertToUFI();
+		}
+	}
+	/**
+	* Main planning algorithm using exhaustive join flip enumeration.
+	*
+	* Enumerates all possible flip patterns for flippable joins (2^n for n flippable joins).
+	* Each pattern represents a different query execution plan. We evaluate the cost of each
+	* plan and select the one with the lowest cost.
+	*
+	* Connections are used only for cost estimation - the flip patterns determine the plan.
+	* FanOut/FanIn states (FO/UFO and FI/UFI) are automatically derived from join flip states.
+	*
+	* @param planDebugger - Optional debugger to receive structured events during planning
+	* @param lc - Optional logger for warnings
+	*/
+	plan(planDebugger, lc) {
+		const flippableJoins = this.joins.filter((j) => j.isFlippable());
+		if (flippableJoins.length > MAX_FLIPPABLE_JOINS) {
+			lc?.warn?.(`Query has ${flippableJoins.length} EXISTS checks which would require ${2 ** flippableJoins.length} plan evaluations. Skipping optimization.`);
+			return;
+		}
+		const fofiCache = buildFOFICache(this);
+		const numPatterns = flippableJoins.length === 0 ? 0 : 2 ** flippableJoins.length;
+		let bestCost = Infinity;
+		let bestPlan = void 0;
+		let bestAttemptNumber = -1;
+		for (let pattern = 0; pattern < numPatterns; pattern++) {
+			this.resetPlanningState();
+			if (planDebugger) planDebugger.log({
+				type: "attempt-start",
+				attemptNumber: pattern,
+				totalAttempts: numPatterns
+			});
+			for (let i = 0; i < flippableJoins.length; i++) if (pattern & 1 << i) flippableJoins[i].flip();
+			checkAndConvertFOFI(fofiCache);
+			propagateUnlimitForFlippedJoins(this);
+			this.propagateConstraints(planDebugger);
+			if (planDebugger) planDebugger.log({
+				type: "constraints-propagated",
+				attemptNumber: pattern,
+				connectionConstraints: this.connections.map((c) => {
+					const constraintCosts = c.getConstraintCostsForDebug();
+					const constraintCostsWithoutFanout = {};
+					for (const [key, cost] of Object.entries(constraintCosts)) constraintCostsWithoutFanout[key] = omitFanout(cost);
+					return {
+						connection: c.name,
+						constraints: c.getConstraintsForDebug(),
+						constraintCosts: constraintCostsWithoutFanout
+					};
+				})
+			});
+			const totalCost = this.getTotalCost(planDebugger);
+			if (planDebugger) planDebugger.log({
+				type: "plan-complete",
+				attemptNumber: pattern,
+				totalCost,
+				flipPattern: pattern,
+				planSnapshot: this.capturePlanningSnapshot(),
+				joinStates: this.joins.map((j) => {
+					const info = j.getDebugInfo();
+					return {
+						join: info.name,
+						type: info.type
+					};
+				})
+			});
+			if (totalCost < bestCost) {
+				bestCost = totalCost;
+				bestPlan = this.capturePlanningSnapshot();
+				bestAttemptNumber = pattern;
+			}
+		}
+		if (bestPlan) {
+			this.restorePlanningSnapshot(bestPlan);
+			this.propagateConstraints(planDebugger);
+			if (planDebugger) planDebugger.log({
+				type: "best-plan-selected",
+				bestAttemptNumber,
+				totalCost: bestCost,
+				flipPattern: bestAttemptNumber,
+				joinStates: this.joins.map((j) => ({
+					join: j.getName(),
+					type: j.type
+				}))
+			});
+		} else assert(numPatterns === 0, "no plan was found but flippable joins did exist!");
+	}
+};
+/**
+* Build cache of FO→FI relationships and joins between them.
+* Called once at the start of planning to avoid redundant BFS traversals.
+*/
+function buildFOFICache(graph) {
+	const cache = /* @__PURE__ */ new Map();
+	for (const fo of graph.fanOuts) {
+		const info = findFIAndJoins(fo);
+		cache.set(fo, info);
+	}
+	return cache;
+}
+/**
+* Check if any joins downstream of a FanOut (before reaching FanIn) are flipped.
+* If so, convert the FO to UFO and the FI to UFI.
+*
+* This must be called after join flipping and before propagateConstraints.
+*/
+function checkAndConvertFOFI(fofiCache) {
+	for (const [fo, info] of fofiCache) {
+		const hasFlippedJoin = info.joinsBetween.some((j) => j.type === "flipped");
+		if (info.fi && hasFlippedJoin) {
+			fo.convertToUFO();
+			info.fi.convertToUFI();
+		}
+	}
+}
+/**
+* Traverse from a FanOut through its outputs to find the corresponding FanIn
+* and collect all joins along the way.
+*/
+function findFIAndJoins(fo) {
+	const joinsBetween = [];
+	let fi = void 0;
+	const queue = [...fo.outputs];
+	const visited = /* @__PURE__ */ new Set();
+	while (queue.length > 0) {
+		const node = must(queue.shift());
+		if (visited.has(node)) continue;
+		visited.add(node);
+		switch (node.kind) {
+			case "join":
+				joinsBetween.push(node);
+				queue.push(node.output);
+				break;
+			case "fan-out":
+				queue.push(...node.outputs);
+				break;
+			case "fan-in":
+				fi = node;
+				break;
+			case "connection": break;
+			case "terminus": break;
+		}
+	}
+	return {
+		fi,
+		joinsBetween
+	};
+}
+/**
+* Propagate unlimiting to all flipped joins in the graph.
+* When a join is flipped, its child becomes the outer loop and should no longer
+* be limited by EXISTS semantics.
+*
+* This must be called after join flipping and before propagateConstraints.
+*/
+function propagateUnlimitForFlippedJoins(graph) {
+	for (const join of graph.joins) if (join.type === "flipped") join.propagateUnlimit();
+}
+//#endregion
+export { PlannerGraph };
+
+//# sourceMappingURL=planner-graph.js.map

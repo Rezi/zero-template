@@ -1,0 +1,92 @@
+import { isMutator } from "../../../zql/src/mutate/mutator.js";
+import { isMutatorRegistry } from "../../../zql/src/mutate/mutator-registry.js";
+import { CRUD_MUTATION_NAME } from "../../../zero-protocol/src/mutation.js";
+import { Internal } from "./client-error-kind-enum.js";
+import { ClientError } from "./error.js";
+import { makeCRUDMutator } from "./crud.js";
+import { customMutatorKey } from "../../../zql/src/mutate/custom.js";
+import { TransactionImpl, makeReplicacheMutator as makeReplicacheMutator$1 } from "./custom.js";
+//#region ../zero-client/src/client/make-replicache-mutators.ts
+function extendReplicacheMutators(lc, context, mutators, schema, mutateObject) {
+	const processMutators = (mutators, path) => {
+		for (const [key, mutator] of Object.entries(mutators)) {
+			if (key === "~") continue;
+			path.push(key);
+			if (isMutator(mutator)) {
+				const fullKey = customMutatorKey(".", path);
+				mutateObject[fullKey] = makeReplicacheMutator(lc, mutator, schema, context);
+			} else if (typeof mutator === "function") {
+				const fullKey = customMutatorKey("|", path);
+				mutateObject[fullKey] = makeReplicacheMutator$1(lc, mutator, schema, context);
+			} else if (mutator !== null && typeof mutator === "object") processMutators(mutator, path);
+			path.pop();
+		}
+	};
+	processMutators(mutators, []);
+}
+function makeReplicacheMutator(lc, mutator, schema, context) {
+	return async (repTx, args) => {
+		const tx = new TransactionImpl(lc, repTx, schema);
+		await mutator.fn({
+			args,
+			ctx: context,
+			tx
+		});
+	};
+}
+/**
+* Creates Replicache mutators from mutator definitions.
+*
+* This function processes mutator definitions at arbitrary depth, supporting both
+* new-style mutator definitions and legacy custom mutator implementations. It creates
+* a mutator object with the CRUD mutator and any provided custom mutators, with keys
+* generated based on their path in the mutator definition hierarchy.
+*
+* @template S - The schema type that defines the structure of the data
+* @template C - The type of the context object passed to mutators
+*
+* @param schema - The schema instance used for validation and type checking
+* @param mutators - The mutator definitions to process, can be nested objects or custom mutator definitions
+* @param context - The context to be passed to mutators
+* @param lc - The log context used for logging operations
+*
+* @returns A mutator definitions object containing the CRUD mutator and any custom mutators
+*
+* @remarks
+* - New-style mutator definitions use '.' as a separator in their keys
+* - Legacy custom mutator implementations use '|' as a separator in their keys
+* - The CRUD mutator can be disabled by setting `enableLegacyMutators: false` in the schema
+*/
+function makeReplicacheMutators(schema, mutators, context, lc) {
+	const { enableLegacyMutators = false } = schema;
+	const replicacheMutators = { [CRUD_MUTATION_NAME]: enableLegacyMutators ? makeCRUDMutator(schema) : () => Promise.reject(new ClientError({
+		kind: Internal,
+		message: "Zero CRUD mutators are not enabled."
+	})) };
+	if (mutators) if (isMutatorRegistry(mutators)) extendFromMutatorRegistry(lc, context, mutators, schema, replicacheMutators);
+	else extendReplicacheMutators(lc, context, mutators, schema, replicacheMutators);
+	return replicacheMutators;
+}
+/**
+* Extends replicache mutators from a MutatorRegistry.
+* Walks the registry tree and wraps each Mutator.fn for Replicache.
+*/
+function extendFromMutatorRegistry(lc, context, registry, schema, mutateObject) {
+	const walk = (node) => {
+		if (typeof node !== "object" || node === null) return;
+		for (const value of Object.values(node)) if (isMutator(value)) mutateObject[value.mutatorName] = (repTx, args) => {
+			const tx = new TransactionImpl(lc, repTx, schema);
+			return value.fn({
+				args,
+				ctx: context,
+				tx
+			});
+		};
+		else if (typeof value === "object" && value !== null) walk(value);
+	};
+	walk(registry);
+}
+//#endregion
+export { makeReplicacheMutators };
+
+//# sourceMappingURL=make-replicache-mutators.js.map

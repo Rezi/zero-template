@@ -1,0 +1,32 @@
+//#region ../replicache/src/connection-loop-delegates.ts
+var ConnectionLoopDelegateImpl = class {
+	rep;
+	invokeSend;
+	maxConnections = 1;
+	constructor(rep, invokeSend) {
+		this.rep = rep;
+		this.invokeSend = invokeSend;
+	}
+	get maxDelayMs() {
+		return this.rep.requestOptions.maxDelayMs;
+	}
+	get minDelayMs() {
+		return this.rep.requestOptions.minDelayMs;
+	}
+};
+var PullDelegate = class extends ConnectionLoopDelegateImpl {
+	debounceDelay = 0;
+	get watchdogTimer() {
+		return this.rep.pullInterval;
+	}
+};
+var PushDelegate = class extends ConnectionLoopDelegateImpl {
+	get debounceDelay() {
+		return this.rep.pushDelay;
+	}
+	watchdogTimer = null;
+};
+//#endregion
+export { PullDelegate, PushDelegate };
+
+//# sourceMappingURL=connection-loop-delegates.js.map

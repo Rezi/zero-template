@@ -1,0 +1,21 @@
+import type { MaybePromise } from '../../shared/src/types.ts';
+import type { Schema } from '../../zero-types/src/schema.ts';
+import type { DBConnection } from '../../zql/src/mutate/custom.ts';
+import type { HumanReadable, Query, RunOptions } from '../../zql/src/query/query.ts';
+import { type TransactionImpl } from './custom.ts';
+import type { Database, TransactionProviderHooks, TransactionProviderInput } from './process-mutations.ts';
+/**
+ * Implements a Database for use with PushProcessor that is backed by Postgres.
+ *
+ * This implementation also implements the same ZQL interfaces for reading and
+ * writing data that the Zero client does, so that mutator functions can be
+ * shared across client and server.
+ */
+export declare class ZQLDatabase<TSchema extends Schema, TWrappedTransaction> implements Database<TransactionImpl<TSchema, TWrappedTransaction>> {
+    #private;
+    readonly connection: DBConnection<TWrappedTransaction>;
+    constructor(connection: DBConnection<TWrappedTransaction>, schema: TSchema);
+    transaction<R>(callback: (tx: TransactionImpl<TSchema, TWrappedTransaction>, transactionHooks: TransactionProviderHooks) => MaybePromise<R>, transactionInput?: TransactionProviderInput): Promise<R>;
+    run<TTable extends keyof TSchema['tables'] & string, TReturn>(query: Query<TTable, TSchema, TReturn>, options?: RunOptions): Promise<HumanReadable<TReturn>>;
+}
+//# sourceMappingURL=zql-database.d.ts.map

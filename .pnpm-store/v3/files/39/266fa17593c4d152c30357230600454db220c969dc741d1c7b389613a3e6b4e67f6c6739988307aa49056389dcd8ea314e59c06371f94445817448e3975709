@@ -1,0 +1,22 @@
+import type { SQLQuery } from '@databases/sql';
+import sql from '@databases/sql';
+import type { ServerColumnSchema } from '../../zero-types/src/server-schema.ts';
+export declare function formatPg(sql: SQLQuery): {
+    text: string;
+    values: unknown[];
+};
+export declare function formatPgInternalConvert(sql: SQLQuery): {
+    text: string;
+    values: unknown[];
+};
+export declare function formatSqlite(sql: SQLQuery): {
+    text: string;
+    values: unknown[];
+};
+export type LiteralType = 'boolean' | 'number' | 'string' | 'null';
+export type PluralLiteralType = Exclude<LiteralType, 'null'>;
+export declare function sqlConvertSingularLiteralArg(value: string | boolean | number | null): SQLQuery;
+export declare function sqlConvertPluralLiteralArg(type: PluralLiteralType, value: PluralLiteralType[]): SQLQuery;
+export declare function sqlConvertColumnArg(serverColumnSchema: ServerColumnSchema, value: unknown, plural: boolean, isComparison: boolean): SQLQuery;
+export { sql };
+//# sourceMappingURL=sql.d.ts.map

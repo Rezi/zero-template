@@ -1,0 +1,162 @@
+import { upstreamSchema } from "../../../types/shards.js";
+import { isPostgresError } from "../../../types/pg.js";
+import { toStateVersionString } from "./lsn.js";
+import { runTx } from "../../../db/run-transaction.js";
+import { createReplica, replicationSlotExpression, replicationSlotPrefix } from "./schema/shard.js";
+import { orTimeout } from "../../../types/timeout.js";
+import { PG_CONFIGURATION_LIMIT_EXCEEDED, PG_INSUFFICIENT_PRIVILEGE } from "@drdgvhbh/postgres-error-codes";
+//#region ../zero-cache/src/services/change-source/pg/replication-slots.ts
+var CREATE_REPLICATION_SLOT_TIMEOUT_MS = 3e4;
+var SERVER_LOCK_TIMEOUT_MS = CREATE_REPLICATION_SLOT_TIMEOUT_MS - 1e3;
+async function createReplicationSlot(lc, session, { slotName, failover, lockTimeout = SERVER_LOCK_TIMEOUT_MS }) {
+	await session.unsafe(`SET lock_timeout = ${lockTimeout}`);
+	const raced = await orTimeout(failover ? session.unsafe(`CREATE_REPLICATION_SLOT "${slotName}" LOGICAL pgoutput (FAILOVER)`) : session.unsafe(`CREATE_REPLICATION_SLOT "${slotName}" LOGICAL pgoutput`), CREATE_REPLICATION_SLOT_TIMEOUT_MS);
+	if (raced === "timed-out") {
+		session.end().catch((e) => lc.warn?.(`Error closing timed out replication slot session`, e));
+		throw new Error(`Timed out after ${CREATE_REPLICATION_SLOT_TIMEOUT_MS} ms creating replication slot ${slotName}. Crashing to force a clean restart.`);
+	}
+	const [slot] = raced;
+	lc.info?.(`Created replication slot ${slotName}`, slot);
+	return slot;
+}
+/**
+* Replica and slot creation involves two sessions for proper coordination
+* with other replica management logic:
+*
+* * A normal transaction is started and acquires an advisory lock for
+*   replica slot management. This is the same lock that cleanup logic
+*   acquires before cleaning up replication slots.
+* * With the lock held, a new replication slot is created in a
+*   replication session. The API of CREATE_REPLICATION_SLOT is such
+*   that it cannot be done in a transaction, and cannot be followed by
+*   any writes, or else its snapshot (which is needed for initial sync)
+*   would be invalidated.
+* * Once the slot is created, the slot and replica information are recorded
+*   in the `replicas` table before releasing the lock.
+*
+* This locking ensures that:
+* 1. multiple replication managers attempting to create a replication slot
+*    will not use the same name for the replication slot (which is selected
+*    from a pool of reused names).
+* 2. Running replication managers (which use an earlier replica of a lower
+*    rank) will not delete the new slot during their cleanup logic, since
+*    the slot will belong to a replica of a higher rank.
+*/
+async function createReplicaAndSlot(lc, sql, replicationSession, shard, replicaID, failover) {
+	const lockName = replicationSlotManagementLock(shard);
+	const slotPoolPrefix = replicationSlotPrefix(shard);
+	for (let first = true;; first = false) {
+		await dropUnclaimedSlots(lc, sql, shard);
+		try {
+			return await runTx(sql, async (tx) => {
+				await tx`SELECT pg_advisory_xact_lock(hashtext(${lockName}))`;
+				let slotName;
+				const names = await tx`
+          SELECT slot_name as name FROM pg_replication_slots
+            WHERE slot_name LIKE ${slotPoolPrefix + "%"};
+        `.values();
+				const inUse = new Set(names.flat());
+				for (let next = 0;; next++) {
+					const candidateName = `${slotPoolPrefix}${slotPoolSuffix(next)}`;
+					if (!inUse.has(candidateName)) {
+						slotName = candidateName;
+						break;
+					}
+				}
+				const slot = await createReplicationSlot(lc, replicationSession, {
+					slotName,
+					failover
+				});
+				await createReplica(tx, shard, replicaID, slot.slot_name, toStateVersionString(slot.consistent_point));
+				return slot;
+			});
+		} catch (e) {
+			if (first && isPostgresError(e, PG_INSUFFICIENT_PRIVILEGE)) {
+				await sql`ALTER ROLE current_user WITH REPLICATION`;
+				lc.info?.(`Added the REPLICATION role to database user`);
+				continue;
+			}
+			if (first && isPostgresError(e, PG_CONFIGURATION_LIMIT_EXCEEDED)) {
+				lc.warn?.(`Reached max replication slots. Attempting to clean up unused slots`, e);
+				await sql`
+          DELETE FROM ${sql(`${upstreamSchema(shard)}.replicas`)} USING pg_replication_slots slots
+            WHERE replicas.slot = slots.slot_name AND NOT slots.active`;
+				continue;
+			}
+			throw e;
+		}
+	}
+}
+/**
+* Deletes "old" replicas (i.e. those with a lower rank than the current)
+* and attempts to drop replication slots that are not associated with any
+* replica.
+*
+* If a slot could not be dropped because there is still an active subscriber,
+* it will be reflected in the `draining` count that is returned. When there
+* are draining slots, the method should be retried until all orphaned slots
+* have been dropped.
+*/
+async function dropOldReplicasAndSlots(lc, sql, shard, beforeRank) {
+	const replicasTable = `${upstreamSchema(shard)}.replicas`;
+	const oldReplicas = await sql`
+    SELECT id, rank::float8, slot, version, "initialSyncContext", "subscriberContext"
+     FROM ${sql(replicasTable)} WHERE rank < ${beforeRank};
+  `;
+	if (oldReplicas.length) {
+		lc.info?.(`Deleting ${oldReplicas.length} old replica(s)`, { oldReplicas });
+		await sql`DELETE FROM ${sql(replicasTable)} WHERE rank < ${beforeRank}`;
+	}
+	return dropUnclaimedSlots(lc, sql, shard);
+}
+function dropUnclaimedSlots(lc, sql, shard) {
+	const lockName = replicationSlotManagementLock(shard);
+	const slotExpression = replicationSlotExpression(shard);
+	const replicasTable = `${upstreamSchema(shard)}.replicas`;
+	return runTx(sql, async (tx) => {
+		await tx`SELECT pg_advisory_xact_lock(hashtext(${lockName}))`;
+		const dropped = await tx`
+      SELECT slot_name as slot, pg_drop_replication_slot(slot_name) 
+        FROM pg_replication_slots
+        LEFT JOIN ${tx(replicasTable)} replica on slot_name = slot
+        WHERE slot_name LIKE ${slotExpression} 
+          AND NOT active
+          AND replica.id IS NULL;
+    `;
+		if (dropped.length) lc.info?.(`dropped inactive replication slots`, { dropped });
+		const remaining = await tx`
+      SELECT slot_name as slot, active_pid as pid, replica.id as id
+        FROM pg_replication_slots
+        LEFT JOIN ${tx(replicasTable)} replica on slot_name = slot
+        WHERE slot_name LIKE ${slotExpression};
+    `;
+		if (remaining.length) lc.info?.(`remaining replication slots`, { remaining });
+		let active = 0;
+		let draining = 0;
+		for (const { id } of remaining) if (id === null) draining++;
+		else active++;
+		return {
+			dropped: dropped.length,
+			active,
+			draining
+		};
+	});
+}
+var ALPHABET = "abcdefghijklmnopqrstuvwxyz";
+function slotPoolSuffix(n) {
+	n++;
+	let suffix = "";
+	while (n > 0) {
+		n--;
+		suffix = ALPHABET[n % 26] + suffix;
+		n = Math.floor(n / 26);
+	}
+	return suffix;
+}
+function replicationSlotManagementLock(shard) {
+	return `replication-slot-management:${shard.appID}_${shard.shardNum}`;
+}
+//#endregion
+export { createReplicaAndSlot, createReplicationSlot, dropOldReplicasAndSlots };
+
+//# sourceMappingURL=replication-slots.js.map

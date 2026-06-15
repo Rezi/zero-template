@@ -1,0 +1,6 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { PostgresDB } from '../../../types/pg.ts';
+import { type ShardID } from '../../../types/shards.ts';
+export declare function initChangeStreamerSchema(log: LogContext, db: PostgresDB, shard: ShardID): Promise<void>;
+export declare function getLastWatermarkV2(db: PostgresDB, shard: ShardID): Promise<string>;
+//# sourceMappingURL=init.d.ts.map

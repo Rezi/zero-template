@@ -1,0 +1,34 @@
+import { readonlyArray, valita_exports } from "../../shared/src/valita.js";
+import { jsonSchema } from "../../shared/src/json-schema.js";
+import { astSchema } from "./ast.js";
+//#region ../zero-protocol/src/inspect-up.ts
+var inspectUpBase = valita_exports.object({ id: valita_exports.string() });
+var inspectQueriesUpBodySchema = inspectUpBase.extend({
+	op: valita_exports.literal("queries"),
+	clientID: valita_exports.string().optional()
+});
+var inspectMetricsUpSchema = inspectUpBase.extend({ op: valita_exports.literal("metrics") });
+var inspectVersionUpSchema = inspectUpBase.extend({ op: valita_exports.literal("version") });
+var inspectAuthenticateUpSchema = inspectUpBase.extend({
+	op: valita_exports.literal("authenticate"),
+	value: valita_exports.string()
+});
+var analyzeQueryOptionsSchema = valita_exports.object({
+	vendedRows: valita_exports.boolean().optional(),
+	syncedRows: valita_exports.boolean().optional(),
+	joinPlans: valita_exports.boolean().optional()
+});
+var inspectAnalyzeQueryUpSchema = inspectUpBase.extend({
+	op: valita_exports.literal("analyze-query"),
+	value: astSchema.optional(),
+	options: analyzeQueryOptionsSchema.optional(),
+	ast: astSchema.optional(),
+	name: valita_exports.string().optional(),
+	args: readonlyArray(jsonSchema).optional()
+});
+var inspectUpBodySchema = valita_exports.union(inspectQueriesUpBodySchema, inspectMetricsUpSchema, inspectVersionUpSchema, inspectAuthenticateUpSchema, inspectAnalyzeQueryUpSchema);
+var inspectUpMessageSchema = valita_exports.tuple([valita_exports.literal("inspect"), inspectUpBodySchema]);
+//#endregion
+export { inspectUpMessageSchema };
+
+//# sourceMappingURL=inspect-up.js.map

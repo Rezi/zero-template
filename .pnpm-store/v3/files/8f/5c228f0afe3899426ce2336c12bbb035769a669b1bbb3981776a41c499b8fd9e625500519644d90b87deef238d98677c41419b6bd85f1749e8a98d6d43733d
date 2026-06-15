@@ -1,0 +1,9 @@
+export declare const ChunkData = 0;
+export declare const ChunkMeta = 1;
+export declare const ChunkRefCount = 2;
+export declare const Head = 3;
+export type ChunkData = typeof ChunkData;
+export type ChunkMeta = typeof ChunkMeta;
+export type ChunkRefCount = typeof ChunkRefCount;
+export type Head = typeof Head;
+//# sourceMappingURL=key-type-enum.d.ts.map

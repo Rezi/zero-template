@@ -1,0 +1,48 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { NoIndexDiff } from '../../../replicache/src/btree/node.ts';
+import type { Hash } from '../../../replicache/src/hash.ts';
+import type { AST } from '../../../zero-protocol/src/ast.ts';
+import type { DebugDelegate } from '../../../zql/src/builder/debug-delegate.ts';
+import type { Input } from '../../../zql/src/ivm/operator.ts';
+import type { Source, SourceInput } from '../../../zql/src/ivm/source.ts';
+import type { MetricsDelegate } from '../../../zql/src/query/metrics-delegate.ts';
+import { QueryDelegateBase } from '../../../zql/src/query/query-delegate-base.ts';
+import type { CommitListener } from '../../../zql/src/query/query-delegate.ts';
+import type { RunOptions } from '../../../zql/src/query/query.ts';
+import { type IVMSourceBranch } from './ivm-branch.ts';
+import type { QueryManager } from './query-manager.ts';
+export type AddQuery = QueryManager['addLegacy'];
+export type AddCustomQuery = QueryManager['addCustom'];
+export type UpdateQuery = QueryManager['updateLegacy'];
+export type UpdateCustomQuery = QueryManager['updateCustom'];
+export type FlushQueryChanges = QueryManager['flushBatch'];
+/**
+ * ZeroContext glues together zql and Replicache. It listens to changes in
+ * Replicache data and pushes them into IVM and on tells the server about new
+ * queries.
+ */
+export declare class ZeroContext extends QueryDelegateBase {
+    #private;
+    readonly addServerQuery: AddQuery;
+    readonly addCustomQuery: AddCustomQuery;
+    readonly updateServerQuery: UpdateQuery;
+    readonly updateCustomQuery: UpdateCustomQuery;
+    readonly flushQueryChanges: () => void;
+    readonly assertValidRunOptions: (options?: RunOptions) => void;
+    /**
+     * Client-side queries start out as "unknown" and are then updated to
+     * "complete" once the server has sent back the query result.
+     */
+    readonly defaultQueryComplete = false;
+    readonly addMetric: MetricsDelegate['addMetric'];
+    constructor(lc: LogContext, mainSources: IVMSourceBranch, addQuery: AddQuery, addCustomQuery: AddCustomQuery, updateQuery: UpdateQuery, updateCustomQuery: UpdateCustomQuery, flushQueryChanges: () => void, batchViewUpdates: (applyViewUpdates: () => void) => void, addMetric: MetricsDelegate['addMetric'], assertValidRunOptions: (options?: RunOptions) => void);
+    applyFiltersAnyway?: boolean | undefined;
+    debug?: DebugDelegate | undefined;
+    getSource(name: string): Source | undefined;
+    mapAst(ast: AST): AST;
+    decorateSourceInput(input: SourceInput, queryID: string): Input;
+    onTransactionCommit(cb: CommitListener): () => void;
+    batchViewUpdates<T>(applyViewUpdates: () => T): T;
+    processChanges(expectedHead: Hash | undefined, newHead: Hash, changes: NoIndexDiff): void;
+}
+//# sourceMappingURL=context.d.ts.map

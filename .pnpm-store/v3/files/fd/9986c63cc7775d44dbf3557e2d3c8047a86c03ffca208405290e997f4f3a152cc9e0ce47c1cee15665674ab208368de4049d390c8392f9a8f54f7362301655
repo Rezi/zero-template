@@ -1,0 +1,50 @@
+import { elide } from "./strings.js";
+//#region ../zero-cache/src/types/ws.ts
+var PROTOCOL_ERROR = 1002;
+var INTERNAL_ERROR = 1011;
+function closeWithError(lc, ws, err, code = INTERNAL_ERROR) {
+	const endpoint = ws.url ?? "client";
+	const errMsg = String(err);
+	lc.warn?.(`closing connection to ${endpoint} with error`, errMsg);
+	ws.close(code, elide(errMsg, 123));
+}
+function sendPingsForLiveness(lc, ws, intervalMs) {
+	let gotLivenessSignal = true;
+	let livenessTimer;
+	function startHeartBeats() {
+		livenessTimer = setInterval(() => {
+			if (!gotLivenessSignal) {
+				lc.warn?.(`socket@${ws.url} did not respond to heartbeat. Terminating...`);
+				ws.terminate();
+				return;
+			}
+			gotLivenessSignal = false;
+			ws.ping();
+		}, intervalMs);
+	}
+	if (ws.readyState === ws.CONNECTING) ws.once("open", () => startHeartBeats());
+	else if (ws.readyState === ws.OPEN) startHeartBeats();
+	const signalAlive = () => gotLivenessSignal = true;
+	ws.on("pong", signalAlive);
+	ws.on("message", signalAlive);
+	ws.once("close", () => clearInterval(livenessTimer));
+}
+function expectPingsForLiveness(lc, ws, intervalMs, timeoutBufferMs = 3e3) {
+	let gotLivenessSignal = false;
+	const livenessTimer = setInterval(() => {
+		if (!gotLivenessSignal) {
+			lc.warn?.(`socket@${ws.url} did not send heartbeat or messages. Terminating...`);
+			ws.terminate();
+			return;
+		}
+		gotLivenessSignal = false;
+	}, intervalMs + timeoutBufferMs);
+	const signalAlive = () => gotLivenessSignal = true;
+	ws.on("ping", signalAlive);
+	ws.on("message", signalAlive);
+	ws.once("close", () => clearTimeout(livenessTimer));
+}
+//#endregion
+export { PROTOCOL_ERROR, closeWithError, expectPingsForLiveness, sendPingsForLiveness };
+
+//# sourceMappingURL=ws.js.map

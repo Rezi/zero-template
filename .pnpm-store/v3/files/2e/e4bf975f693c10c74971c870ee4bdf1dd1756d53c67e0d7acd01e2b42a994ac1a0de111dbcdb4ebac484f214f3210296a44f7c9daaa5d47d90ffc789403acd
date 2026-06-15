@@ -1,0 +1,11 @@
+//#region ../zql/src/error.ts
+var NotImplementedError = class extends Error {
+	constructor(message) {
+		super(message);
+		this.name = "NotImplementedError";
+	}
+};
+//#endregion
+export { NotImplementedError };
+
+//# sourceMappingURL=error.js.map

@@ -1,0 +1,158 @@
+import { assert } from "../../../../shared/src/asserts.js";
+import { must } from "../../../../shared/src/must.js";
+import { BigIntJSON } from "../../../../shared/src/bigint-json.js";
+import { max } from "../../types/lexi-version.js";
+import "./change-streamer.js";
+//#region ../zero-cache/src/services/change-streamer/subscriber.ts
+/**
+* Encapsulates a subscriber to changes. All subscribers start in a
+* "catchup" phase in which changes are buffered in a backlog while the
+* storer is queried to send any changes that were committed since the
+* subscriber's watermark. Once the catchup is complete, calls to
+* {@link send()} result in immediately sending the change.
+*/
+var Subscriber = class {
+	#protocolVersion;
+	id;
+	#downstream;
+	#latestStatus;
+	#watermark;
+	#acked;
+	#backlog;
+	constructor(protocolVersion, id, watermark, downstream, latestStatus) {
+		this.#protocolVersion = protocolVersion;
+		this.id = id;
+		this.#downstream = downstream;
+		this.#latestStatus = latestStatus;
+		this.#watermark = watermark;
+		this.#acked = watermark;
+		this.#backlog = [];
+	}
+	get watermark() {
+		return this.#watermark;
+	}
+	get acked() {
+		return this.#acked;
+	}
+	async send(change) {
+		const [watermark] = change;
+		if (watermark > this.#watermark) if (this.#backlog) this.#backlog.push(change);
+		else await this.#sendChange(change);
+	}
+	#initialized = false;
+	/**
+	* Called once the subscriber's watermark has been validated in the initial
+	* catchup process.
+	*/
+	#initialize() {
+		if (!this.#initialized) {
+			this.#initialized = true;
+			this.sendStatus(this.#latestStatus());
+		}
+	}
+	sendStatus(status) {
+		if (this.#protocolVersion >= 2 && this.#initialized) this.#sendDownstream(["status", status]);
+	}
+	/** catchup() is called on ChangeEntries loaded from the store. */
+	async catchup(change) {
+		this.#initialize();
+		await this.#sendChange(change);
+	}
+	/**
+	* Marks the Subscribe as "caught up" and flushes any backlog of
+	* entries that were received during the catchup.
+	*/
+	setCaughtUp() {
+		this.#initialize();
+		assert(this.#backlog, "setCaughtUp() called but subscriber is not in catchup mode");
+		for (const change of this.#backlog) this.#sendChange(change);
+		this.#backlog = null;
+	}
+	async #sendChange(change) {
+		const [watermark, tag, json] = change;
+		if (watermark <= this.watermark) return;
+		if (!this.supportsMessage(tag)) return;
+		if (tag === "commit") this.#watermark = watermark;
+		const result = await this.#sendStringifiedDownstream(json);
+		if (tag === "commit" && result === "consumed") this.#acked = max(this.#acked, watermark);
+	}
+	#sendDownstream(downstream) {
+		return this.#sendStringifiedDownstream(BigIntJSON.stringify(downstream));
+	}
+	async #sendStringifiedDownstream(json) {
+		this.#pending++;
+		const { result } = this.#downstream.push(json);
+		try {
+			return await result;
+		} finally {
+			this.#pending--;
+			this.#processed++;
+		}
+	}
+	#pending = 0;
+	#processed = 0;
+	#samples = [{
+		processed: 0,
+		timestamp: performance.now()
+	}];
+	/**
+	* The number of downstream messages that have yet to be acked.
+	*/
+	get numPending() {
+		return this.#pending;
+	}
+	/**
+	* The total number of downstream messages that the subscriber has
+	* processed (i.e. acked).
+	*/
+	get numProcessed() {
+		return this.#processed;
+	}
+	/**
+	* Records a new history entry for the number of messages processed,
+	* keeping the number of samples bounded to `maxSamples`.
+	*/
+	sampleProcessRate(now, maxSamples = 10) {
+		while (this.#samples.length >= maxSamples) this.#samples.shift();
+		this.#samples.push({
+			processed: this.#processed,
+			timestamp: now
+		});
+		return this;
+	}
+	getStats() {
+		const pending = this.#pending;
+		if (this.#samples.length < 2) return {
+			processRate: 0,
+			pending
+		};
+		const from = this.#samples[0];
+		const to = must(this.#samples.at(-1));
+		const processed = to.processed - from.processed;
+		const seconds = (to.timestamp - from.timestamp) / 1e3;
+		return {
+			processRate: seconds === 0 ? 0 : processed / seconds,
+			pending
+		};
+	}
+	supportsMessage(tag) {
+		switch (tag) {
+			case "update-table-metadata": return this.#protocolVersion >= 5;
+		}
+		return true;
+	}
+	fail(err) {
+		this.close(0, String(err));
+	}
+	close(error, message) {
+		if (error) this.#sendDownstream(["error", {
+			type: error,
+			message
+		}]).finally(() => this.#downstream.cancel());
+		else this.#downstream.cancel();
+	}
+};
+//#endregion
+export { Subscriber };
+
+//# sourceMappingURL=subscriber.js.map

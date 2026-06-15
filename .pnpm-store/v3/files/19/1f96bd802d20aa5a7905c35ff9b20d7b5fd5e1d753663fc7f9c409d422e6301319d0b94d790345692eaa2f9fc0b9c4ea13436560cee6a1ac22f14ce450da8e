@@ -1,0 +1,50 @@
+import type { ClientGroupID, ClientID } from '../../../replicache/src/sync/ids.ts';
+/**
+ * A class that lists the active clients in a client group. It uses the
+ * `navigator.locks` API to manage locks for each client. The class is designed
+ * to be used in a browser environment where the `navigator.locks` API is
+ * available.
+ *
+ * When navigator.locks is not available, it will return a set only containing
+ * the clients in the current scripting context (window, worker, etc).
+ *
+ * It uses one exclusive lock per client, identified by a combination of
+ * `clientGroupID` and `clientID`. Then the `query` method is used to get the
+ * list of all clients that hold or are waiting for locks in the same client
+ * group.
+ *
+ * It also tries to get a shared lock for each client in the group, so that it
+ * can be notified when the exclusive lock is released. This allows the class to
+ * keep track of the active clients in the group and notify when an existing
+ * client is removed.
+ *
+ * The class also uses a `BroadcastChannel` to notify other clients in the
+ * same client group when a new client is added. This allows the class to keep
+ * track of the active clients in the group and notify when a new client is
+ * added.
+ */
+export declare class ActiveClientsManager {
+    #private;
+    readonly clientGroupID: string;
+    readonly clientID: string;
+    /**
+     * A callback that is called when a client is added to the client group.
+     * It receives the client ID of the added client.
+     */
+    onAdd: ((clientID: string) => void) | undefined;
+    /**
+     * A callback that is called when a client is deleted from the client group.
+     * It receives the client ID of the deleted client.
+     */
+    onDelete: ((clientID: ClientID, clientGroupID: ClientGroupID) => void) | undefined;
+    /**
+     * Creates an instance of `ActiveClientsManager` for the specified client
+     * group and client ID. It will return a promise that resolves when the
+     * instance is ready to use, which means that it has successfully acquired the
+     * exclusive lock for the client and has retrieved the list of active clients.
+     */
+    static create(clientGroupID: string, clientID: string, signal: AbortSignal): Promise<ActiveClientsManager>;
+    private constructor();
+    get activeClients(): ReadonlySet<string>;
+}
+//# sourceMappingURL=active-clients-manager.d.ts.map

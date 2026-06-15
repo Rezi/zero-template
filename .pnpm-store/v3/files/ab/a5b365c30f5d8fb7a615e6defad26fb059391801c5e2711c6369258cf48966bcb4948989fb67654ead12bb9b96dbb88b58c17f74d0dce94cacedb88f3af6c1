@@ -1,0 +1,17 @@
+import type { SchemaValue } from '../../zero-types/src/schema-value.ts';
+import type { ConnectionCostModel } from '../../zql/src/planner/planner-connection.ts';
+import type { Database } from './db.ts';
+/**
+ * Creates a SQLite-based cost model for query planning.
+ * Uses SQLite's scanstatus API to estimate query costs based on the actual
+ * SQLite query planner's analysis.
+ *
+ * @param db Database instance for preparing statements
+ * @param tableSpecs Map of table names to their table specs with ZQL schemas
+ * @returns ConnectionCostModel function for use with the planner
+ */
+export declare function createSQLiteCostModel(db: Database, tableSpecs: Map<string, {
+    zqlSpec: Record<string, SchemaValue>;
+}>): ConnectionCostModel;
+export declare function btreeCost(rows: number): number;
+//# sourceMappingURL=sqlite-cost-model.d.ts.map

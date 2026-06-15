@@ -1,0 +1,3 @@
+declare const bc: typeof BroadcastChannel;
+export { bc as BroadcastChannel };
+//# sourceMappingURL=broadcast-channel.d.ts.map

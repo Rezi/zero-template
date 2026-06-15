@@ -1,0 +1,40 @@
+import { NameMapper } from "../../zero-types/src/name-mapper.js";
+//#region ../zero-schema/src/name-mapper.ts
+function clientToServer(tables) {
+	return createMapperFrom("client", tables);
+}
+function serverToClient(tables) {
+	return createMapperFrom("server", tables);
+}
+function createMapperFrom(src, tables) {
+	return new NameMapper(new Map(Object.entries(tables).map(([tableName, { serverName: serverTableName, columns }]) => {
+		let allColumnsSame = true;
+		const names = {};
+		for (const [name, { serverName }] of Object.entries(columns)) {
+			if (serverName && serverName !== name) allColumnsSame = false;
+			if (src === "client") names[name] = serverName ?? name;
+			else names[serverName ?? name] = name;
+		}
+		return [src === "client" ? tableName : serverTableName ?? tableName, {
+			tableName: src === "client" ? serverTableName ?? tableName : tableName,
+			columns: names,
+			allColumnsSame
+		}];
+	})));
+}
+/**
+* Returns an "identity" NameMapper that simply serves the purpose
+* of validating that all table and column names conform to the
+* specified `tablesToColumns` map.
+*/
+function validator(tablesToColumns) {
+	return new NameMapper(new Map(Array.from(tablesToColumns.entries(), ([tableName, columns]) => [tableName, {
+		tableName,
+		columns: Object.fromEntries(columns.map((c) => [c, c])),
+		allColumnsSame: true
+	}])));
+}
+//#endregion
+export { clientToServer, serverToClient, validator };
+
+//# sourceMappingURL=name-mapper.js.map

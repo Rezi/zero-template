@@ -1,0 +1,182 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { InitConnectionBody } from '../../../../zero-protocol/src/connect.ts';
+import type { UpdateAuthBody } from '../../../../zero-protocol/src/update-auth.ts';
+import { type Auth, type ValidateLegacyJWT } from '../../auth/auth.ts';
+import type { ZeroConfig } from '../../config/zero-config.ts';
+import type { ConnectParams } from '../../workers/connect-params.ts';
+export type ConnectionState = 'provisional' | 'validated';
+/**
+ * Normalized user identity shared by live connection state and group auth state.
+ * `id: null` means logged out.
+ */
+export type UserState = {
+    readonly id: string | null;
+};
+/**
+ * Delineates the two paths for validating a connection: either server can validate
+ * the user's identity and return a definitive userID to trust, or we fall back to
+ * trusting the one provided by the client in the incoming query params.
+ */
+export type ConnectionValidation = {
+    kind: 'client-fallback';
+} | {
+    kind: 'server-validated';
+    validatedUserID: string | null;
+};
+/**
+ * Identifies one live websocket for a client slot.
+ */
+export type ConnectionSelector = {
+    readonly clientID: string;
+    readonly wsID: string;
+};
+type FetchConfig = ZeroConfig['query'];
+export type HeaderOptions = {
+    readonly apiKey?: string | undefined;
+    readonly customHeaders?: Readonly<Record<string, string>> | undefined;
+    readonly allowedClientHeaders?: readonly string[] | undefined;
+    readonly cookie?: string | undefined;
+    readonly origin?: string | undefined;
+};
+export type ConnectionFetchContext = {
+    readonly url: string | undefined;
+    readonly allowedUrlPatterns: readonly URLPattern[] | undefined;
+    readonly headerOptions: HeaderOptions;
+};
+/**
+ * A snapshot of one live connection tracked by the manager.
+ *
+ * `revalidateAt` is only populated while the connection is `validated`.
+ */
+export type ConnectionContext = {
+    readonly state: ConnectionState;
+    readonly clientID: string;
+    readonly wsID: string;
+    readonly user: UserState;
+    readonly auth: Auth | undefined;
+    readonly profileID: string | null;
+    readonly baseCookie: string | null;
+    readonly protocolVersion: number;
+    readonly revision: number;
+    readonly revalidateAt: number | undefined;
+    readonly insertionOrder: number;
+    readonly queryContext: ConnectionFetchContext;
+    readonly mutateContext: ConnectionFetchContext;
+};
+/**
+ * Group-scoped auth state shared across the live connections.
+ *
+ * The background connection is the validated connection currently used for
+ * shared background work. Retransform happens on a group level, and uses
+ * the background connection's credential to refetch the latest queries.
+ */
+export type GroupAuthState = {
+    readonly pinnedUser: UserState | undefined;
+    readonly backgroundConnection: ConnectionSelector | undefined;
+    readonly retransformAt: number | undefined;
+    readonly maintenanceNotBeforeAt: number | undefined;
+};
+export type ConnectionContextManager = {
+    registerConnection(selector: ConnectionSelector, connectParams: ConnectParams, auth?: Auth): Readonly<ConnectionContext>;
+    initConnection(selector: ConnectionSelector, body: InitConnectionBody): Readonly<ConnectionContext>;
+    updateAuth(selector: ConnectionSelector, body: UpdateAuthBody): Promise<Readonly<ConnectionContext>>;
+    validateConnection(selector: ConnectionSelector, revision: number, validation: ConnectionValidation): Readonly<{
+        connection: ConnectionContext;
+        group: GroupAuthState;
+    }> | undefined;
+    failConnection(selector: ConnectionSelector, revision: number): Readonly<ConnectionContext> | undefined;
+    closeConnection(selector: ConnectionSelector): Readonly<ConnectionContext> | undefined;
+    markBackgroundRetransformSuccess(selector: ConnectionSelector, revision: number): void;
+    setSharedRetransformReady(ready: boolean): void;
+    deferMaintenance(kind: 'revalidate' | 'retransform'): void;
+    getConnectionContext(selector: ConnectionSelector): Readonly<ConnectionContext> | undefined;
+    mustGetConnectionContext(selector: ConnectionSelector): Readonly<ConnectionContext>;
+    getBackgroundConnectionContext(): Readonly<ConnectionContext> | undefined;
+    mustGetBackgroundConnectionContext(): Readonly<ConnectionContext>;
+    getGroupState(): Readonly<GroupAuthState>;
+    planMaintenance(): {
+        dueRevalidations: Readonly<ConnectionContext>[];
+        dueRetransform: boolean;
+        earliestDeadlineAt: number | undefined;
+    };
+};
+/**
+ * State machine for the auth state of a single `ViewSyncerService`.
+ *
+ * Connections are registered as `provisional`, optionally backfilled with
+ * `initConnection` metadata, and then promoted to `validated` once their
+ * effective `userID` is confirmed as valid. The manager also tracks which
+ * validated connection currently serves as the group's background connection.
+ */
+export declare class ConnectionContextManagerImpl implements ConnectionContextManager {
+    #private;
+    constructor(lc: LogContext, revalidateIntervalSeconds?: number, retransformIntervalSeconds?: number, queryConfig?: FetchConfig, pushConfig?: FetchConfig, validateLegacyJWT?: ValidateLegacyJWT, now?: () => number);
+    /**
+     * Creates or replaces the live record for a websocket connection.
+     *
+     * Re-registering the same `clientID` drops the old socket record and starts
+     * the replacement back in `provisional` state.
+     */
+    registerConnection(selector: ConnectionSelector, connectParams: ConnectParams, auth?: Auth): Readonly<ConnectionContext>;
+    /**
+     * Backfills `initConnection` data for sockets that were registered before the
+     * client could send its full init payload.
+     *
+     * This updates metadata only; it does not validate the connection.
+     */
+    initConnection(selector: ConnectionSelector, body: InitConnectionBody): Readonly<ConnectionContext>;
+    /**
+     * A material auth change demotes the connection back to provisional until it
+     * is validated again.
+     */
+    updateAuth(selector: ConnectionSelector, body: UpdateAuthBody): Promise<Readonly<ConnectionContext>>;
+    /**
+     * Validates one connection against the group's pinned `userID`.
+     *
+     * The first successful validation binds the group `userID`. Later
+     * validations must match it. Validation also refreshes the connection's
+     * revalidation deadline and may pick the connection as the group
+     * background connection if none is currently available. If the websocket is
+     * gone by the time async validation finishes, this becomes a no-op.
+     */
+    validateConnection(selector: ConnectionSelector, revision: number, validation: ConnectionValidation): Readonly<{
+        connection: ConnectionContext;
+        group: GroupAuthState;
+    }> | undefined;
+    /** Removes one connection due to failed auth and updates all derived background/deadline state. */
+    failConnection(selector: ConnectionSelector, revision: number): ConnectionContext | undefined;
+    /** Removes one disconnected connection and updates all derived background/deadline state. */
+    closeConnection(selector: ConnectionSelector): ConnectionContext | undefined;
+    /**
+     * Records a successful background retransform. This starts a fresh interval
+     * from the manager clock when shared retransform is schedulable, or
+     * clears the deadline if it is not.
+     */
+    markBackgroundRetransformSuccess(selector: ConnectionSelector, revision: number): void;
+    setSharedRetransformReady(ready: boolean): void;
+    deferMaintenance(kind: 'revalidate' | 'retransform'): void;
+    /** Returns the current live record for a client slot, if any. */
+    getConnectionContext(selector: ConnectionSelector): Readonly<ConnectionContext> | undefined;
+    /** Returns the live record for one websocket or throws if it is unavailable. */
+    mustGetConnectionContext(selector: ConnectionSelector): Readonly<ConnectionContext>;
+    /** Returns the current background connection, if one exists. */
+    getBackgroundConnectionContext(): Readonly<ConnectionContext> | undefined;
+    mustGetBackgroundConnectionContext(): Readonly<ConnectionContext>;
+    /** Returns the shared group auth state. */
+    getGroupState(): Readonly<GroupAuthState>;
+    /**
+     * Reports which maintenance work is currently due.
+     *
+     * The result is a pure snapshot: callers decide which actions to run and
+     * when to wake up next. `earliestDeadlineAt` is the earliest outstanding
+     * maintenance deadline, including overdue work, unless a transient failure
+     * has deferred all scheduled maintenance until `maintenanceNotBeforeAt`.
+     */
+    planMaintenance(): {
+        dueRevalidations: Readonly<ConnectionContext>[];
+        dueRetransform: boolean;
+        earliestDeadlineAt: number | undefined;
+    };
+}
+export {};
+//# sourceMappingURL=connection-context-manager.d.ts.map

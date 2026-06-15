@@ -1,0 +1,29 @@
+import { h64 } from "../../../../shared/src/hash.js";
+import { rowIDString } from "../../types/row-key.js";
+//#region ../zero-cache/src/services/view-syncer/row-set-signature.ts
+/**
+* The hash of a row ID used as the unit XOR'd into a query's
+* {@link rowSetSignature}. Includes schema + table + rowKey, so the hash is
+* unique across tables in the same query.
+*/
+function rowIDSignatureUnit(id) {
+	return h64(rowIDString(id));
+}
+/**
+* Parses a hex-encoded signature back to its bigint form. Empty / undefined
+* is the identity (`0n`).
+*/
+function parseSignature(hex) {
+	if (!hex) return 0n;
+	return BigInt("0x" + hex);
+}
+/**
+* Serializes a bigint signature to lowercase hex. `0n` serializes to `'0'`.
+*/
+function formatSignature(sig) {
+	return sig.toString(16);
+}
+//#endregion
+export { formatSignature, parseSignature, rowIDSignatureUnit };
+
+//# sourceMappingURL=row-set-signature.js.map

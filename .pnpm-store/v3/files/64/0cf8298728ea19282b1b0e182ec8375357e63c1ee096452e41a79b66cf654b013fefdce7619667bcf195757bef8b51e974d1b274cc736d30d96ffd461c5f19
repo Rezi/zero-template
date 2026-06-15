@@ -1,0 +1,25 @@
+import { valita_exports } from "../../../../../../shared/src/valita.js";
+import { resetRequiredSchema } from "./control.js";
+import { beginSchema, commitSchema, dataChangeSchema, rollbackSchema, schemaChangeSchema } from "./data.js";
+import { downstreamStatusMessageSchema } from "./status.js";
+//#region ../zero-cache/src/services/change-source/protocol/current/downstream.ts
+var begin = valita_exports.tuple([
+	valita_exports.literal("begin"),
+	beginSchema,
+	valita_exports.object({ commitWatermark: valita_exports.string() })
+]);
+var data = valita_exports.tuple([valita_exports.literal("data"), valita_exports.union(dataChangeSchema, schemaChangeSchema)]);
+var commit = valita_exports.tuple([
+	valita_exports.literal("commit"),
+	commitSchema,
+	valita_exports.object({ watermark: valita_exports.string() })
+]);
+var rollback = valita_exports.tuple([valita_exports.literal("rollback"), rollbackSchema]);
+var changeStreamDataSchema = valita_exports.union(begin, data, commit, rollback);
+var changeStreamControlSchema = valita_exports.tuple([valita_exports.literal("control"), resetRequiredSchema]);
+/** Downstream messages consist of data plane and control plane messages. */
+var changeStreamMessageSchema = valita_exports.union(changeStreamDataSchema, changeStreamControlSchema, downstreamStatusMessageSchema);
+//#endregion
+export { changeStreamControlSchema, changeStreamDataSchema, changeStreamMessageSchema };
+
+//# sourceMappingURL=downstream.js.map

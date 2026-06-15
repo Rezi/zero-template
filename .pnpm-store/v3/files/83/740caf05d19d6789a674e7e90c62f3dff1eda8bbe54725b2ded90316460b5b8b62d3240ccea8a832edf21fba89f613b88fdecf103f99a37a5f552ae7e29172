@@ -1,0 +1,1 @@
+{"version":3,"file":"otel-log-sink.d.ts","sourceRoot":"","sources":["../../../../../zero-cache/src/server/otel-log-sink.ts"],"names":[],"mappings":"AAOA,OAAO,KAAK,EAAC,OAAO,EAAE,QAAQ,EAAE,OAAO,EAAC,MAAM,kBAAkB,CAAC;AAIjE,qBAAa,WAAY,YAAW,OAAO;;;IAOzC,GAAG,CAAC,KAAK,EAAE,QAAQ,EAAE,OAAO,EAAE,OAAO,GAAG,SAAS,EAAE,GAAG,IAAI,EAAE,OAAO,EAAE,GAAG,IAAI;CAwB7E"}

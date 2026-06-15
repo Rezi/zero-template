@@ -1,0 +1,3 @@
+import type { LogContext } from '@rocicorp/logger';
+export declare const startOtelAuto: (lc: LogContext | undefined, workerName: string, workerIndex: number) => void;
+//# sourceMappingURL=otel-start.d.ts.map

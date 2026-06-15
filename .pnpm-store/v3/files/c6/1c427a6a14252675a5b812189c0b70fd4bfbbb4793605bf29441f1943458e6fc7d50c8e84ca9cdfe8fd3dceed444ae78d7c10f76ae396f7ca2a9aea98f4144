@@ -1,0 +1,49 @@
+import type { ReadonlyJSONValue } from '../../../../shared/src/json.ts';
+import type { AnalyzeQueryResult, PlanDebugEventJSON } from '../../../../zero-protocol/src/analyze-query-result.ts';
+import type { AST } from '../../../../zero-protocol/src/ast.ts';
+import type { AnalyzeQueryOptions } from '../../../../zero-protocol/src/inspect-up.ts';
+import type { QueryDelegate } from '../../../../zql/src/query/query-delegate.ts';
+import type { AnyQuery } from '../../../../zql/src/query/query.ts';
+import type { ClientGroup } from './client-group.ts';
+import { Client } from './client.ts';
+import type { InspectorDelegate, Metrics, Rep } from './lazy-inspector.ts';
+export type { InspectorDelegate };
+export type Lazy = typeof import('./lazy-inspector.ts');
+export declare class Inspector {
+    #private;
+    readonly client: Client;
+    readonly clientGroup: ClientGroup;
+    constructor(rep: Rep, inspectorDelegate: InspectorDelegate, queryDelegate: QueryDelegate, getSocket: () => Promise<WebSocket>);
+    metrics(): Promise<Metrics>;
+    clients(): Promise<Client[]>;
+    clientsWithQueries(): Promise<Client[]>;
+    serverVersion(): Promise<string>;
+    analyzeQuery(query: AnyQuery, options?: AnalyzeQueryOptions): Promise<AnalyzeQueryResult>;
+    /**
+     * Analyze a query specified by a server-side AST. Unlike {@link analyzeQuery}
+     * the AST is sent to the server verbatim with no client-to-server name
+     * mapping; callers should provide an AST already in the server shape.
+     */
+    analyzeServerAST(ast: AST, options?: AnalyzeQueryOptions): Promise<AnalyzeQueryResult>;
+    /**
+     * Analyze a server-registered named (custom) query. The server resolves
+     * the name and args to an AST using its registered custom-query handler.
+     */
+    analyzeNamedQuery(name: string, args: ReadonlyArray<ReadonlyJSONValue>, options?: AnalyzeQueryOptions): Promise<AnalyzeQueryResult>;
+    /**
+     * Authenticate with the server's admin password. Other inspector RPCs
+     * (e.g. {@link analyzeQuery}) fall back to an interactive HTML password
+     * prompt when authentication is needed, which is unavailable in non-DOM
+     * environments. Call this first from Node contexts to establish the
+     * session.
+     *
+     * Returns `true` if the password is accepted (or the server runs in a
+     * development mode that bypasses the check), `false` otherwise.
+     */
+    authenticate(password: string): Promise<boolean>;
+    /**
+     * Format planner debug events as a human-readable string.
+     */
+    formatPlannerEvents(events: PlanDebugEventJSON[]): string;
+}
+//# sourceMappingURL=inspector.d.ts.map

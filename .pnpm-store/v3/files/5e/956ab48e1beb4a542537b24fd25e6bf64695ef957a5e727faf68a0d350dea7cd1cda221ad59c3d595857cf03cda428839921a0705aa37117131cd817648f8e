@@ -1,0 +1,6 @@
+/**
+ * Returns a random 18 character string encoded in base32 suitable as a client
+ * ID.
+ */
+export declare function makeClientID(): string;
+//# sourceMappingURL=make-client-id.d.ts.map

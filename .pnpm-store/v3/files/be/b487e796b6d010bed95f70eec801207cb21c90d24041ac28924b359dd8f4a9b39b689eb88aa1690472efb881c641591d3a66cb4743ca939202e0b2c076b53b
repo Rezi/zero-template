@@ -1,0 +1,511 @@
+import { assert, unreachable } from "../../../../shared/src/asserts.js";
+import { AbortError } from "../../../../shared/src/abort-error.js";
+import { must } from "../../../../shared/src/must.js";
+import { stringify } from "../../../../shared/src/bigint-json.js";
+import { ZERO_VERSION_COLUMN_NAME } from "./schema/constants.js";
+import { liteRow } from "../../types/lite.js";
+import { liteTableName } from "../../types/names.js";
+import { mapPostgresToLite, mapPostgresToLiteColumn, mapPostgresToLiteIndex } from "../../db/pg-to-lite.js";
+import { ColumnMetadataStore } from "./schema/column-metadata.js";
+import { TableMetadataTracker } from "./schema/table-metadata.js";
+import { computeZqlSpecs, listIndexes, listTables } from "../../db/lite-tables.js";
+import { ChangeLog } from "./schema/change-log.js";
+import { updateReplicationWatermark } from "./schema/replication-state.js";
+import { id } from "../../types/sql.js";
+import { createLiteIndexStatement, createLiteTableStatement, liteColumnDef } from "../../db/create.js";
+import { SqliteError } from "@rocicorp/zero-sqlite3";
+//#region ../zero-cache/src/services/replicator/change-processor.ts
+/**
+* The ChangeProcessor partitions the stream of messages into transactions
+* by creating a {@link TransactionProcessor} when a transaction begins, and dispatching
+* messages to it until the commit is received.
+*
+* From https://www.postgresql.org/docs/current/protocol-logical-replication.html#PROTOCOL-LOGICAL-MESSAGES-FLOW :
+*
+* "The logical replication protocol sends individual transactions one by one.
+*  This means that all messages between a pair of Begin and Commit messages
+*  belong to the same transaction."
+*/
+var ChangeProcessor = class {
+	#db;
+	#changeLog;
+	#tableMetadata;
+	#mode;
+	#failService;
+	#tableSpecs = /* @__PURE__ */ new Map();
+	#currentTx = null;
+	#failure;
+	constructor(db, mode, failService) {
+		this.#db = db;
+		this.#changeLog = new ChangeLog(db.db);
+		this.#tableMetadata = new TableMetadataTracker(db.db);
+		this.#mode = mode;
+		this.#failService = failService;
+	}
+	#fail(lc, err) {
+		if (!this.#failure) {
+			let failureError = err;
+			try {
+				this.#currentTx?.abort(lc);
+			} catch (rollbackError) {
+				const combinedError = /* @__PURE__ */ new Error(`Message processing failed and rollback also failed: operation error = ${String(err)}; rollback error = ${String(rollbackError)}`);
+				combinedError.cause = err;
+				failureError = combinedError;
+			}
+			this.#failure = ensureError(failureError);
+			if (!(this.#failure instanceof AbortError)) {
+				lc.error?.("Message Processing failed:", this.#failure);
+				this.#failService(lc, this.#failure);
+			}
+		}
+	}
+	abort(lc) {
+		this.#fail(lc, new AbortError());
+	}
+	/** @return If a transaction was committed. */
+	processMessage(lc, downstream) {
+		const [type, message] = downstream;
+		if (this.#failure) {
+			lc.debug?.(`Dropping ${message.tag}`);
+			return null;
+		}
+		try {
+			const watermark = type === "begin" ? downstream[2].commitWatermark : type === "commit" ? downstream[2].watermark : void 0;
+			return this.#processMessage(lc, message, watermark);
+		} catch (e) {
+			this.#fail(lc, e);
+		}
+		return null;
+	}
+	#beginTransaction(lc, commitVersion, jsonFormat) {
+		const start = Date.now();
+		for (let i = 0;; i++) try {
+			return new TransactionProcessor(lc, this.#db, this.#mode, this.#changeLog, this.#tableMetadata, this.#tableSpecs, commitVersion, jsonFormat);
+		} catch (e) {
+			if (e instanceof SqliteError && e.code === "SQLITE_BUSY") {
+				lc.warn?.(`SQLITE_BUSY for ${Date.now() - start} ms (attempt ${i + 1}). This is only expected if litestream is performing a large checkpoint.`, e);
+				continue;
+			}
+			throw e;
+		}
+	}
+	/** @return If a transaction was committed. */
+	#processMessage(lc, msg, watermark) {
+		if (msg.tag === "begin") {
+			if (this.#currentTx) throw new Error(`Already in a transaction ${stringify(msg)}`);
+			this.#currentTx = this.#beginTransaction(lc, must(watermark), msg.json ?? "p");
+			return null;
+		}
+		const tx = this.#currentTx;
+		if (!tx) throw new Error(`Received message outside of transaction: ${stringify(msg)}`);
+		if (msg.tag === "commit") {
+			this.#currentTx = null;
+			assert(watermark, "watermark is required for commit messages");
+			return tx.processCommit(msg, watermark);
+		}
+		if (msg.tag === "rollback") {
+			this.#currentTx?.abort(lc);
+			this.#currentTx = null;
+			return null;
+		}
+		switch (msg.tag) {
+			case "insert":
+				tx.processInsert(msg);
+				break;
+			case "update":
+				tx.processUpdate(msg);
+				break;
+			case "delete":
+				tx.processDelete(msg);
+				break;
+			case "truncate":
+				tx.processTruncate(msg);
+				break;
+			case "create-table":
+				tx.processCreateTable(msg);
+				break;
+			case "rename-table":
+				tx.processRenameTable(msg);
+				break;
+			case "update-table-metadata":
+				tx.processTableMetadata(msg);
+				break;
+			case "add-column":
+				tx.processAddColumn(msg);
+				break;
+			case "update-column":
+				tx.processUpdateColumn(msg);
+				break;
+			case "drop-column":
+				tx.processDropColumn(msg);
+				break;
+			case "drop-table":
+				tx.processDropTable(msg);
+				break;
+			case "create-index":
+				tx.processCreateIndex(msg);
+				break;
+			case "drop-index":
+				tx.processDropIndex(msg);
+				break;
+			case "backfill":
+				tx.processBackfill(msg);
+				break;
+			case "backfill-completed":
+				tx.processBackfillCompleted(msg);
+				break;
+			default: unreachable(msg);
+		}
+		return null;
+	}
+};
+/**
+* The {@link TransactionProcessor} handles the sequence of messages from
+* upstream, from `BEGIN` to `COMMIT` and executes the corresponding mutations
+* on the {@link postgres.TransactionSql} on the replica.
+*
+* When applying row contents to the replica, the `_0_version` column is added / updated,
+* and a corresponding entry in the `ChangeLog` is added. The version value is derived
+* from the watermark of the preceding transaction (stored as the `nextStateVersion` in the
+* `ReplicationState` table).
+*
+*   Side note: For non-streaming Postgres transactions, the commitEndLsn (and thus
+*   commit watermark) is available in the `begin` message, so it could theoretically
+*   be used for the row version of changes within the transaction. However, the
+*   commitEndLsn is not available in the streaming (in-progress) transaction
+*   protocol, and may not be available for CDC streams of other upstream types.
+*   Therefore, the zero replication protocol is designed to not require the commit
+*   watermark when a transaction begins.
+*
+* Also of interest is the fact that all INSERT Messages are logically applied as
+* UPSERTs. See {@link processInsert} for the underlying motivation.
+*/
+var TransactionProcessor = class {
+	#lc;
+	#startMs;
+	#db;
+	#mode;
+	#version;
+	#changeLog;
+	#tableMetadata;
+	#tableSpecs;
+	#jsonFormat;
+	#columnMetadata;
+	#pos = 0;
+	#schemaChanged = false;
+	#numChangeLogEntries = 0;
+	constructor(lc, db, mode, changeLog, tableMetadata, tableSpecs, commitVersion, jsonFormat) {
+		this.#startMs = Date.now();
+		this.#mode = mode;
+		this.#jsonFormat = jsonFormat;
+		switch (mode) {
+			case "serving":
+				db.beginConcurrent();
+				break;
+			case "backup":
+				db.beginImmediate();
+				break;
+			case "initial-sync": break;
+			default: unreachable();
+		}
+		this.#db = db;
+		this.#version = commitVersion;
+		this.#lc = lc.withContext("version", commitVersion);
+		this.#changeLog = changeLog;
+		this.#tableMetadata = tableMetadata;
+		this.#tableSpecs = tableSpecs;
+		this.#columnMetadata = must(ColumnMetadataStore.getInstance(db.db));
+		if (this.#tableSpecs.size === 0) this.#reloadTableSpecs();
+	}
+	#reloadTableSpecs() {
+		this.#tableSpecs.clear();
+		const zqlSpecs = computeZqlSpecs(this.#lc, this.#db.db, { includeBackfillingColumns: true });
+		for (let spec of listTables(this.#db.db)) {
+			if (!spec.primaryKey) spec = {
+				...spec,
+				primaryKey: [...zqlSpecs.get(spec.name)?.tableSpec.primaryKey ?? []]
+			};
+			this.#tableSpecs.set(spec.name, spec);
+		}
+	}
+	#tableSpec(name) {
+		return must(this.#tableSpecs.get(name), `Unknown table ${name}`);
+	}
+	#getKey({ row, numCols }, { relation }) {
+		const keyColumns = relation.rowKey.type !== "full" ? relation.rowKey.columns : this.#tableSpec(liteTableName(relation)).primaryKey;
+		if (!keyColumns?.length) throw new Error(`Cannot replicate table "${relation.name}" without a PRIMARY KEY or UNIQUE INDEX`);
+		if (numCols === keyColumns.length) return row;
+		const key = {};
+		for (const col of keyColumns) key[col] = row[col];
+		return key;
+	}
+	processInsert(insert) {
+		const table = liteTableName(insert.relation);
+		const tableSpec = this.#tableSpec(table);
+		const newRow = liteRow(insert.new, tableSpec, this.#jsonFormat);
+		this.#upsert(table, {
+			...newRow.row,
+			[ZERO_VERSION_COLUMN_NAME]: this.#version
+		});
+		if (insert.relation.rowKey.columns.length === 0) return;
+		const key = this.#getKey(newRow, insert);
+		this.#logSetOp(table, key, getBackfilledColumns(newRow.row, tableSpec));
+	}
+	#upsert(table, row) {
+		const columns = Object.keys(row).map((c) => id(c));
+		this.#db.run(`
+      INSERT OR REPLACE INTO ${id(table)} (${columns.join(",")})
+        VALUES (${Array.from({ length: columns.length }).fill("?").join(",")})
+      `, Object.values(row));
+	}
+	processUpdate(update) {
+		const table = liteTableName(update.relation);
+		const tableSpec = this.#tableSpec(table);
+		const newRow = liteRow(update.new, tableSpec, this.#jsonFormat);
+		const row = {
+			...newRow.row,
+			[ZERO_VERSION_COLUMN_NAME]: this.#version
+		};
+		const oldKey = update.key ? this.#getKey(liteRow(update.key, this.#tableSpec(table), this.#jsonFormat), update) : null;
+		const newKey = this.#getKey(newRow, update);
+		if (oldKey) this.#logDeleteOp(table, oldKey, tableSpec.backfilling);
+		this.#logSetOp(table, newKey, getBackfilledColumns(newRow.row, tableSpec));
+		const currKey = oldKey ?? newKey;
+		const conds = Object.keys(currKey).map((col) => `${id(col)}=?`);
+		const setExprs = Object.keys(row).map((col) => `${id(col)}=?`);
+		const { changes } = this.#db.run(`
+      UPDATE ${id(table)}
+        SET ${setExprs.join(",")}
+        WHERE ${conds.join(" AND ")}
+      `, [...Object.values(row), ...Object.values(currKey)]);
+		if (changes === 0) this.#upsert(table, row);
+	}
+	processDelete(del) {
+		const table = liteTableName(del.relation);
+		const tableSpec = this.#tableSpec(table);
+		const rowKey = this.#getKey(liteRow(del.key, tableSpec, this.#jsonFormat), del);
+		this.#delete(table, rowKey);
+		this.#logDeleteOp(table, rowKey, tableSpec.backfilling);
+	}
+	#delete(table, rowKey) {
+		const conds = Object.keys(rowKey).map((col) => `${id(col)}=?`);
+		this.#db.run(`DELETE FROM ${id(table)} WHERE ${conds.join(" AND ")}`, Object.values(rowKey));
+	}
+	processTruncate(truncate) {
+		for (const relation of truncate.relations) {
+			const table = liteTableName(relation);
+			this.#db.run(`DELETE FROM ${id(table)}`);
+			this.#logTruncateOp(table);
+		}
+	}
+	processCreateTable(create) {
+		if (create.metadata) this.#tableMetadata.setUpstreamMetadata(create.spec, create.metadata);
+		const table = mapPostgresToLite(create.spec);
+		this.#db.db.exec(createLiteTableStatement(table));
+		for (const [colName, colSpec] of Object.entries(create.spec.columns)) this.#columnMetadata.insert(table.name, colName, colSpec, create.backfill?.[colName]);
+		if (Object.keys(create.backfill ?? {}).length === Object.keys(create.spec.columns).length) this.#reloadTableSpecs();
+		else this.#logResetOp(table.name);
+		this.#lc.info?.(create.tag, table.name);
+	}
+	processTableMetadata(msg) {
+		this.#tableMetadata.setUpstreamMetadata(msg.table, msg.new);
+	}
+	processRenameTable(rename) {
+		this.#tableMetadata.rename(rename.old, rename.new);
+		const oldName = liteTableName(rename.old);
+		const newName = liteTableName(rename.new);
+		this.#db.db.exec(`ALTER TABLE ${id(oldName)} RENAME TO ${id(newName)}`);
+		this.#columnMetadata.renameTable(oldName, newName);
+		this.#bumpVersions(rename.new);
+		this.#logResetOp(oldName);
+		this.#lc.info?.(rename.tag, oldName, newName);
+	}
+	processAddColumn(msg) {
+		if (msg.tableMetadata) this.#tableMetadata.setUpstreamMetadata(msg.table, msg.tableMetadata);
+		const table = liteTableName(msg.table);
+		const { name } = msg.column;
+		const spec = mapPostgresToLiteColumn(table, msg.column);
+		this.#db.db.exec(`ALTER TABLE ${id(table)} ADD ${id(name)} ${liteColumnDef(spec)}`);
+		this.#columnMetadata.insert(table, name, msg.column.spec, msg.backfill);
+		if (msg.backfill) this.#reloadTableSpecs();
+		else this.#bumpVersions(msg.table);
+		this.#lc.info?.(msg.tag, table, msg.column);
+	}
+	processUpdateColumn(msg) {
+		const table = liteTableName(msg.table);
+		let oldName = msg.old.name;
+		const newName = msg.new.name;
+		const oldSpec = mapPostgresToLiteColumn(table, msg.old, "ignore-default");
+		const newSpec = mapPostgresToLiteColumn(table, msg.new, "ignore-default");
+		if (oldName === newName && oldSpec.dataType === newSpec.dataType) {
+			this.#lc.info?.(msg.tag, "no thing to update", oldSpec, newSpec);
+			return;
+		}
+		if (oldSpec.dataType !== newSpec.dataType) {
+			const indexes = listIndexes(this.#db.db).filter((idx) => idx.tableName === table && oldName in idx.columns);
+			const stmts = indexes.map((idx) => `DROP INDEX IF EXISTS ${id(idx.name)};`);
+			const tmpName = `tmp.${newName}`;
+			stmts.push(`
+        ALTER TABLE ${id(table)} ADD ${id(tmpName)} ${liteColumnDef(newSpec)};
+        UPDATE ${id(table)} SET ${id(tmpName)} = ${id(oldName)};
+        ALTER TABLE ${id(table)} DROP ${id(oldName)};
+        `);
+			for (const idx of indexes) {
+				idx.columns[tmpName] = idx.columns[oldName];
+				delete idx.columns[oldName];
+				stmts.push(createLiteIndexStatement(idx));
+			}
+			this.#db.db.exec(stmts.join(""));
+			oldName = tmpName;
+		}
+		if (oldName !== newName) this.#db.db.exec(`ALTER TABLE ${id(table)} RENAME ${id(oldName)} TO ${id(newName)}`);
+		this.#columnMetadata.update(table, msg.old.name, msg.new.name, msg.new.spec);
+		this.#bumpVersions(msg.table);
+		this.#lc.info?.(msg.tag, table, msg.new);
+	}
+	processDropColumn(msg) {
+		const table = liteTableName(msg.table);
+		const { column } = msg;
+		this.#db.db.exec(`ALTER TABLE ${id(table)} DROP ${id(column)}`);
+		this.#columnMetadata.deleteColumn(table, column);
+		this.#bumpVersions(msg.table);
+		this.#lc.info?.(msg.tag, table, column);
+	}
+	processDropTable(drop) {
+		this.#tableMetadata.drop(drop.id);
+		const name = liteTableName(drop.id);
+		this.#db.db.exec(`DROP TABLE IF EXISTS ${id(name)}`);
+		this.#columnMetadata.deleteTable(name);
+		this.#logResetOp(name);
+		this.#lc.info?.(drop.tag, name);
+	}
+	processCreateIndex(create) {
+		const index = mapPostgresToLiteIndex(create.spec);
+		this.#db.db.exec(createLiteIndexStatement(index));
+		const tableSpec = must(this.#tableSpecs.get(index.tableName));
+		if ((tableSpec.backfilling ?? []).length === Object.entries(tableSpec.columns).length - 1) this.#reloadTableSpecs();
+		else this.#logResetOp(index.tableName);
+		this.#lc.info?.(create.tag, index.name);
+	}
+	processDropIndex(drop) {
+		const name = liteTableName(drop.id);
+		this.#db.db.exec(`DROP INDEX IF EXISTS ${id(name)}`);
+		this.#lc.info?.(drop.tag, name);
+	}
+	#bumpVersions(table) {
+		this.#tableMetadata.setMinRowVersion(table, this.#version);
+		this.#logResetOp(liteTableName(table));
+	}
+	/**
+	* @param backfilledColumns `backfilling` columns for which values were set
+	*/
+	#logSetOp(table, key, backfilledColumns) {
+		if (this.#mode === "serving" || backfilledColumns !== void 0) {
+			this.#changeLog.logSetOp(this.#version, this.#pos++, table, key, backfilledColumns);
+			this.#numChangeLogEntries++;
+		}
+	}
+	#logDeleteOp(table, key, backfilling) {
+		if (this.#mode === "serving" || backfilling?.length) {
+			this.#changeLog.logDeleteOp(this.#version, this.#pos++, table, key);
+			this.#numChangeLogEntries++;
+		}
+	}
+	#logTruncateOp(table) {
+		if (this.#mode === "serving") {
+			this.#changeLog.logTruncateOp(this.#version, table);
+			this.#numChangeLogEntries++;
+		}
+	}
+	#logResetOp(table) {
+		this.#schemaChanged = true;
+		if (this.#mode === "serving") {
+			this.#changeLog.logResetOp(this.#version, table);
+			this.#numChangeLogEntries++;
+		}
+		this.#reloadTableSpecs();
+	}
+	processBackfill({ relation, watermark, columns, rowValues }) {
+		const tableName = liteTableName(relation);
+		const tableSpec = must(this.#tableSpecs.get(tableName));
+		const rowKeyCols = relation.rowKey.columns;
+		const cols = [...rowKeyCols, ...columns];
+		const insertColsStr = [...cols, ZERO_VERSION_COLUMN_NAME].map(id).join(",");
+		const qMarks = Array.from({ length: cols.length + 1 }).fill("?").join(",");
+		const rowKeyColsStr = rowKeyCols.map(id).join(",");
+		let backfilled = 0;
+		let skipped = 0;
+		for (const v of rowValues) {
+			const row = liteRow(Object.fromEntries(cols.map((c, i) => [c, v[i]])), tableSpec, this.#jsonFormat);
+			const rowKey = this.#getKey(row, { relation });
+			const rowOp = this.#changeLog.getLatestRowOp(tableName, rowKey);
+			if (rowOp?.op === "d" && rowOp.stateVersion > watermark) {
+				skipped++;
+				continue;
+			}
+			const updates = rowOp?.op === "s" ? cols.filter((c) => (rowOp.backfillingColumnVersions[c] ?? "") <= watermark) : cols;
+			if (updates.length === 0) {
+				skipped++;
+				continue;
+			}
+			const updateStmts = updates.map((col) => `${id(col)}=excluded.${id(col)}`);
+			this.#db.run(`
+        INSERT INTO ${id(tableName)} (${insertColsStr}) VALUES (${qMarks})
+          ON CONFLICT (${rowKeyColsStr})
+          DO UPDATE SET ${updateStmts.join(",")};
+      `, ...Object.values(row.row), watermark);
+			backfilled++;
+		}
+		this.#lc.debug?.(`backfilled ${backfilled} rows (skipped ${skipped}) into ${tableName}`);
+	}
+	#completedBackfill;
+	processBackfillCompleted({ relation, columns, status }) {
+		const tableName = liteTableName(relation);
+		const cols = [...relation.rowKey.columns, ...columns];
+		const columnMetadata = must(ColumnMetadataStore.getInstance(this.#db.db));
+		for (const col of cols) columnMetadata.clearBackfilling(tableName, col);
+		this.#bumpVersions(relation);
+		if (status) this.#completedBackfill = {
+			table: tableName,
+			columns: cols,
+			...status
+		};
+		this.#lc.info?.(`finished backfilling ${tableName}`);
+	}
+	processCommit(commit, watermark) {
+		if (watermark !== this.#version) throw new Error(`'commit' version ${watermark} does not match 'begin' version ${this.#version}: ${stringify(commit)}`);
+		updateReplicationWatermark(this.#db, watermark);
+		if (this.#schemaChanged) {
+			const start = Date.now();
+			this.#db.db.pragma("optimize");
+			this.#lc.info?.(`PRAGMA optimized after schema change (${Date.now() - start} ms)`);
+		}
+		if (this.#mode !== "initial-sync") this.#db.commit();
+		const elapsedMs = Date.now() - this.#startMs;
+		this.#lc.debug?.(`Committed tx@${this.#version} (${elapsedMs} ms)`);
+		return {
+			watermark,
+			completedBackfill: this.#completedBackfill,
+			schemaUpdated: this.#schemaChanged,
+			changeLogUpdated: this.#numChangeLogEntries > 0
+		};
+	}
+	abort(lc) {
+		lc.info?.(`aborting transaction ${this.#version}`);
+		this.#db.rollback();
+	}
+};
+function getBackfilledColumns(row, { backfilling }) {
+	if (!backfilling?.length) return;
+	return backfilling.filter((col) => col in row);
+}
+function ensureError(err) {
+	if (err instanceof Error) return err;
+	const error = /* @__PURE__ */ new Error();
+	error.cause = err;
+	return error;
+}
+//#endregion
+export { ChangeProcessor };
+
+//# sourceMappingURL=change-processor.js.map

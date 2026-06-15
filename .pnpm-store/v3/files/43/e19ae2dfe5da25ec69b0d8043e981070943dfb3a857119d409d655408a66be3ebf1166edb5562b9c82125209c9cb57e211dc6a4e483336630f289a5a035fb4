@@ -1,0 +1,220 @@
+import { BinaryReader } from "./binary-reader.js";
+//#region ../zero-cache/src/services/change-source/pg/logical-replication/pgoutput-parser.ts
+var PgoutputParser = class {
+	_typeCache = /* @__PURE__ */ new Map();
+	_relationCache = /* @__PURE__ */ new Map();
+	#typeParsers;
+	constructor(typeParsers) {
+		this.#typeParsers = typeParsers;
+	}
+	#getTypeParser(typeOid) {
+		return this.#typeParsers.getTypeParser(typeOid);
+	}
+	parse(buf) {
+		const reader = new BinaryReader(buf);
+		switch (reader.readUint8()) {
+			case 66: return this.msgBegin(reader);
+			case 79: return this.msgOrigin(reader);
+			case 89: return this.msgType(reader);
+			case 82: return this.msgRelation(reader);
+			case 73: return this.msgInsert(reader);
+			case 85: return this.msgUpdate(reader);
+			case 68: return this.msgDelete(reader);
+			case 84: return this.msgTruncate(reader);
+			case 77: return this.msgMessage(reader);
+			case 67: return this.msgCommit(reader);
+			default: throw Error("unknown pgoutput message");
+		}
+	}
+	msgBegin(reader) {
+		return {
+			tag: "begin",
+			commitLsn: reader.readLsn(),
+			commitTime: reader.readTime(),
+			xid: reader.readInt32()
+		};
+	}
+	msgOrigin(reader) {
+		return {
+			tag: "origin",
+			originLsn: reader.readLsn(),
+			originName: reader.readString()
+		};
+	}
+	msgType(reader) {
+		const typeOid = reader.readInt32();
+		const typeSchema = reader.readString();
+		const typeName = reader.readString();
+		this._typeCache.set(typeOid, {
+			typeSchema,
+			typeName
+		});
+		return {
+			tag: "type",
+			typeOid,
+			typeSchema,
+			typeName
+		};
+	}
+	msgRelation(reader) {
+		const relationOid = reader.readInt32();
+		const schema = reader.readString();
+		const name = reader.readString();
+		const replicaIdentity = this.readRelationReplicaIdentity(reader);
+		const columns = reader.array(reader.readInt16(), () => this.readRelationColumn(reader));
+		const msg = {
+			tag: "relation",
+			relationOid,
+			schema,
+			name,
+			replicaIdentity,
+			columns,
+			keyColumns: columns.filter((it) => it.flags & 1).map((it) => it.name)
+		};
+		this._relationCache.set(relationOid, msg);
+		return msg;
+	}
+	readRelationReplicaIdentity(reader) {
+		const ident = reader.readUint8();
+		switch (ident) {
+			case 100: return "default";
+			case 110: return "nothing";
+			case 102: return "full";
+			case 105: return "index";
+			default: throw Error(`unknown replica identity ${String.fromCharCode(ident)}`);
+		}
+	}
+	readRelationColumn(reader) {
+		const flags = reader.readUint8();
+		const name = reader.readString();
+		const typeOid = reader.readInt32();
+		return {
+			flags,
+			name,
+			typeOid,
+			typeMod: reader.readInt32(),
+			typeSchema: null,
+			typeName: null,
+			...this._typeCache.get(typeOid),
+			parser: this.#getTypeParser(typeOid)
+		};
+	}
+	msgInsert(reader) {
+		const relation = this._relationCache.get(reader.readInt32());
+		if (!relation) throw Error("missing relation");
+		reader.readUint8();
+		return {
+			tag: "insert",
+			relation,
+			new: this.readTuple(reader, relation)
+		};
+	}
+	msgUpdate(reader) {
+		const relation = this._relationCache.get(reader.readInt32());
+		if (!relation) throw Error("missing relation");
+		let key = null;
+		let old = null;
+		let new_ = null;
+		const subMsgKey = reader.readUint8();
+		if (subMsgKey === 75) {
+			key = this.readKeyTuple(reader, relation);
+			reader.readUint8();
+			new_ = this.readTuple(reader, relation);
+		} else if (subMsgKey === 79) {
+			old = this.readTuple(reader, relation);
+			reader.readUint8();
+			new_ = this.readTuple(reader, relation, old);
+		} else if (subMsgKey === 78) new_ = this.readTuple(reader, relation);
+		else throw Error(`unknown submessage key ${String.fromCharCode(subMsgKey)}`);
+		return {
+			tag: "update",
+			relation,
+			key,
+			old,
+			new: new_
+		};
+	}
+	msgDelete(reader) {
+		const relation = this._relationCache.get(reader.readInt32());
+		if (!relation) throw Error("missing relation");
+		let key = null;
+		let old = null;
+		const subMsgKey = reader.readUint8();
+		if (subMsgKey === 75) key = this.readKeyTuple(reader, relation);
+		else if (subMsgKey === 79) old = this.readTuple(reader, relation);
+		else throw Error(`unknown submessage key ${String.fromCharCode(subMsgKey)}`);
+		return {
+			tag: "delete",
+			relation,
+			key,
+			old
+		};
+	}
+	readKeyTuple(reader, relation) {
+		const tuple = this.readTuple(reader, relation);
+		const key = Object.create(null);
+		for (const k of relation.keyColumns) key[k] = tuple[k] === null ? void 0 : tuple[k];
+		return key;
+	}
+	readTuple(reader, { columns }, unchangedToastFallback) {
+		const nfields = reader.readInt16();
+		const tuple = Object.create(null);
+		for (let i = 0; i < nfields; i++) {
+			const { name, parser } = columns[i];
+			const kind = reader.readUint8();
+			switch (kind) {
+				case 98:
+					const bsize = reader.readInt32();
+					tuple[name] = reader.read(bsize);
+					break;
+				case 116:
+					const valsize = reader.readInt32();
+					const valbuf = reader.read(valsize);
+					tuple[name] = parser(reader.decodeText(valbuf));
+					break;
+				case 110:
+					tuple[name] = null;
+					break;
+				case 117:
+					tuple[name] = unchangedToastFallback?.[name];
+					break;
+				default: throw Error(`unknown attribute kind ${String.fromCharCode(kind)}`);
+			}
+		}
+		return tuple;
+	}
+	msgTruncate(reader) {
+		const nrels = reader.readInt32();
+		const flags = reader.readUint8();
+		return {
+			tag: "truncate",
+			cascade: Boolean(flags & 1),
+			restartIdentity: Boolean(flags & 2),
+			relations: reader.array(nrels, () => this._relationCache.get(reader.readInt32()))
+		};
+	}
+	msgMessage(reader) {
+		const flags = reader.readUint8();
+		return {
+			tag: "message",
+			flags,
+			transactional: Boolean(flags & 1),
+			messageLsn: reader.readLsn(),
+			prefix: reader.readString(),
+			content: reader.read(reader.readInt32())
+		};
+	}
+	msgCommit(reader) {
+		return {
+			tag: "commit",
+			flags: reader.readUint8(),
+			commitLsn: reader.readLsn(),
+			commitEndLsn: reader.readLsn(),
+			commitTime: reader.readTime()
+		};
+	}
+};
+//#endregion
+export { PgoutputParser };
+
+//# sourceMappingURL=pgoutput-parser.js.map

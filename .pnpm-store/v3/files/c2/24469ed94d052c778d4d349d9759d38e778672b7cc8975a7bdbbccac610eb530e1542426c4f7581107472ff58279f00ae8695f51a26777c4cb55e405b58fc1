@@ -1,0 +1,65 @@
+{
+  "name": "@rocicorp/zero-sqlite3",
+  "version": "1.1.2",
+  "description": "better-sqlite3 on bedrock",
+  "homepage": "https://github.com/rocicorp/zero-sqlite3",
+  "author": "Rocicorp",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/rocicorp/zero-sqlite3.git"
+  },
+  "main": "lib/index.js",
+  "bin": {
+    "zero-sqlite3": "./shell.js"
+  },
+  "files": [
+    "binding.gyp",
+    "src/**/*.[ch]pp",
+    "lib/**",
+    "deps/**",
+    "shell.js"
+  ],
+  "engines": {
+    "node": "22.x || 24.x",
+    "bun": ">=1.1.0"
+  },
+  "types": "lib/index.d.ts",
+  "dependencies": {
+    "bindings": "^1.5.0",
+    "prebuild-install": "^7.1.1"
+  },
+  "overrides": {
+    "prebuild": {
+      "node-abi": "^4.25.0"
+    }
+  },
+  "devDependencies": {
+    "chai": "^4.3.8",
+    "cli-color": "^2.0.3",
+    "fs-extra": "^11.1.1",
+    "mocha": "^11.7.5",
+    "nodemark": "^0.3.0",
+    "prebuild": "^13.0.1",
+    "sqlite": "^5.0.1",
+    "sqlite3": "^5.1.6"
+  },
+  "scripts": {
+    "install": "prebuild-install || node -e \"require('fs').existsSync('build/Release/better_sqlite3.node')||process.exit(1)\" || node-gyp rebuild --release",
+    "build-release": "node-gyp rebuild --release",
+    "build-debug": "node-gyp rebuild --debug",
+    "test": "mocha --exit --slow=75 --timeout=5000",
+    "benchmark": "node benchmark",
+    "download": "bash ./deps/download.sh"
+  },
+  "license": "MIT",
+  "keywords": [
+    "sql",
+    "sqlite",
+    "sqlite3",
+    "transactions",
+    "user-defined functions",
+    "aggregate functions",
+    "window functions",
+    "database"
+  ]
+}

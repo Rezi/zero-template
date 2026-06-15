@@ -1,0 +1,261 @@
+import { assert, assertObject } from "../../../shared/src/asserts.js";
+import { hasOwn } from "../../../shared/src/has-own.js";
+import { compareCookies } from "../cookies.js";
+import { deepFreeze } from "../frozen-json.js";
+import { assert as assert$1, readonlyArray, readonlyObject, valita_exports } from "../../../shared/src/valita.js";
+import { hashSchema } from "../hash.js";
+import { toRefs } from "../dag/chunk.js";
+import { emptyDataNode } from "../btree/node.js";
+import { BTreeRead } from "../btree/read.js";
+import { assertSnapshotCommitDD31, baseSnapshotFromHash, chunkIndexDefinitionEqualIgnoreName, getRefs, newSnapshotCommitDataDD31, toChunkIndexDefinition } from "../db/commit.js";
+import { createIndexBTree } from "../db/write.js";
+import { indexDefinitionsEqual } from "../index-defs.js";
+import { clientGroupIDSchema } from "../sync/ids.js";
+import { withWrite } from "../with-transactions.js";
+import { getClientGroup, getClientGroups, mutatorNamesEqual, setClientGroup } from "./client-groups.js";
+import { makeClientID } from "./make-client-id.js";
+//#region ../replicache/src/persist/clients.ts
+var clientV5Schema = readonlyObject({
+	heartbeatTimestampMs: valita_exports.number(),
+	headHash: hashSchema,
+	tempRefreshHash: hashSchema.nullable(),
+	clientGroupID: clientGroupIDSchema
+});
+var clientV6Schema = readonlyObject({
+	heartbeatTimestampMs: valita_exports.number(),
+	refreshHashes: readonlyArray(hashSchema),
+	persistHash: hashSchema.nullable(),
+	clientGroupID: clientGroupIDSchema
+});
+function isClientV6(client) {
+	return client.refreshHashes !== void 0;
+}
+var CLIENTS_HEAD_NAME = "clients";
+var clientSchema = valita_exports.union(clientV5Schema, clientV6Schema);
+function assertClient(value) {
+	assert$1(value, clientSchema);
+}
+function assertClientV6(value) {
+	assert$1(value, clientV6Schema);
+}
+function chunkDataToClientMap(chunkData) {
+	assertObject(chunkData);
+	const clients = /* @__PURE__ */ new Map();
+	for (const key in chunkData) if (hasOwn(chunkData, key)) {
+		const value = chunkData[key];
+		if (value !== void 0) {
+			assertClient(value);
+			clients.set(key, value);
+		}
+	}
+	return clients;
+}
+function clientMapToChunkData(clients, dagWrite) {
+	for (const client of clients.values()) if (isClientV6(client)) {
+		client.refreshHashes.forEach(dagWrite.assertValidHash);
+		if (client.persistHash) dagWrite.assertValidHash(client.persistHash);
+	} else {
+		dagWrite.assertValidHash(client.headHash);
+		if (client.tempRefreshHash) dagWrite.assertValidHash(client.tempRefreshHash);
+	}
+	return deepFreeze(Object.fromEntries(clients));
+}
+async function getClients(dagRead) {
+	return getClientsAtHash(await dagRead.getHead(CLIENTS_HEAD_NAME), dagRead);
+}
+async function getClientsAtHash(hash, dagRead) {
+	if (!hash) return /* @__PURE__ */ new Map();
+	return chunkDataToClientMap((await dagRead.getChunk(hash))?.data);
+}
+/**
+* Used to signal that a client does not exist. Maybe it was garbage collected?
+*/
+var ClientStateNotFoundError = class extends Error {
+	name = "ClientStateNotFoundError";
+	id;
+	constructor(id) {
+		super(`Client state not found, id: ${id}`);
+		this.id = id;
+	}
+};
+/**
+* Throws a `ClientStateNotFoundError` if the client does not exist.
+*/
+async function assertHasClientState(id, dagRead) {
+	if (!await hasClientState(id, dagRead)) throw new ClientStateNotFoundError(id);
+}
+async function hasClientState(id, dagRead) {
+	return !!await getClient(id, dagRead);
+}
+async function getClient(id, dagRead) {
+	return (await getClients(dagRead)).get(id);
+}
+async function mustGetClient(id, dagRead) {
+	const client = await getClient(id, dagRead);
+	if (!client) throw new ClientStateNotFoundError(id);
+	return client;
+}
+function initClientV6(newClientID, lc, perdag, mutatorNames, indexes, formatVersion, enableClientGroupForking) {
+	return withWrite(perdag, async (dagWrite) => {
+		async function setClientsAndClientGroupAndCommit(basisHash, cookieJSON, valueHash, indexRecords) {
+			const newSnapshotData = newSnapshotCommitDataDD31(basisHash, {}, cookieJSON, valueHash, indexRecords);
+			const chunk = dagWrite.createChunk(newSnapshotData, getRefs(newSnapshotData));
+			const newClientGroupID = makeClientID();
+			const newClient = {
+				heartbeatTimestampMs: Date.now(),
+				refreshHashes: [chunk.hash],
+				persistHash: null,
+				clientGroupID: newClientGroupID
+			};
+			const newClients = new Map(clients).set(newClientID, newClient);
+			const clientGroup = {
+				headHash: chunk.hash,
+				mutatorNames,
+				indexes,
+				mutationIDs: {},
+				lastServerAckdMutationIDs: {},
+				disabled: false
+			};
+			await Promise.all([
+				dagWrite.putChunk(chunk),
+				setClients(newClients, dagWrite),
+				setClientGroup(newClientGroupID, clientGroup, dagWrite)
+			]);
+			return [
+				newClient,
+				chunk.hash,
+				newClients,
+				true
+			];
+		}
+		const clients = await getClients(dagWrite);
+		const res = await findMatchingClient(dagWrite, mutatorNames, indexes);
+		if (res.type === 2) {
+			const { clientGroupID, headHash } = res;
+			const newClient = {
+				clientGroupID,
+				refreshHashes: [headHash],
+				heartbeatTimestampMs: Date.now(),
+				persistHash: null
+			};
+			const newClients = new Map(clients).set(newClientID, newClient);
+			await setClients(newClients, dagWrite);
+			return [
+				newClient,
+				headHash,
+				newClients,
+				false
+			];
+		}
+		if (!enableClientGroupForking || res.type === 0) {
+			const emptyBTreeChunk = dagWrite.createChunk(emptyDataNode, []);
+			await dagWrite.putChunk(emptyBTreeChunk);
+			const indexRecords = [];
+			for (const [name, indexDefinition] of Object.entries(indexes)) {
+				const chunkIndexDefinition = toChunkIndexDefinition(name, indexDefinition);
+				indexRecords.push({
+					definition: chunkIndexDefinition,
+					valueHash: emptyBTreeChunk.hash
+				});
+			}
+			return setClientsAndClientGroupAndCommit(null, null, emptyBTreeChunk.hash, indexRecords);
+		}
+		assert(res.type === 1, "Expected result type to be FORK");
+		const { snapshot } = res;
+		const indexRecords = [];
+		const { valueHash, indexes: oldIndexes } = snapshot;
+		const map = new BTreeRead(dagWrite, formatVersion, valueHash);
+		for (const [name, indexDefinition] of Object.entries(indexes)) {
+			const { prefix = "", jsonPointer, allowEmpty = false } = indexDefinition;
+			const chunkIndexDefinition = {
+				name,
+				keyPrefix: prefix,
+				jsonPointer,
+				allowEmpty
+			};
+			const oldIndex = findMatchingOldIndex(oldIndexes, chunkIndexDefinition);
+			if (oldIndex) indexRecords.push({
+				definition: chunkIndexDefinition,
+				valueHash: oldIndex.valueHash
+			});
+			else {
+				const indexBTree = await createIndexBTree(lc, dagWrite, map, prefix, jsonPointer, allowEmpty, formatVersion);
+				indexRecords.push({
+					definition: chunkIndexDefinition,
+					valueHash: await indexBTree.flush()
+				});
+			}
+		}
+		return setClientsAndClientGroupAndCommit(snapshot.meta.basisHash, snapshot.meta.cookieJSON, snapshot.valueHash, indexRecords);
+	});
+}
+function findMatchingOldIndex(oldIndexes, chunkIndexDefinition) {
+	return oldIndexes.find((index) => chunkIndexDefinitionEqualIgnoreName(index.definition, chunkIndexDefinition));
+}
+async function findMatchingClient(dagRead, mutatorNames, indexes) {
+	let newestCookie;
+	let bestSnapshot;
+	const mutatorNamesSet = new Set(mutatorNames);
+	const clientGroups = await getClientGroups(dagRead);
+	for (const [clientGroupID, clientGroup] of clientGroups) {
+		if (!clientGroup.disabled && mutatorNamesEqual(mutatorNamesSet, clientGroup.mutatorNames) && indexDefinitionsEqual(indexes, clientGroup.indexes)) return {
+			type: 2,
+			clientGroupID,
+			headHash: clientGroup.headHash
+		};
+		const clientGroupSnapshotCommit = await baseSnapshotFromHash(clientGroup.headHash, dagRead);
+		assertSnapshotCommitDD31(clientGroupSnapshotCommit);
+		const { cookieJSON } = clientGroupSnapshotCommit.meta;
+		if (newestCookie === void 0 || compareCookies(cookieJSON, newestCookie) > 0) {
+			newestCookie = cookieJSON;
+			bestSnapshot = clientGroupSnapshotCommit;
+		}
+	}
+	if (bestSnapshot) return {
+		type: 1,
+		snapshot: bestSnapshot
+	};
+	return { type: 0 };
+}
+function getRefsForClients(clients) {
+	const refs = /* @__PURE__ */ new Set();
+	for (const client of clients.values()) if (isClientV6(client)) {
+		for (const hash of client.refreshHashes) refs.add(hash);
+		if (client.persistHash) refs.add(client.persistHash);
+	} else {
+		refs.add(client.headHash);
+		if (client.tempRefreshHash) refs.add(client.tempRefreshHash);
+	}
+	return toRefs(refs);
+}
+async function getClientGroupForClient(clientID, read) {
+	const clientGroupID = await getClientGroupIDForClient(clientID, read);
+	if (!clientGroupID) return;
+	return getClientGroup(clientGroupID, read);
+}
+async function getClientGroupIDForClient(clientID, read) {
+	return (await getClient(clientID, read))?.clientGroupID;
+}
+/**
+* Adds a Client to the ClientMap and updates the 'clients' head to point at
+* the updated clients.
+*/
+async function setClient(clientID, client, dagWrite) {
+	const clients = await getClients(dagWrite);
+	return setClients(new Map(clients).set(clientID, client), dagWrite);
+}
+/**
+* Sets the ClientMap and updates the 'clients' head top point at the new
+* clients.
+*/
+async function setClients(clients, dagWrite) {
+	const chunkData = clientMapToChunkData(clients, dagWrite);
+	const chunk = dagWrite.createChunk(chunkData, getRefsForClients(clients));
+	await dagWrite.putChunk(chunk);
+	await dagWrite.setHead(CLIENTS_HEAD_NAME, chunk.hash);
+	return chunk.hash;
+}
+//#endregion
+export { ClientStateNotFoundError, assertClientV6, assertHasClientState, getClient, getClientGroupForClient, getClientGroupIDForClient, getClients, hasClientState, initClientV6, mustGetClient, setClient, setClients };
+
+//# sourceMappingURL=clients.js.map

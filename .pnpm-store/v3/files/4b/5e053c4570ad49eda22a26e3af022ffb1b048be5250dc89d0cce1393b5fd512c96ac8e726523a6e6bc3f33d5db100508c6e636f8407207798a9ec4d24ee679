@@ -1,0 +1,54 @@
+import { Subscription } from "../../types/subscription.js";
+import { EventEmitter } from "eventemitter3";
+//#region ../zero-cache/src/services/replicator/notifier.ts
+/**
+* Handles the semantics of {@link ReplicatorVersionNotifier.subscribe()}
+* notifications, namely:
+*
+* * New subscribers are notified immediately with the latest received
+*   ReplicaState.
+*
+* * Non-latest notifications are discarded if the subscriber is too
+*   busy to consume them.
+*
+* By encapsulating the state for the first behavior (essentially, whether
+* the first notification has been sent by the Replicator), Notifier objects
+* can be chained to simplify fanout from Replicator to View Syncers.
+*
+* In particular, each Syncer Thread can manage a single Subscription to
+* the Replicator across a MessageChannel, which it uses for its own Notifier
+* instance to manage subscriptions from View Syncers within its thread. This
+* way a Replicator only deals with sending notifications to a bounded set
+* of MessageChannel-based subscribers (Syncer Threads), while the dynamic
+* subscribe and unsubscribe traffic from View Syncers remains within each
+* Syncer Thread.
+*/
+var Notifier = class {
+	#eventEmitter = new EventEmitter();
+	#lastStateReceived;
+	#newSubscription() {
+		const notify = (state) => subscription.push(state);
+		const subscription = Subscription.create({
+			coalesce: (curr) => curr,
+			cleanup: () => this.#eventEmitter.off("version", notify)
+		});
+		return {
+			notify,
+			subscription
+		};
+	}
+	subscribe() {
+		const { notify, subscription } = this.#newSubscription();
+		this.#eventEmitter.on("version", notify);
+		if (this.#lastStateReceived) notify(this.#lastStateReceived);
+		return subscription;
+	}
+	notifySubscribers(state = { state: "version-ready" }) {
+		this.#lastStateReceived = state;
+		return this.#eventEmitter.listeners("version").map((notify) => notify(state)).map((pending) => pending.result);
+	}
+};
+//#endregion
+export { Notifier };
+
+//# sourceMappingURL=notifier.js.map

@@ -1,0 +1,26 @@
+import type { IncomingHttpHeaders } from 'node:http2';
+import { type InitConnectionMessage } from '../../../zero-protocol/src/connect.ts';
+export type ConnectParams = {
+    readonly protocolVersion: number;
+    readonly clientID: string;
+    readonly clientGroupID: string;
+    readonly profileID: string | null;
+    readonly baseCookie: string | null;
+    readonly timestamp: number;
+    readonly lmID: number;
+    readonly wsID: string;
+    readonly debugPerf: boolean;
+    readonly auth: string | undefined;
+    readonly userID: string | undefined;
+    readonly initConnectionMsg: InitConnectionMessage | undefined;
+    readonly httpCookie: string | undefined;
+    readonly origin: string | undefined;
+};
+export declare function getConnectParams(protocolVersion: number, url: URL, headers: IncomingHttpHeaders): {
+    params: ConnectParams;
+    error: null;
+} | {
+    params: null;
+    error: string;
+};
+//# sourceMappingURL=connect-params.d.ts.map

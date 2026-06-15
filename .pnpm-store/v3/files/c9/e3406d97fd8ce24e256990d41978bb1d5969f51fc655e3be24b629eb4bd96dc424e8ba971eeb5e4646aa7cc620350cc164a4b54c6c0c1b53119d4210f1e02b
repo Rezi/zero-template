@@ -1,0 +1,14 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { Upstream } from '../../../zero-protocol/src/up.ts';
+import type { Mutagen } from '../services/mutagen/mutagen.ts';
+import type { Pusher } from '../services/mutagen/pusher.ts';
+import { type ConnectionContextManager } from '../services/view-syncer/connection-context-manager.ts';
+import { type ViewSyncer } from '../services/view-syncer/view-syncer.ts';
+import type { ConnectParams } from './connect-params.ts';
+import type { HandlerResult, MessageHandler } from './connection.ts';
+export declare class SyncerWsMessageHandler implements MessageHandler {
+    #private;
+    constructor(lc: LogContext, connectParams: ConnectParams, connContextManager: ConnectionContextManager, viewSyncer: ViewSyncer, mutagen: Mutagen | undefined, pusher: Pusher | undefined);
+    handleMessage(msg: Upstream): Promise<HandlerResult[]>;
+}
+//# sourceMappingURL=syncer-ws-message-handler.d.ts.map

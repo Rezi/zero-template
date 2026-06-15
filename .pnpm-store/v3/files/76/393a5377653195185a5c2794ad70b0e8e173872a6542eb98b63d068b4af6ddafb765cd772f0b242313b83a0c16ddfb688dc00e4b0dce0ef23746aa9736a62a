@@ -1,0 +1,1 @@
+{"version":3,"file":"get-kv-store-provider.d.ts","sourceRoot":"","sources":["../../../../replicache/src/get-kv-store-provider.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAC,UAAU,EAAC,MAAM,kBAAkB,CAAC;AAMjD,OAAO,KAAK,EAAC,aAAa,EAAC,MAAM,eAAe,CAAC;AAEjD,wBAAgB,kBAAkB,CAChC,EAAE,EAAE,UAAU,EACd,OAAO,EAAE,KAAK,GAAG,KAAK,GAAG,aAAa,GAAG,SAAS,GACjD,aAAa,CAgBf"}

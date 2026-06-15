@@ -1,0 +1,10 @@
+import type { ClientID } from './ids.ts';
+/**
+ * Returns a new requestID of the form <client ID>-<session ID>-<request
+ * count>. The request count enables one to find the request following or
+ * preceding a given request. The sessionid scopes the request count, ensuring
+ * the requestID is probabilistically unique across restarts (which is good
+ * enough).
+ */
+export declare function newRequestID(clientID: ClientID): string;
+//# sourceMappingURL=request-id.d.ts.map

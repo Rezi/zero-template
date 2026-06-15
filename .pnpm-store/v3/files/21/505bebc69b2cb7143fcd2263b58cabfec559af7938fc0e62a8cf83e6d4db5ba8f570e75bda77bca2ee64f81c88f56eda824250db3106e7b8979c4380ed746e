@@ -1,0 +1,10 @@
+import { LogContext, type Context, type LogLevel, type LogSink } from '@rocicorp/logger';
+/**
+ * Creates a LogContext
+ * @param logLevel The log level to use. Default is `'info'`.
+ * @param logSinks Destination for logs. Default is `[consoleLogSink]`.
+ * @param context Optional: Additional information that can be associated with logs.
+ * @returns A LogContext instance configured with the provided options.
+ */
+export declare function createLogContext(logLevel?: LogLevel, logSinks?: LogSink[], context?: Context): LogContext;
+//# sourceMappingURL=log-options.d.ts.map

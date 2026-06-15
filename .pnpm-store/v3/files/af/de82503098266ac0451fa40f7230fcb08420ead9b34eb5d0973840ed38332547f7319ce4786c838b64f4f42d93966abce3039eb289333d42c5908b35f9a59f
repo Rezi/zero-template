@@ -1,0 +1,31 @@
+import * as expo from './expo-sqlite.ts';
+import * as sqlite from './sqlite.ts';
+/** @deprecated Use `expoSQLiteStoreProvider` from `@rocicorp/zero/expo-sqlite` instead. */
+export declare const expoSQLiteStoreProvider: typeof expo.expoSQLiteStoreProvider;
+/** @deprecated Use `clearAllNamedStoresForTesting` from `@rocicorp/zero/expo-sqlite` instead. */
+export declare const clearAllNamedStoresForTesting: typeof sqlite.clearAllNamedStoresForTesting;
+/** @deprecated Use `dropStore` from `@rocicorp/zero/expo-sqlite` instead. */
+export declare const dropStore: typeof sqlite.dropStore;
+/** @deprecated Use `SQLiteStore` from `@rocicorp/zero/expo-sqlite` instead. */
+export declare const SQLiteStore: typeof sqlite.SQLiteStore;
+/** @deprecated Use `ExpoSQLiteStoreOptions` from `@rocicorp/zero/expo-sqlite` instead. */
+export type ExpoSQLiteStoreOptions = expo.ExpoSQLiteStoreOptions;
+/** @deprecated Use `PreparedStatement` from `@rocicorp/zero/expo-sqlite` instead. */
+export type PreparedStatement = sqlite.PreparedStatement;
+/** @deprecated Use `SQLiteDatabase` from `@rocicorp/zero/expo-sqlite` instead. */
+export type SQLiteDatabase = sqlite.SQLiteDatabase;
+/** @deprecated Use `SQLiteStoreOptions` from `@rocicorp/zero/expo-sqlite` instead. */
+export type SQLiteStoreOptions = sqlite.SQLiteStoreOptions;
+/** @deprecated Use `CreateStore` from `@rocicorp/zero/expo-sqlite` instead. */
+export type CreateStore = sqlite.CreateStore;
+/** @deprecated Use `DropStore` from `@rocicorp/zero/expo-sqlite` instead. */
+export type DropStore = sqlite.DropStore;
+/** @deprecated Use `Read` from `@rocicorp/zero/expo-sqlite` instead. */
+export type Read = sqlite.Read;
+/** @deprecated Use `Store` from `@rocicorp/zero/expo-sqlite` instead. */
+export type Store = sqlite.Store;
+/** @deprecated Use `StoreProvider` from `@rocicorp/zero/expo-sqlite` instead. */
+export type StoreProvider = sqlite.StoreProvider;
+/** @deprecated Use `Write` from `@rocicorp/zero/expo-sqlite` instead. */
+export type Write = sqlite.Write;
+//# sourceMappingURL=react-native.d.ts.map

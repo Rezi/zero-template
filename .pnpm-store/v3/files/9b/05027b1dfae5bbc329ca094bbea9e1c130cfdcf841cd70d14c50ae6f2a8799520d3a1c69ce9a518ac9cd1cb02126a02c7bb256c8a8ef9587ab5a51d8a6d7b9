@@ -1,0 +1,10 @@
+import type { Pusher } from './pusher.ts';
+/**
+ * This creates a default pusher which uses HTTP POST to send the push request.
+ */
+export declare function getDefaultPusher(rep: {
+    pushURL: string;
+    auth: string;
+}): Pusher;
+export declare function isDefaultPusher(pusher: Pusher): boolean;
+//# sourceMappingURL=get-default-pusher.d.ts.map

@@ -1,0 +1,381 @@
+import { stringify } from "../../../shared/src/bigint-json.js";
+import { BPCHAR, DATE, JSONB, NUMERIC, TIME, TIMESTAMP, TIMESTAMPTZ, TIMETZ, UUID, VARCHAR } from "../types/pg-types.js";
+//#region ../zero-cache/src/db/pg-copy-binary.ts
+var PGCOPY_SIGNATURE = Buffer.from([
+	80,
+	71,
+	67,
+	79,
+	80,
+	89,
+	10,
+	255,
+	13,
+	10,
+	0
+]);
+var HEADER_MIN_SIZE = 19;
+var PG_EPOCH_UNIX_MILLIS = 9466848e5;
+var PG_EPOCH_UNIX_DAYS = 10957;
+var MS_PER_DAY = 864e5;
+var PG_TIMESTAMP_INF_HI = 2147483647;
+var PG_TIMESTAMP_INF_LO = 4294967295;
+var PG_TIMESTAMP_NEG_INF_HI = -2147483648;
+var PG_TIMESTAMP_NEG_INF_LO = 0;
+var PG_DATE_INFINITY = 2147483647;
+var PG_DATE_NEG_INFINITY = -2147483648;
+/**
+* Streaming parser for PostgreSQL `COPY ... TO STDOUT WITH (FORMAT binary)`.
+*
+* Analogous to {@link import('./pg-copy.ts').TsvParser} but for binary format.
+* Yields `Buffer | null` per field (null = SQL NULL).
+*
+* The caller tracks column position the same way as with TsvParser.
+*/
+var BinaryCopyParser = class {
+	#buffer = Buffer.alloc(0);
+	#offset = 0;
+	#headerParsed = false;
+	#fieldsRemaining = 0;
+	*parse(chunk) {
+		this.#append(chunk);
+		if (!this.#headerParsed) {
+			if (!this.#tryParseHeader()) return;
+		}
+		for (;;) {
+			if (this.#fieldsRemaining === 0) {
+				if (this.#remaining() < 2) break;
+				const fieldCount = this.#buffer.readInt16BE(this.#offset);
+				if (fieldCount === -1) break;
+				this.#offset += 2;
+				this.#fieldsRemaining = fieldCount;
+			}
+			while (this.#fieldsRemaining > 0) {
+				if (this.#remaining() < 4) {
+					this.#compact();
+					return;
+				}
+				const fieldLen = this.#buffer.readInt32BE(this.#offset);
+				this.#offset += 4;
+				if (fieldLen === -1) yield null;
+				else {
+					if (this.#remaining() < fieldLen) {
+						this.#offset -= 4;
+						this.#compact();
+						return;
+					}
+					yield this.#buffer.subarray(this.#offset, this.#offset + fieldLen);
+					this.#offset += fieldLen;
+				}
+				this.#fieldsRemaining--;
+			}
+		}
+		this.#compact();
+	}
+	#remaining() {
+		return this.#buffer.length - this.#offset;
+	}
+	#append(chunk) {
+		if (this.#buffer.length === this.#offset) {
+			this.#buffer = chunk;
+			this.#offset = 0;
+		} else {
+			this.#buffer = Buffer.concat([this.#buffer.subarray(this.#offset), chunk]);
+			this.#offset = 0;
+		}
+	}
+	#compact() {
+		if (this.#offset > 0) {
+			this.#buffer = this.#buffer.subarray(this.#offset);
+			this.#offset = 0;
+		}
+	}
+	#tryParseHeader() {
+		if (this.#remaining() < HEADER_MIN_SIZE) return false;
+		for (let i = 0; i < PGCOPY_SIGNATURE.length; i++) if (this.#buffer[this.#offset + i] !== PGCOPY_SIGNATURE[i]) throw new Error("Invalid PGCOPY binary signature");
+		this.#offset += 11;
+		const flags = this.#buffer.readInt32BE(this.#offset);
+		this.#offset += 4;
+		if (flags !== 0) throw new Error(`Unsupported PGCOPY flags: ${flags}`);
+		const extensionLen = this.#buffer.readInt32BE(this.#offset);
+		this.#offset += 4;
+		if (extensionLen > 0) {
+			if (this.#remaining() < extensionLen) {
+				this.#offset -= HEADER_MIN_SIZE;
+				return false;
+			}
+			this.#offset += extensionLen;
+		}
+		this.#headerParsed = true;
+		return true;
+	}
+};
+var KNOWN_BINARY_OIDS = new Set([
+	16,
+	21,
+	23,
+	20,
+	700,
+	701,
+	25,
+	VARCHAR,
+	BPCHAR,
+	18,
+	UUID,
+	17,
+	114,
+	JSONB,
+	TIMESTAMP,
+	TIMESTAMPTZ,
+	DATE,
+	TIME,
+	TIMETZ,
+	NUMERIC
+]);
+/**
+* Returns true if the column's binary format is known and can be decoded
+* natively. For columns where this returns false, the COPY SELECT should
+* cast the column to `::text` so PG sends the text representation inside
+* the binary frame.
+*/
+function hasBinaryDecoder(spec) {
+	if (spec.elemPgTypeClass !== null && spec.elemPgTypeClass !== void 0) return true;
+	if (spec.pgTypeClass === "e") return true;
+	return KNOWN_BINARY_OIDS.has(spec.typeOID);
+}
+/** Decoder for columns cast to `::text` in the COPY SELECT. */
+var textCastDecoder = (buf) => buf.toString("utf8");
+/**
+* Creates a specialized binary decoder for the given column spec.
+* The returned function converts a raw COPY binary field `Buffer`
+* directly to a `LiteValueType`, bypassing text parsing entirely.
+*
+* Only call this for columns where {@link hasBinaryDecoder} returns true.
+* For other columns, cast to `::text` in the SELECT and use
+* {@link textCastDecoder}.
+*/
+function makeBinaryDecoder(spec) {
+	const { typeOID, pgTypeClass, elemPgTypeClass } = spec;
+	if (elemPgTypeClass !== null && elemPgTypeClass !== void 0) return (buf) => decodeArray(buf);
+	if (pgTypeClass === "e") return (buf) => buf.toString("utf8");
+	switch (typeOID) {
+		case 16: return (buf) => buf[0] ? 1 : 0;
+		case 21: return (buf) => buf.readInt16BE(0);
+		case 23: return (buf) => buf.readInt32BE(0);
+		case 20: return (buf) => buf.readBigInt64BE(0);
+		case 700: return (buf) => buf.readFloatBE(0);
+		case 701: return (buf) => buf.readDoubleBE(0);
+		case 25:
+		case VARCHAR:
+		case BPCHAR:
+		case 18: return (buf) => buf.toString("utf8");
+		case UUID: return (buf) => decodeUUID(buf);
+		case 17: return (buf) => Uint8Array.prototype.slice.call(buf);
+		case 114: return (buf) => buf.toString("utf8");
+		case JSONB: return (buf) => buf.toString("utf8", 1);
+		case TIMESTAMP:
+		case TIMESTAMPTZ: return (buf) => decodeTimestamp(buf);
+		case DATE: return (buf) => decodeDate(buf);
+		case TIME: return (buf) => decodeTime(buf);
+		case TIMETZ: return (buf) => decodeTimeTZ(buf);
+		case NUMERIC: return (buf) => decodeNumeric(buf);
+		default: throw new Error(`No binary decoder for type OID ${typeOID}. Use hasBinaryDecoder() to check before calling makeBinaryDecoder().`);
+	}
+}
+/**
+* UUID: 16 bytes → "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+*/
+function decodeUUID(buf) {
+	const hex = buf.toString("hex");
+	return hex.substring(0, 8) + "-" + hex.substring(8, 12) + "-" + hex.substring(12, 16) + "-" + hex.substring(16, 20) + "-" + hex.substring(20, 32);
+}
+/**
+* TIMESTAMP / TIMESTAMPTZ: int64 microseconds since PG epoch (2000-01-01 UTC)
+* → floating-point milliseconds since Unix epoch.
+*
+* Matches the output of `timestampToFpMillis()` in `types/pg.ts`.
+*
+* Uses Number arithmetic (avoiding BigInt) for speed. The microsecond value
+* fits safely in a Number for all practical dates (up to ~year 285,000).
+*/
+function decodeTimestamp(buf) {
+	const hi = buf.readInt32BE(0);
+	const lo = buf.readUInt32BE(4);
+	if (hi === PG_TIMESTAMP_INF_HI && lo === PG_TIMESTAMP_INF_LO) return Infinity;
+	if (hi === PG_TIMESTAMP_NEG_INF_HI && lo === PG_TIMESTAMP_NEG_INF_LO) return -Infinity;
+	return (hi * 4294967296 + lo) / 1e3 + PG_EPOCH_UNIX_MILLIS;
+}
+/**
+* DATE: int32 days since PG epoch (2000-01-01) → millis since Unix epoch at
+* UTC midnight. Matches `dateToUTCMidnight()` in `types/pg.ts`.
+*/
+function decodeDate(buf) {
+	const pgDays = buf.readInt32BE(0);
+	if (pgDays === PG_DATE_INFINITY) return Infinity;
+	if (pgDays === PG_DATE_NEG_INFINITY) return -Infinity;
+	return (pgDays + PG_EPOCH_UNIX_DAYS) * MS_PER_DAY;
+}
+/**
+* TIME: int64 microseconds since midnight → milliseconds since midnight.
+* Matches `postgresTimeToMilliseconds()` in `types/pg.ts`.
+*
+* Max value is 86,400,000,000 (~8.6e10), well within Number.MAX_SAFE_INTEGER.
+*/
+function decodeTime(buf) {
+	const hi = buf.readInt32BE(0);
+	const lo = buf.readUInt32BE(4);
+	const micros = hi * 4294967296 + lo;
+	return Math.trunc(micros / 1e3);
+}
+/**
+* TIMETZ: int64 microseconds since midnight + int32 timezone offset in seconds.
+* PG stores the offset with inverted sign from ISO (POSIX convention):
+* positive = west of UTC, negative = east of UTC.
+* UTC = local_time + pg_offset.
+* → UTC milliseconds since midnight.
+*
+* Max value ~1.3e11 microseconds, well within Number.MAX_SAFE_INTEGER.
+*/
+function decodeTimeTZ(buf) {
+	const hi = buf.readInt32BE(0);
+	const lo = buf.readUInt32BE(4);
+	const utcMicros = hi * 4294967296 + lo + buf.readInt32BE(8) * 1e6;
+	let ms = Math.trunc(utcMicros / 1e3);
+	if (ms < 0 || ms >= MS_PER_DAY) ms = (ms % MS_PER_DAY + MS_PER_DAY) % MS_PER_DAY;
+	return ms;
+}
+var NUMERIC_NEG = 16384;
+var NUMERIC_NAN = 49152;
+var NUMERIC_PINF = 53248;
+var NUMERIC_NINF = 61440;
+var NBASE = 1e4;
+/**
+* NUMERIC: variable-length binary format.
+* Header: {ndigits: int16, weight: int16, sign: int16, dscale: int16}
+* Followed by ndigits x int16 base-10000 digits.
+*
+* Converts to a JS `number` (matching the text path's `Number(x)` behavior).
+*/
+function decodeNumeric(buf) {
+	const ndigits = buf.readInt16BE(0);
+	const weight = buf.readInt16BE(2);
+	const sign = buf.readUInt16BE(4);
+	if (sign === NUMERIC_NAN) return NaN;
+	if (sign === NUMERIC_PINF) return Infinity;
+	if (sign === NUMERIC_NINF) return -Infinity;
+	if (ndigits === 0) return 0;
+	if (ndigits > 3) return decodeNumericViaString(buf, ndigits, weight, sign);
+	let intVal = 0;
+	for (let i = 0; i < ndigits; i++) intVal = intVal * NBASE + buf.readInt16BE(8 + i * 2);
+	const shift = ndigits - weight - 1;
+	let result;
+	if (shift > 0) result = intVal / NBASE ** shift;
+	else if (shift < 0) result = intVal * NBASE ** -shift;
+	else result = intVal;
+	return sign === NUMERIC_NEG ? -result : result;
+}
+/**
+* Fallback for numerics with many base-10000 digits where accumulating
+* into an integer would exceed MAX_SAFE_INTEGER. Builds the decimal
+* string and uses Number() to match the text path exactly.
+*/
+function decodeNumericViaString(buf, ndigits, weight, sign) {
+	const intGroups = weight + 1;
+	let str = "";
+	for (let i = 0; i < ndigits; i++) {
+		const digit = buf.readInt16BE(8 + i * 2);
+		if (i === intGroups) {
+			str = str || "0";
+			str += ".";
+		}
+		str += i === 0 ? String(digit) : String(digit).padStart(4, "0");
+	}
+	if (intGroups > ndigits) str += "0".repeat((intGroups - ndigits) * 4);
+	return Number((sign === NUMERIC_NEG ? "-" : "") + str);
+}
+/**
+* Array: binary format.
+*
+* Header:
+*   int32 ndim       — number of dimensions (0 for empty array)
+*   int32 flags      — 0 or 1 (has-nulls)
+*   int32 elem_oid   — OID of element type
+*   Per dimension:
+*     int32 dim_size  — number of elements in this dimension
+*     int32 dim_lb    — lower bound (usually 1)
+*
+* Then for each element (in row-major order):
+*   int32 length     — -1 for NULL, otherwise byte length
+*   bytes            — element data
+*
+* Result is JSON.stringify'd for storage in SQLite (matching text path behavior).
+*/
+function decodeArray(buf) {
+	let offset = 0;
+	const ndim = buf.readInt32BE(offset);
+	offset += 4;
+	offset += 4;
+	const elemOid = buf.readInt32BE(offset);
+	offset += 4;
+	if (ndim === 0) return "[]";
+	const dims = [];
+	for (let d = 0; d < ndim; d++) {
+		dims.push(buf.readInt32BE(offset));
+		offset += 4;
+		offset += 4;
+	}
+	const elemDecoder = makeElementDecoder(elemOid);
+	function readDimension(dim) {
+		const size = dims[dim];
+		const arr = [];
+		for (let i = 0; i < size; i++) if (dim < ndim - 1) arr.push(readDimension(dim + 1));
+		else {
+			const elemLen = buf.readInt32BE(offset);
+			offset += 4;
+			if (elemLen === -1) arr.push(null);
+			else {
+				arr.push(elemDecoder(buf.subarray(offset, offset + elemLen)));
+				offset += elemLen;
+			}
+		}
+		return arr;
+	}
+	return stringify(readDimension(0));
+}
+/**
+* Creates a decoder for array elements. Array elements use the same
+* binary encoding as scalar columns, but we need to map the element
+* OID to the right decoder. Returns JS values (not LiteValueType)
+* since the result will be JSON.stringify'd.
+*/
+function makeElementDecoder(elemOid) {
+	switch (elemOid) {
+		case 16: return (buf) => buf[0] ? true : false;
+		case 21: return (buf) => buf.readInt16BE(0);
+		case 23: return (buf) => buf.readInt32BE(0);
+		case 20: return (buf) => {
+			const val = buf.readBigInt64BE(0);
+			return val >= Number.MIN_SAFE_INTEGER && val <= Number.MAX_SAFE_INTEGER ? Number(val) : val;
+		};
+		case 700: return (buf) => buf.readFloatBE(0);
+		case 701: return (buf) => buf.readDoubleBE(0);
+		case 25:
+		case VARCHAR:
+		case BPCHAR:
+		case 18: return (buf) => buf.toString("utf8");
+		case UUID: return (buf) => decodeUUID(buf);
+		case 114: return (buf) => JSON.parse(buf.toString("utf8"));
+		case JSONB: return (buf) => JSON.parse(buf.toString("utf8", 1));
+		case TIMESTAMP:
+		case TIMESTAMPTZ: return (buf) => decodeTimestamp(buf);
+		case DATE: return (buf) => decodeDate(buf);
+		case TIME: return (buf) => decodeTime(buf);
+		case TIMETZ: return (buf) => decodeTimeTZ(buf);
+		case NUMERIC: return (buf) => decodeNumeric(buf);
+		default: return (buf) => buf.toString("utf8");
+	}
+}
+//#endregion
+export { BinaryCopyParser, hasBinaryDecoder, makeBinaryDecoder, textCastDecoder };
+
+//# sourceMappingURL=pg-copy-binary.js.map

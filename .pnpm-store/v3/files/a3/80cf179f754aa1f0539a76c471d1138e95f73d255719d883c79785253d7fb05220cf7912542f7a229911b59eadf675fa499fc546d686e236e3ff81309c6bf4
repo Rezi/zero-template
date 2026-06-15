@@ -1,0 +1,28 @@
+import { isProd } from "./config.js";
+import { isJSONObject, isJSONValue } from "./json.js";
+import { valita_exports } from "./valita.js";
+import * as valita from "@badrap/valita";
+//#region ../shared/src/json-schema.ts
+var path = [];
+var jsonSchema = valita_exports.unknown().chain((v) => {
+	if (isProd) return valita.ok(v);
+	const rv = isJSONValue(v, path) ? valita.ok(v) : valita.err({
+		message: `Not a JSON value`,
+		path: path.slice()
+	});
+	path.length = 0;
+	return rv;
+});
+var jsonObjectSchema = valita_exports.unknown().chain((v) => {
+	if (isProd) return valita.ok(v);
+	const rv = isJSONObject(v, path) ? valita.ok(v) : valita.err({
+		message: `Not a JSON object`,
+		path: path.slice()
+	});
+	path.length = 0;
+	return rv;
+});
+//#endregion
+export { jsonObjectSchema, jsonSchema };
+
+//# sourceMappingURL=json-schema.js.map

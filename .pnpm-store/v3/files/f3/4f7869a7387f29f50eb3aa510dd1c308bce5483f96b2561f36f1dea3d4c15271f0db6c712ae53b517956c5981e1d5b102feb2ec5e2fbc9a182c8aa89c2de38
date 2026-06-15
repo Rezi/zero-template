@@ -1,0 +1,9 @@
+import { LogContext, consoleLogSink } from "@rocicorp/logger";
+//#region ../zero-server/src/logging.ts
+function createLogContext(level) {
+	return new LogContext(level, {}, consoleLogSink);
+}
+//#endregion
+export { createLogContext };
+
+//# sourceMappingURL=logging.js.map

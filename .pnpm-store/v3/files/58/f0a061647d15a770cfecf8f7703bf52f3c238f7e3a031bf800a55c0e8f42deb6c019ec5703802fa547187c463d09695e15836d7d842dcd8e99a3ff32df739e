@@ -1,0 +1,14 @@
+import { type LogLevel, type LogSink } from '@rocicorp/logger';
+import { type DatadogLogSinkOptions } from '../../../datadog/src/datadog-log-sink.ts';
+import { type HTTPString } from './http-string.ts';
+export type LogOptions = {
+    readonly logLevel: LogLevel;
+    readonly logSink: LogSink;
+};
+export declare function createLogOptions(options: {
+    consoleLogLevel: LogLevel;
+    server: HTTPString | null;
+    enableAnalytics: boolean;
+    consoleLogSink?: LogSink | undefined;
+}, createDatadogLogSink?: (options: DatadogLogSinkOptions) => LogSink): LogOptions;
+//# sourceMappingURL=log-options.d.ts.map

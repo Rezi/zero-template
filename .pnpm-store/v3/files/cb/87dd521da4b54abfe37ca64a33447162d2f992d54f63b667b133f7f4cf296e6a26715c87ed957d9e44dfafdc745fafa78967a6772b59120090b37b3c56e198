@@ -1,0 +1,26 @@
+import { promiseVoid } from "../../../shared/src/resolved-promises.js";
+import { Visitor } from "../dag/visitor.js";
+//#region ../replicache/src/persist/gather-mem-only-visitor.ts
+var GatherMemoryOnlyVisitor = class extends Visitor {
+	#gatheredChunks = /* @__PURE__ */ new Map();
+	#lazyRead;
+	constructor(dagRead) {
+		super(dagRead);
+		this.#lazyRead = dagRead;
+	}
+	get gatheredChunks() {
+		return this.#gatheredChunks;
+	}
+	visit(h) {
+		if (!this.#lazyRead.isMemOnlyChunkHash(h)) return promiseVoid;
+		return super.visit(h);
+	}
+	visitChunk(chunk) {
+		this.#gatheredChunks.set(chunk.hash, chunk);
+		return super.visitChunk(chunk);
+	}
+};
+//#endregion
+export { GatherMemoryOnlyVisitor };
+
+//# sourceMappingURL=gather-mem-only-visitor.js.map

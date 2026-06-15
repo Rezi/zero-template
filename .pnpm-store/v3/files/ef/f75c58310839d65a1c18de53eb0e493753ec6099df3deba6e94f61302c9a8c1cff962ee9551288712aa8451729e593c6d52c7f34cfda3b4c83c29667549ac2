@@ -1,0 +1,40 @@
+import { readonly, valita_exports } from "../../shared/src/valita.js";
+import { jsonSchema } from "../../shared/src/json-schema.js";
+import { astSchema } from "./ast.js";
+import { transformFailedBodySchema } from "./error.js";
+//#region ../zero-protocol/src/custom-queries.ts
+var transformRequestBodySchema = valita_exports.array(valita_exports.object({
+	id: valita_exports.string(),
+	name: valita_exports.string(),
+	args: readonly(valita_exports.array(jsonSchema))
+}));
+var transformedQuerySchema = valita_exports.object({
+	id: valita_exports.string(),
+	name: valita_exports.string(),
+	ast: astSchema
+});
+var appErroredQuerySchema = valita_exports.object({
+	error: valita_exports.literal("app"),
+	id: valita_exports.string(),
+	name: valita_exports.string(),
+	message: valita_exports.string().optional(),
+	details: jsonSchema.optional()
+});
+var parseErroredQuerySchema = valita_exports.object({
+	error: valita_exports.literal("parse"),
+	id: valita_exports.string(),
+	name: valita_exports.string(),
+	message: valita_exports.string(),
+	details: jsonSchema.optional()
+});
+var erroredQuerySchema = valita_exports.union(appErroredQuerySchema, parseErroredQuerySchema);
+var transformResponseBodySchema = valita_exports.array(valita_exports.union(transformedQuerySchema, erroredQuerySchema));
+var transformRequestMessageSchema = valita_exports.tuple([valita_exports.literal("transform"), transformRequestBodySchema]);
+var transformErrorMessageSchema = valita_exports.tuple([valita_exports.literal("transformError"), valita_exports.array(erroredQuerySchema)]);
+var transformFailedMessageSchema = valita_exports.tuple([valita_exports.literal("transformFailed"), transformFailedBodySchema]);
+var transformOkMessageSchema = valita_exports.tuple([valita_exports.literal("transformed"), transformResponseBodySchema]);
+var transformResponseMessageSchema = valita_exports.union(transformOkMessageSchema, transformFailedMessageSchema);
+//#endregion
+export { erroredQuerySchema, transformErrorMessageSchema, transformRequestMessageSchema, transformResponseMessageSchema, transformedQuerySchema };
+
+//# sourceMappingURL=custom-queries.js.map

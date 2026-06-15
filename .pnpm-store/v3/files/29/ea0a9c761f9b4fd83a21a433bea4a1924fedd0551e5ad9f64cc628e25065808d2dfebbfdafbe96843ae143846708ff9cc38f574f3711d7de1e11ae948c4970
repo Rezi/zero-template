@@ -1,0 +1,29 @@
+import { parse, valita_exports } from "../../../../shared/src/valita.js";
+import { nanoid } from "nanoid";
+//#region ../zero-cache/src/server/runner/runtime.ts
+var containerMetadataSchema = valita_exports.object({ ["TaskARN"]: valita_exports.string() });
+async function getTaskID(lc) {
+	const containerURI = process.env["ECS_CONTAINER_METADATA_URI_V4"];
+	if (containerURI) {
+		try {
+			const metadata = await (await fetch(`${containerURI}`)).json();
+			lc.info?.(`Container metadata`, { metadata });
+		} catch (e) {
+			lc.warn?.("unable to lookup container metadata", e);
+		}
+		try {
+			const metadata = parse(await (await fetch(`${containerURI}/task`)).json(), containerMetadataSchema, "passthrough");
+			lc.info?.(`Task metadata`, { metadata });
+			const { TaskARN: taskID } = metadata;
+			const lastSlash = taskID.lastIndexOf("/");
+			return taskID.substring(lastSlash + 1);
+		} catch (e) {
+			lc.warn?.("unable to determine task ID. falling back to random ID", e);
+		}
+	}
+	return nanoid();
+}
+//#endregion
+export { getTaskID };
+
+//# sourceMappingURL=runtime.js.map

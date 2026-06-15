@@ -1,0 +1,33 @@
+import { valita_exports } from "../../../../../../shared/src/valita.js";
+import { commitSchema } from "./data.js";
+import { changeSourceReportSchema } from "../../../replicator/reporter/report-schema.js";
+//#region ../zero-cache/src/services/change-source/protocol/current/status.ts
+/**
+* The downstream status messages contain metadata about the status
+* of the change-source. indicates whether it should be echoed
+* back in an upstream status message.
+*/
+var downstreamStatusSchema = valita_exports.object({
+	ack: valita_exports.boolean().optional(() => true),
+	lagReport: changeSourceReportSchema.optional()
+});
+var downstreamStatusMessageSchema = valita_exports.tuple([
+	valita_exports.literal("status"),
+	downstreamStatusSchema,
+	valita_exports.object({ watermark: valita_exports.string() })
+]);
+/**
+* The `zero-cache` will send the Commit payload to acknowledge a completed
+* transaction (unless the `skipAck` field was specified in the Begin message
+* of the transaction), and will echo back the downstream `status` message if
+* `ack` is true.
+*/
+var upstreamStatusMessageSchema = valita_exports.tuple([
+	valita_exports.literal("status"),
+	valita_exports.union(downstreamStatusSchema, commitSchema),
+	valita_exports.object({ watermark: valita_exports.string() })
+]);
+//#endregion
+export { downstreamStatusMessageSchema, downstreamStatusSchema, upstreamStatusMessageSchema };
+
+//# sourceMappingURL=status.js.map

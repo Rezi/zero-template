@@ -1,0 +1,140 @@
+import { assert } from "../../../shared/src/asserts.js";
+import { parse } from "../../../shared/src/valita.js";
+import { getErrorDetails, getErrorMessage } from "../../../shared/src/error.js";
+import { mapAST } from "../../../zero-protocol/src/ast.js";
+import { TransformFailed } from "../../../zero-protocol/src/error-kind-enum.js";
+import { Server } from "../../../zero-protocol/src/error-origin-enum.js";
+import { Internal, Parse } from "../../../zero-protocol/src/error-reason-enum.js";
+import { transformRequestMessageSchema } from "../../../zero-protocol/src/custom-queries.js";
+import { asQueryInternals } from "../../../zql/src/query/query-internals.js";
+import { clientToServer } from "../../../zero-schema/src/name-mapper.js";
+import { QueryParseError } from "../../../zql/src/query/error.js";
+import { createLogContext } from "../logging.js";
+//#region ../zero-server/src/queries/process-queries.ts
+/**
+* Invokes the callback `cb` for each query in the request or JSON body.
+* The callback should return a Query or Promise<Query> that is the transformed result.
+*
+* This function will call `cb` in parallel for each query found in the request.
+*
+* If you need to limit concurrency, you can use a library like `p-limit` to wrap the `cb` function.
+* @deprecated Use {@linkcode handleQueryRequest} instead.
+*/
+function handleGetQueriesRequest(cb, schema, requestOrJsonBody, logLevel = "info") {
+	return transform(normalizeLegacyQueryRequestArgs(cb, schema, requestOrJsonBody, logLevel), "getQueries");
+}
+/**
+* Invokes the callback `cb` for each query in the request or JSON body.
+* The callback should return a Query or Promise<Query> that is the transformed result.
+*
+* This function will call `cb` in parallel for each query found in the request.
+*
+* If you need to limit concurrency, you can use a library like `p-limit` to wrap the `cb` function.
+* @deprecated Use {@linkcode handleQueryRequest} instead.
+*/
+function handleTransformRequest(cb, schema, requestOrJsonBody, logLevel = "info") {
+	return transform(normalizeLegacyQueryRequestArgs(cb, schema, requestOrJsonBody, logLevel), "transform");
+}
+function handleQueryRequest(inputOrTransformQuery, schema, requestOrJsonBody, logLevel) {
+	return transform(typeof inputOrTransformQuery === "object" && "handler" in inputOrTransformQuery ? normalizeQueryRequestInput(inputOrTransformQuery) : normalizeLegacyQueryRequestArgs(wrapQueryRequestHandler(inputOrTransformQuery), schema, requestOrJsonBody, logLevel), "query");
+}
+function normalizeQueryRequestInput(input) {
+	return "request" in input ? normalizeLegacyQueryRequestArgs(wrapQueryRequestHandler(input.handler), input.schema, input.request, input.logLevel, input.userID ?? null) : normalizeLegacyQueryRequestArgs(wrapQueryRequestHandler(input.handler), input.schema, input.body, input.logLevel, input.userID ?? null);
+}
+function normalizeLegacyQueryRequestArgs(handler, schema, requestOrJsonBody, logLevel, userID) {
+	assert(typeof schema !== "undefined", "Schema must be provided when using handleQueryRequest");
+	if (requestOrJsonBody instanceof Request) return {
+		type: "request",
+		handler,
+		schema,
+		request: requestOrJsonBody,
+		userID,
+		logLevel: logLevel ?? "info"
+	};
+	assert(typeof requestOrJsonBody !== "undefined", "JSON body cannot be undefined");
+	return {
+		type: "body",
+		handler,
+		schema,
+		jsonBody: requestOrJsonBody,
+		userID,
+		logLevel: logLevel ?? "info"
+	};
+}
+async function transform(args, apiName) {
+	const lc = createLogContext(args.logLevel).withContext("TransformRequest");
+	let parsed;
+	let queryIDs = [];
+	try {
+		let body;
+		if (args.type === "request") body = await args.request.json();
+		else body = args.jsonBody;
+		parsed = parse(body, transformRequestMessageSchema);
+		queryIDs = parsed[1].map((r) => r.id);
+	} catch (error) {
+		lc.error?.(`Failed to parse ${apiName} request`, error);
+		const message = `Failed to parse ${apiName} request: ${getErrorMessage(error)}`;
+		const details = getErrorDetails(error);
+		return {
+			kind: TransformFailed,
+			origin: Server,
+			reason: Parse,
+			message,
+			queryIDs,
+			...details ? { details } : {}
+		};
+	}
+	try {
+		const nameMapper = clientToServer(args.schema.tables);
+		return {
+			kind: "QueryResponse",
+			queries: await Promise.all(parsed[1].map(async (req) => {
+				let finalQuery;
+				try {
+					const result = await args.handler(req.name, req.args);
+					finalQuery = "query" in result ? result.query : result;
+				} catch (error) {
+					const message = getErrorMessage(error);
+					const details = getErrorDetails(error);
+					return {
+						error: error instanceof QueryParseError ? "parse" : "app",
+						id: req.id,
+						name: req.name,
+						message,
+						...details ? { details } : {}
+					};
+				}
+				try {
+					const ast = mapAST(asQueryInternals(finalQuery).ast, nameMapper);
+					return {
+						id: req.id,
+						name: req.name,
+						ast
+					};
+				} catch (error) {
+					lc.error?.("Failed to map AST", error);
+					throw error;
+				}
+			})),
+			...typeof args.userID !== "undefined" ? { userID: args.userID } : {}
+		};
+	} catch (e) {
+		const message = getErrorMessage(e);
+		const details = getErrorDetails(e);
+		return {
+			kind: TransformFailed,
+			origin: Server,
+			reason: Internal,
+			message,
+			queryIDs,
+			...details ? { details } : {}
+		};
+	}
+}
+function wrapQueryRequestHandler(handler) {
+	return (name, args) => handler(name, args[0]);
+}
+//#endregion
+export { handleGetQueriesRequest, handleQueryRequest, handleTransformRequest };
+
+//# sourceMappingURL=process-queries.js.map

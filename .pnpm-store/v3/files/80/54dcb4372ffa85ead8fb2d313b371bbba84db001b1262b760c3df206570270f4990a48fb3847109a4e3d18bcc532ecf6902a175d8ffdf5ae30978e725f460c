@@ -1,0 +1,28 @@
+import { assertObject } from "../../shared/src/asserts.js";
+import { assertVersionNotSupportedResponse, isClientStateNotFoundResponse } from "./error-responses.js";
+import { assertHTTPRequestInfo } from "./http-request-info.js";
+//#region ../replicache/src/pusher.ts
+function assertPusherResult(v) {
+	assertObject(v);
+	assertHTTPRequestInfo(v.httpRequestInfo);
+	if (v.response !== void 0) assertPushResponse(v.response);
+}
+function assertPushResponse(v) {
+	if (isClientStateNotFoundResponse(v)) return;
+	assertVersionNotSupportedResponse(v);
+}
+/**
+* This error is thrown when the pusher fails for any reason.
+*/
+var PushError = class extends Error {
+	name = "PushError";
+	causedBy;
+	constructor(causedBy) {
+		super("Failed to push");
+		this.causedBy = causedBy;
+	}
+};
+//#endregion
+export { PushError, assertPusherResult };
+
+//# sourceMappingURL=pusher.js.map

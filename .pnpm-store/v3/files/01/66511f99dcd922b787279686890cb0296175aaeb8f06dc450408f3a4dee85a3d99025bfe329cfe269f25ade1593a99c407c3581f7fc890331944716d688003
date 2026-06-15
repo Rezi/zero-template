@@ -1,0 +1,16 @@
+//#region ../replicache/src/sync/pull-error.ts
+/**
+* This error is thrown when the puller fails for any reason.
+*/
+var PullError = class extends Error {
+	name = "PullError";
+	causedBy;
+	constructor(causedBy) {
+		super("Failed to pull");
+		this.causedBy = causedBy;
+	}
+};
+//#endregion
+export { PullError };
+
+//# sourceMappingURL=pull-error.js.map

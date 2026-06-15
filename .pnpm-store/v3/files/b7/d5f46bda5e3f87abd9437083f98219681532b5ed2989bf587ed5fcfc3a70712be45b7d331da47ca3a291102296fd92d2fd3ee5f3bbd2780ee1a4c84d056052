@@ -1,0 +1,33 @@
+import { assertObject, assertString } from "../../shared/src/asserts.js";
+import { bc } from "../../shared/src/broadcast-channel.js";
+//#region ../replicache/src/on-persist-channel.ts
+function makeChannelName(replicacheName) {
+	return `replicache-on-persist:${replicacheName}`;
+}
+function assertPersistInfo(value) {
+	assertObject(value);
+	assertString(value.clientGroupID);
+	assertString(value.clientID);
+}
+function initOnPersistChannel(replicacheName, signal, handlePersist) {
+	if (signal.aborted) return () => void 0;
+	const channel = new bc(makeChannelName(replicacheName));
+	channel.onmessage = (e) => {
+		const { data } = e;
+		assertPersistInfo(data);
+		handlePersist({
+			clientGroupID: data.clientGroupID,
+			clientID: data.clientID
+		});
+	};
+	signal.addEventListener("abort", () => channel.close(), { once: true });
+	return (persistInfo) => {
+		if (signal.aborted) return;
+		channel.postMessage(persistInfo);
+		handlePersist(persistInfo);
+	};
+}
+//#endregion
+export { initOnPersistChannel };
+
+//# sourceMappingURL=on-persist-channel.js.map

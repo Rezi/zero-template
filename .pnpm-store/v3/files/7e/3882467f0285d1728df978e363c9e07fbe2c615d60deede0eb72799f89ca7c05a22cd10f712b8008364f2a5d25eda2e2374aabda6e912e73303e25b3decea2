@@ -1,0 +1,101 @@
+import { isJSONValue } from "../../../shared/src/json.js";
+import { promiseVoid } from "../../../shared/src/resolved-promises.js";
+import { sleep } from "../../../shared/src/sleep.js";
+import { parse, valita_exports } from "../../../shared/src/valita.js";
+import { must } from "../../../shared/src/must.js";
+import { stringify } from "../../../shared/src/bigint-json.js";
+import { resolver } from "@rocicorp/resolver";
+import { nanoid } from "nanoid";
+import { gzip } from "node:zlib";
+import { CloudEvent, emitterFor, httpTransport } from "cloudevents";
+//#region ../zero-cache/src/observability/events.ts
+var MAX_PUBLISH_ATTEMPTS = 6;
+var INITIAL_PUBLISH_BACKOFF_MS = 500;
+var publishFn = (lc, { type }) => {
+	lc.warn?.(`Cannot publish "${type}" event before initEventSink(). This is only expected in unit tests.`);
+	return promiseVoid;
+};
+var attributeValueSchema = valita_exports.union(valita_exports.string(), valita_exports.number(), valita_exports.boolean());
+var eventSchema = valita_exports.record(attributeValueSchema);
+var extensionsObjectSchema = valita_exports.object({ extensions: eventSchema });
+async function base64gzip(str) {
+	const { promise: gzipped, resolve, reject } = resolver();
+	gzip(Buffer.from(str), (err, buf) => err ? reject(err) : resolve(buf));
+	return (await gzipped).toString("base64");
+}
+/**
+* Initializes a per-process event sink according to the cloud event
+* parameters in the ZeroConfig. This must be called at the beginning
+* of the process, before any ZeroEvents are generated / published.
+*/
+function initEventSink(lc, { taskID, cloudEvent }) {
+	if (!cloudEvent.sinkEnv) {
+		publishFn = (lc, event) => {
+			lc.info?.(`ZeroEvent: ${event.type}`, event);
+			return promiseVoid;
+		};
+		return;
+	}
+	let overrides = {};
+	if (cloudEvent.extensionOverridesEnv) {
+		const strVal = must(process.env[cloudEvent.extensionOverridesEnv]);
+		const { extensions } = parse(JSON.parse(strVal), extensionsObjectSchema);
+		overrides = extensions;
+	}
+	async function createCloudEvent(event) {
+		const { type, time } = event;
+		const data = await base64gzip(stringify(event));
+		return new CloudEvent({
+			id: nanoid(),
+			source: taskID,
+			type,
+			time,
+			datacontenttype: "text/plain",
+			datacontentencoding: "gzip",
+			data,
+			...overrides
+		});
+	}
+	const sinkURI = must(process.env[cloudEvent.sinkEnv]);
+	const emit = emitterFor(httpTransport(sinkURI));
+	lc.debug?.(`Publishing ZeroEvents to ${sinkURI}`);
+	publishFn = async (lc, event) => {
+		let cloudEvent;
+		try {
+			cloudEvent = await createCloudEvent(event);
+		} catch (e) {
+			lc.error?.(`Error creating CloudEvent ${event.type}`, e);
+			return;
+		}
+		lc.debug?.(`Publishing CloudEvent: ${cloudEvent.type}`);
+		for (let i = 0; i < MAX_PUBLISH_ATTEMPTS; i++) {
+			if (i > 0) await sleep(INITIAL_PUBLISH_BACKOFF_MS * 2 ** (i - 1));
+			try {
+				await emit(cloudEvent);
+				const { data: _, ...event } = cloudEvent;
+				lc.info?.(`Published CloudEvent: ${cloudEvent.type}`, { event });
+				return;
+			} catch (e) {
+				lc.warn?.(`Error publishing ${cloudEvent.type} (attempt ${i + 1})`, e);
+			}
+		}
+	};
+}
+async function publishCriticalEvent(lc, event) {
+	await publishFn(lc, event);
+}
+function makeErrorDetails(e) {
+	const err = e instanceof Error ? e : new Error(String(e));
+	const errorDetails = {
+		name: err.name,
+		message: err.message,
+		stack: err.stack,
+		cause: err.cause ? makeErrorDetails(err.cause) : void 0
+	};
+	for (const [field, value] of Object.entries(err)) if (isJSONValue(value, [])) errorDetails[field] = value;
+	return errorDetails;
+}
+//#endregion
+export { initEventSink, makeErrorDetails, publishCriticalEvent };
+
+//# sourceMappingURL=events.js.map

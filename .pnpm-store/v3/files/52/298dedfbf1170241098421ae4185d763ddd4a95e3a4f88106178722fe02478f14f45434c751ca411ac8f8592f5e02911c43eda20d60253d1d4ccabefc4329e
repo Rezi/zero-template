@@ -1,0 +1,306 @@
+import { promiseVoid } from "../../../../shared/src/resolved-promises.js";
+import { must } from "../../../../shared/src/must.js";
+import { cvrSchema } from "../../types/shards.js";
+import { startAsyncSpan } from "../../../../otel/src/span.js";
+import { getOrCreateCounter, getOrCreateLatencyHistogram } from "../../observability/metrics.js";
+import { rowIDString } from "../../types/row-key.js";
+import "../../types/pg.js";
+import { READONLY, READ_COMMITTED } from "../../db/mode-enum.js";
+import { runTx } from "../../db/run-transaction.js";
+import { CustomKeyMap } from "../../../../shared/src/custom-key-map.js";
+import { TransactionPool } from "../../db/transaction-pool.js";
+import { cmpVersions, versionString, versionToNullableCookie } from "./schema/types.js";
+import { rowRecordToRowsRow, rowsRowToRowRecord } from "./schema/cvr.js";
+import { tracer } from "./tracer.js";
+import { checkVersion } from "./cvr-store.js";
+import { resolver } from "@rocicorp/resolver";
+//#region ../zero-cache/src/services/view-syncer/row-record-cache.ts
+var FLUSH_TYPE_ATTRIBUTE = "flush.type";
+/**
+* The RowRecordCache is an in-memory cache of the `cvr.rows` tables that
+* operates as both a write-through and write-back cache.
+*
+* For "small" CVR updates (i.e. zero or small numbers of rows) the
+* RowRecordCache operates as write-through, executing commits in
+* {@link executeRowUpdates()} before they are {@link apply}-ed to the
+* in-memory state.
+*
+* For "large" CVR updates (i.e. with many rows), the cache switches to a
+* write-back mode of operation, in which {@link executeRowUpdates()} is a
+* no-op, and {@link apply()} initiates a background task to flush the pending
+* row changes to the store. This allows the client poke to be completed and
+* committed on the client without waiting for the heavyweight operation of
+* committing the row records to the CVR store.
+*
+* Note that when the cache is in write-back mode, all updates become
+* write-back (i.e. asynchronously flushed) until the pending update queue is
+* fully flushed. This is required because updates must be applied in version
+* order. As with all pending work systems in zero-cache, multiple pending
+* updates are coalesced to reduce buildup of work.
+*
+* ### High level consistency
+*
+* Note that the above caching scheme only applies to the row data in `cvr.rows`
+* and corresponding `cvr.rowsVersion` tables. CVR metadata and query
+* information, on the other hand, are always committed before completing the
+* client poke. In this manner, the difference between the `version` column in
+* `cvr.instances` and the analogous column in `cvr.rowsVersion` determines
+* whether the data in the store is consistent, or whether it is awaiting a
+* pending update.
+*
+* The logic in {@link CVRStore#load()} takes this into account by loading both
+* the `cvr.instances` version and the `cvr.rowsVersion` version and checking
+* if they are in sync, waiting for a configurable delay until they are.
+*
+* ### Eventual conversion
+*
+* In the event of a continual stream of mutations (e.g. an animation-style
+* app), it is conceivable that the row record data be continually behind
+* the CVR metadata. In order to effect eventual convergence, a new view-syncer
+* signals the current view-syncer to stop updating by writing new `owner`
+* information to the `cvr.instances` row. This effectively stops the mutation
+* processing (in {@link CVRStore.#checkVersionAndOwnership}) so that the row
+* data can eventually catch up, allowing the new view-syncer to take over.
+*
+* Of course, there is the pathological situation in which a view-syncer
+* process crashes before the pending row updates are flushed. In this case,
+* the wait timeout will elapse and the CVR considered invalid.
+*/
+var RowRecordCache = class {
+	#cache;
+	#lc;
+	#db;
+	#schema;
+	#cvrID;
+	#failService;
+	#deferredRowFlushThreshold;
+	#setTimeout;
+	#pending = new CustomKeyMap(rowIDString);
+	#pendingRowsVersion = null;
+	#flushedRowsVersion = null;
+	#flushing = null;
+	#cvrFlushTime = getOrCreateLatencyHistogram("sync", "cvr.flush-time", "Time to flush a CVR transaction. This includes both synchronous and asynchronous flushes, distinguished by the flush.type attribute.");
+	#cvrRowsFlushed = getOrCreateCounter("sync", "cvr.rows-flushed", "Number of (changed) rows flushed to a CVR");
+	constructor(lc, db, shard, cvrID, failService, deferredRowFlushThreshold = 100, setTimeoutFn = setTimeout) {
+		this.#lc = lc;
+		this.#db = db;
+		this.#schema = cvrSchema(shard);
+		this.#cvrID = cvrID;
+		this.#failService = failService;
+		this.#deferredRowFlushThreshold = deferredRowFlushThreshold;
+		this.#setTimeout = setTimeoutFn;
+	}
+	recordSyncFlushStats(stats, elapsedMs) {
+		this.#cvrFlushTime.recordMs(elapsedMs, { [FLUSH_TYPE_ATTRIBUTE]: "sync" });
+		if (stats.rowsDeferred === 0) this.#cvrRowsFlushed.add(stats.rows);
+	}
+	#recordAsyncFlushStats(rows, elapsedMs) {
+		this.#cvrFlushTime.recordMs(elapsedMs, { [FLUSH_TYPE_ATTRIBUTE]: "async" });
+		this.#cvrRowsFlushed.add(rows);
+	}
+	#cvr(table) {
+		return this.#db(`${this.#schema}.${table}`);
+	}
+	async #ensureLoaded() {
+		if (this.#cache) return this.#cache;
+		const start = Date.now();
+		const r = resolver();
+		r.promise.catch(() => {});
+		this.#cache = r.promise;
+		try {
+			const cache = await startAsyncSpan(tracer, "RowRecordCache.load", async (span) => {
+				const cache = new CustomKeyMap(rowIDString);
+				for await (const rows of this.#db`
+            SELECT
+              "clientGroupID",
+              "schema",
+              "table",
+              "rowKey",
+              "rowVersion",
+              "patchVersion",
+              "refCounts"
+            FROM ${this.#cvr(`rows`)}
+              WHERE "clientGroupID" = ${this.#cvrID} AND "refCounts" IS NOT NULL`.cursor(5e3)) for (const row of rows) {
+					const rowRecord = rowsRowToRowRecord(row);
+					cache.set(rowRecord.id, rowRecord);
+				}
+				span.setAttribute("rows", cache.size);
+				return cache;
+			});
+			this.#lc.info?.(`Loaded ${cache.size} row records in ${Date.now() - start} ms`);
+			r.resolve(cache);
+			return this.#cache;
+		} catch (e) {
+			r.reject(e);
+			throw e;
+		}
+	}
+	getRowRecords() {
+		return this.#ensureLoaded();
+	}
+	/**
+	* Applies the `rowRecords` corresponding to the `rowsVersion`
+	* to the cache, indicating whether the corresponding updates
+	* (generated by {@link executeRowUpdates}) were `flushed`.
+	*
+	* If `flushed` is false, the RowRecordCache will flush the records
+	* asynchronously.
+	*
+	* Note that `apply()` indicates that the CVR metadata associated with
+	* the `rowRecords` was successfully committed, which essentially means
+	* that this process has the unconditional right (and responsibility) of
+	* following up with a flush of the `rowRecords`. In particular, the
+	* commit of row records are not conditioned on the version or ownership
+	* columns of the `cvr.instances` row.
+	*/
+	async apply(rowRecords, rowsVersion, flushed) {
+		const cache = await this.#ensureLoaded();
+		for (const [id, row] of rowRecords.entries()) {
+			if (row === null || row.refCounts === null) cache.delete(id);
+			else cache.set(id, row);
+			if (!flushed) this.#pending.set(id, row);
+		}
+		this.#pendingRowsVersion = rowsVersion;
+		if (!flushed && this.#flushing === null) {
+			this.#flushing = resolver();
+			this.#flushing.promise.catch(() => {});
+			this.#setTimeout(() => this.#flush(), 0);
+		}
+		return cache.size;
+	}
+	async #flush() {
+		const flushing = must(this.#flushing);
+		try {
+			while (this.#pendingRowsVersion !== this.#flushedRowsVersion) {
+				const start = performance.now();
+				const { rows, rowsVersion } = await runTx(this.#db, (tx) => {
+					const rows = this.#pending.size;
+					const rowsVersion = must(this.#pendingRowsVersion);
+					Promise.all(this.executeRowUpdates(tx, rowsVersion, this.#pending, "force")).catch((e) => this.#lc.error?.(`error flushing cvr rows`, e));
+					this.#pending.clear();
+					return {
+						rows,
+						rowsVersion
+					};
+				}, { mode: READ_COMMITTED });
+				const elapsed = performance.now() - start;
+				this.#lc.info?.(`flushed ${rows} rows@${versionString(rowsVersion)} (${elapsed} ms)`);
+				this.#recordAsyncFlushStats(rows, elapsed);
+				this.#flushedRowsVersion = rowsVersion;
+			}
+			this.#lc.info?.(`up to date rows@${versionToNullableCookie(this.#flushedRowsVersion)}`);
+			flushing.resolve();
+			this.#flushing = null;
+		} catch (e) {
+			this.#lc.info?.(`row record flush failed`, e);
+			flushing.reject(e);
+			this.#failService(e);
+		}
+	}
+	hasPendingUpdates() {
+		return this.#flushing !== null;
+	}
+	/**
+	* Returns a promise that resolves when all outstanding row-records
+	* have been committed.
+	*/
+	flushed(lc) {
+		if (this.#flushing) {
+			lc.debug?.("awaiting pending row flush");
+			return this.#flushing.promise;
+		}
+		return promiseVoid;
+	}
+	clear() {
+		this.#cache = void 0;
+	}
+	async *catchupRowPatches(lc, afterVersion, upToCVR, current, excludeQueryHashes = []) {
+		if (cmpVersions(afterVersion, upToCVR.version) >= 0) return;
+		const startMs = Date.now();
+		const start = afterVersion ? versionString(afterVersion) : "";
+		const end = versionString(upToCVR.version);
+		lc.debug?.(`scanning row patches for clients from ${start}`);
+		await this.flushed(lc);
+		const flushMs = Date.now() - startMs;
+		const reader = new TransactionPool(lc, { mode: READONLY }).run(this.#db);
+		try {
+			await reader.processReadTask((tx) => checkVersion(tx, this.#schema, this.#cvrID, current));
+			const { query } = await reader.processReadTask((tx) => {
+				return { query: excludeQueryHashes.length === 0 ? tx`SELECT
+              "clientGroupID",
+              "schema",
+              "table",
+              "rowKey",
+              "rowVersion",
+              "patchVersion",
+              "refCounts"
+            FROM ${this.#cvr("rows")}
+        WHERE "clientGroupID" = ${this.#cvrID}
+          AND "patchVersion" > ${start}
+          AND "patchVersion" <= ${end}` : tx`SELECT
+              "clientGroupID",
+              "schema",
+              "table",
+              "rowKey",
+              "rowVersion",
+              "patchVersion",
+              "refCounts"
+            FROM ${this.#cvr("rows")}
+        WHERE "clientGroupID" = ${this.#cvrID}
+          AND "patchVersion" > ${start}
+          AND "patchVersion" <= ${end}
+          AND ("refCounts" IS NULL OR NOT "refCounts" ?| ${excludeQueryHashes})` };
+			});
+			yield* query.cursor(1e4);
+		} finally {
+			reader.setDone();
+		}
+		const totalMs = Date.now() - startMs;
+		lc.info?.(`finished row catchup (flush: ${flushMs} ms, total: ${totalMs} ms)`);
+	}
+	executeRowUpdates(tx, version, rowUpdates, mode, lc = this.#lc) {
+		if (mode === "allow-defer" && (this.#flushing !== null || rowUpdates.size > this.#deferredRowFlushThreshold)) return [];
+		const rowsVersion = {
+			clientGroupID: this.#cvrID,
+			version: versionString(version)
+		};
+		const pending = [tx`INSERT INTO ${this.#cvr("rowsVersion")} ${tx(rowsVersion)}
+           ON CONFLICT ("clientGroupID") 
+           DO UPDATE SET ${tx(rowsVersion)}`];
+		const rowRecordRows = [];
+		for (const [id, row] of rowUpdates.entries()) if (row === null) pending.push(tx`
+          DELETE FROM ${this.#cvr("rows")}
+            WHERE "clientGroupID" = ${this.#cvrID}
+              AND "schema" = ${id.schema}
+              AND "table" = ${id.table}
+              AND "rowKey" = ${id.rowKey}
+       `);
+		else rowRecordRows.push(rowRecordToRowsRow(this.#cvrID, row));
+		if (rowRecordRows.length) {
+			pending.push(tx`
+  INSERT INTO ${this.#cvr("rows")}(
+      "clientGroupID", "schema", "table", "rowKey", "rowVersion", "patchVersion", "refCounts"
+  ) SELECT
+      "clientGroupID", "schema", "table", "rowKey", "rowVersion", "patchVersion", "refCounts"
+    FROM json_to_recordset(${rowRecordRows}) AS x(
+      "clientGroupID" TEXT,
+      "schema" TEXT,
+      "table" TEXT,
+      "rowKey" JSONB,
+      "rowVersion" TEXT,
+      "patchVersion" TEXT,
+      "refCounts" JSONB
+  ) ON CONFLICT ("clientGroupID", "schema", "table", "rowKey")
+    DO UPDATE SET "rowVersion" = excluded."rowVersion",
+      "patchVersion" = excluded."patchVersion",
+      "refCounts" = excluded."refCounts"
+    `);
+			lc.info?.(`flushing ${rowUpdates.size} rows (${rowRecordRows.length} inserts, ${rowUpdates.size - rowRecordRows.length} deletes)`);
+		}
+		return pending;
+	}
+};
+//#endregion
+export { RowRecordCache };
+
+//# sourceMappingURL=row-record-cache.js.map

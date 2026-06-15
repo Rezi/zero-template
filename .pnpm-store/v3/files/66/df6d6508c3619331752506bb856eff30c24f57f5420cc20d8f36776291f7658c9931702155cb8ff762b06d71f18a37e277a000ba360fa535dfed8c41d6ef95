@@ -1,0 +1,8 @@
+import { valita_exports } from "../../shared/src/valita.js";
+//#region ../zero-protocol/src/ping.ts
+var pingBodySchema = valita_exports.object({});
+var pingMessageSchema = valita_exports.tuple([valita_exports.literal("ping"), pingBodySchema]);
+//#endregion
+export { pingMessageSchema };
+
+//# sourceMappingURL=ping.js.map

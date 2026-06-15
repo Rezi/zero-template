@@ -1,0 +1,15 @@
+import type { LogContext } from '@rocicorp/logger';
+import { type JSONObject } from '../../../shared/src/json.ts';
+import { type ZeroEvent } from '../../../zero-events/src/index.ts';
+import type { NormalizedZeroConfig } from '../config/normalize.ts';
+/**
+ * Initializes a per-process event sink according to the cloud event
+ * parameters in the ZeroConfig. This must be called at the beginning
+ * of the process, before any ZeroEvents are generated / published.
+ */
+export declare function initEventSink(lc: LogContext, { taskID, cloudEvent }: Pick<NormalizedZeroConfig, 'taskID' | 'cloudEvent'>): void;
+export declare function initEventSinkForTesting(sink: ZeroEvent[], now?: Date): void;
+export declare function publishEvent<E extends ZeroEvent>(lc: LogContext, event: E): void;
+export declare function publishCriticalEvent<E extends ZeroEvent>(lc: LogContext, event: E): Promise<void>;
+export declare function makeErrorDetails(e: unknown): JSONObject;
+//# sourceMappingURL=events.d.ts.map

@@ -1,0 +1,9 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { WebSocket } from 'ws';
+export declare const PROTOCOL_ERROR = 1002;
+export declare const INTERNAL_ERROR = 1011;
+export type ErrorCode = typeof PROTOCOL_ERROR | typeof INTERNAL_ERROR;
+export declare function closeWithError(lc: LogContext, ws: WebSocket, err: unknown, code?: ErrorCode): void;
+export declare function sendPingsForLiveness(lc: LogContext, ws: WebSocket, intervalMs: number): void;
+export declare function expectPingsForLiveness(lc: LogContext, ws: WebSocket, intervalMs: number, timeoutBufferMs?: number): void;
+//# sourceMappingURL=ws.d.ts.map

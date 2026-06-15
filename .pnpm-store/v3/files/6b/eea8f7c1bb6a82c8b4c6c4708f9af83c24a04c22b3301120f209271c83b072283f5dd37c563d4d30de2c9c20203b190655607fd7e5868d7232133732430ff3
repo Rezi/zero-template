@@ -1,0 +1,81 @@
+import * as v from '../../../../../../shared/src/valita.ts';
+/**
+ * The downstream status messages contain metadata about the status
+ * of the change-source. indicates whether it should be echoed
+ * back in an upstream status message.
+ */
+export declare const downstreamStatusSchema: v.ObjectType<{
+    ack: v.Type<boolean>;
+    lagReport: v.Optional<{
+        lastTimings: {
+            sendTimeMs: number;
+            commitTimeMs: number;
+            receiveTimeMs: number;
+        };
+        nextSendTimeMs: number;
+    }>;
+}, undefined>;
+export type DownstreamStatus = v.Infer<typeof downstreamStatusSchema>;
+export declare const downstreamStatusMessageSchema: v.TupleType<[v.Type<"status">, v.ObjectType<{
+    ack: v.Type<boolean>;
+    lagReport: v.Optional<{
+        lastTimings: {
+            sendTimeMs: number;
+            commitTimeMs: number;
+            receiveTimeMs: number;
+        };
+        nextSendTimeMs: number;
+    }>;
+}, undefined>, v.ObjectType<{
+    watermark: v.Type<string>;
+}, undefined>]>;
+/**
+ * The `zero-cache` will send the Commit payload to acknowledge a completed
+ * transaction (unless the `skipAck` field was specified in the Begin message
+ * of the transaction), and will echo back the downstream `status` message if
+ * `ack` is true.
+ */
+export declare const upstreamStatusMessageSchema: v.TupleType<[v.Type<"status">, v.UnionType<[v.ObjectType<{
+    ack: v.Type<boolean>;
+    lagReport: v.Optional<{
+        lastTimings: {
+            sendTimeMs: number;
+            commitTimeMs: number;
+            receiveTimeMs: number;
+        };
+        nextSendTimeMs: number;
+    }>;
+}, undefined>, v.ObjectType<{
+    tag: v.Type<"commit">;
+}, undefined>]>, v.ObjectType<{
+    watermark: v.Type<string>;
+}, undefined>]>;
+/**
+ * Status messages convey positional information from both the ChangeSource
+ * and the `zero-cache`.
+ *
+ * A StatusMessage from the ChangeSource indicates a position in its change
+ * log. Generally, the watermarks sent in `Commit` messages already convey
+ * this information, but a StatusMessage may also be sent to indicate that the
+ * log has progressed without any corresponding changes relevant to the
+ * subscriber. The watermarks of commit messages and status messages must be
+ * monotonic in the stream of messages from the ChangeSource.
+ *
+ * The `zero-cache` sends StatusMessages to the ChangeSource:
+ *
+ * * when it has processed a `Commit` received from the ChangeSource,
+ *   unless the `Begin` message specified `skipAck`.
+ *
+ * * when it receives a `StatusMessage` and all preceding `Commit` messages
+ *   have been processed
+ *
+ * This allows the ChangeSource to clean up change log entries appropriately.
+ *
+ * Note that StatusMessages from the ChangeSource are optional. If a
+ * ChangeSource implementation can track subscriber progress and clean up
+ * its change log purely from Commit-driven StatusMessages there is no need
+ * for the ChangeSource to send StatusMessages.
+ */
+export type DownstreamStatusMessage = v.Infer<typeof downstreamStatusMessageSchema>;
+export type UpstreamStatusMessage = v.Infer<typeof upstreamStatusMessageSchema>;
+//# sourceMappingURL=status.d.ts.map

@@ -1,0 +1,11 @@
+/**
+ * Resolves to the the string `"timed-out"` if `timeoutMs` elapses before
+ * the specified `promise` resolves.
+ */
+export declare function orTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | 'timed-out'>;
+/**
+ * Resolves to the specified `timeoutValue` if `timeoutMs` elapses before
+ * the specified `promise` resolves.
+ */
+export declare function orTimeoutWith<T, U>(promise: Promise<T>, timeoutMs: number, timeoutValue: U): Promise<T | U>;
+//# sourceMappingURL=timeout.d.ts.map

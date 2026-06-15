@@ -1,0 +1,192 @@
+import { assert } from "../../../shared/src/asserts.js";
+import { emptyHash } from "../hash.js";
+import { BTreeRead, allEntriesAsDiff } from "../btree/read.js";
+import { baseSnapshotHashFromHash, commitFromHash, getMutationID, newLocalDD31, newSnapshotDD31 } from "./commit.js";
+import { diff } from "../btree/diff.js";
+import { BTreeWrite } from "../btree/write.js";
+import { lazy } from "../lazy.js";
+import { IndexWrite, indexValue } from "./index.js";
+import { Read, readIndexesForRead } from "./read.js";
+import { DiffsMap } from "../sync/diff.js";
+//#region ../replicache/src/db/write.ts
+var Write = class extends Read {
+	#dagWrite;
+	#basis;
+	#meta;
+	#clientID;
+	#formatVersion;
+	constructor(dagWrite, map, basis, meta, indexes, clientID, formatVersion) {
+		super(dagWrite, map, indexes);
+		this.#dagWrite = dagWrite;
+		this.#basis = basis;
+		this.#meta = meta;
+		this.#clientID = clientID;
+		this.#formatVersion = formatVersion;
+		if (basis === void 0) assert(meta.basisHash === emptyHash, "Expected basisHash to be emptyHash when basis is undefined");
+		else assert(meta.basisHash === basis.chunk.hash, "Expected meta.basisHash to equal basis.chunk.hash");
+	}
+	/**
+	* The value needs to be frozen since it is kept in memory and used later for
+	* comparison as well as returned in `get`.
+	*/
+	async put(lc, key, value) {
+		const oldVal = lazy(() => this.map.get(key));
+		await updateIndexes(lc, this.indexes, key, oldVal, value);
+		await this.map.put(key, value);
+	}
+	/**
+	* Inserts or updates multiple entries in a single bulk operation. More
+	* efficient than calling {@link put} in a loop because it uses
+	* {@link BTreeWrite.putMany} to build or merge tree nodes in one pass.
+	*
+	* `entries` must be sorted in ascending key order.
+	*/
+	async putMany(lc, entries) {
+		if (entries.length === 0) return;
+		if (this.indexes.size > 0) for (const [key, value] of entries) {
+			const oldVal = lazy(() => this.map.get(key));
+			await updateIndexes(lc, this.indexes, key, oldVal, value);
+		}
+		await this.map.putMany(entries);
+	}
+	getMutationID() {
+		return getMutationID(this.#clientID, this.#dagWrite, this.#meta);
+	}
+	async del(lc, key) {
+		const oldVal = lazy(() => this.map.get(key));
+		if (oldVal !== void 0) await updateIndexes(lc, this.indexes, key, oldVal, void 0);
+		return this.map.del(key);
+	}
+	async clear() {
+		await this.map.clear();
+		const ps = [];
+		for (const idx of this.indexes.values()) ps.push(idx.clear());
+		await Promise.all(ps);
+	}
+	async putCommit() {
+		const valueHash = await this.map.flush();
+		const indexRecords = [];
+		for (const index of this.indexes.values()) {
+			const valueHash = await index.flush();
+			const indexRecord = {
+				definition: index.meta.definition,
+				valueHash
+			};
+			indexRecords.push(indexRecord);
+		}
+		let commit;
+		const meta = this.#meta;
+		switch (meta.type) {
+			case 4: {
+				assert(this.#formatVersion >= 5, "Expected formatVersion >= DD31 for LocalDD31 commit");
+				const { basisHash, mutationID, mutatorName, mutatorArgsJSON, originalHash, timestamp } = meta;
+				commit = newLocalDD31(this.#dagWrite.createChunk, basisHash, await baseSnapshotHashFromHash(basisHash, this.#dagWrite), mutationID, mutatorName, mutatorArgsJSON, originalHash, valueHash, indexRecords, timestamp, this.#clientID);
+				break;
+			}
+			case 5: {
+				assert(this.#formatVersion > 5, "Expected formatVersion > DD31 for SnapshotDD31 commit");
+				const { basisHash, lastMutationIDs, cookieJSON } = meta;
+				commit = newSnapshotDD31(this.#dagWrite.createChunk, basisHash, lastMutationIDs, cookieJSON, valueHash, indexRecords);
+				break;
+			}
+		}
+		await this.#dagWrite.putChunk(commit.chunk);
+		return commit;
+	}
+	async commit(headName) {
+		const commitHash = (await this.putCommit()).chunk.hash;
+		await this.#dagWrite.setHead(headName, commitHash);
+		await this.#dagWrite.commit();
+		return commitHash;
+	}
+	async commitWithDiffs(headName, diffConfig) {
+		const commit = this.putCommit();
+		const diffMap = await this.#generateDiffs(diffConfig);
+		const commitHash = (await commit).chunk.hash;
+		await this.#dagWrite.setHead(headName, commitHash);
+		await this.#dagWrite.commit();
+		return [commitHash, diffMap];
+	}
+	async #generateDiffs(diffConfig) {
+		const diffsMap = new DiffsMap();
+		if (!diffConfig.shouldComputeDiffs()) return diffsMap;
+		let valueDiff = [];
+		if (this.#basis) valueDiff = await diff(new BTreeRead(this.#dagWrite, this.#formatVersion, this.#basis.valueHash), this.map);
+		diffsMap.set("", valueDiff);
+		let basisIndexes;
+		if (this.#basis) basisIndexes = readIndexesForRead(this.#basis, this.#dagWrite, this.#formatVersion);
+		else basisIndexes = /* @__PURE__ */ new Map();
+		for (const [name, index] of this.indexes) {
+			if (!diffConfig.shouldComputeDiffsForIndex(name)) continue;
+			const basisIndex = basisIndexes.get(name);
+			assert(index !== basisIndex, "Expected index to differ from basisIndex");
+			const indexDiffResult = await (basisIndex ? diff(basisIndex.map, index.map) : allEntriesAsDiff(index.map, "add"));
+			diffsMap.set(name, indexDiffResult);
+		}
+		for (const [name, basisIndex] of basisIndexes) if (!this.indexes.has(name) && diffConfig.shouldComputeDiffsForIndex(name)) {
+			const indexDiffResult = await allEntriesAsDiff(basisIndex.map, "del");
+			diffsMap.set(name, indexDiffResult);
+		}
+		return diffsMap;
+	}
+	close() {
+		this.#dagWrite.release();
+	}
+};
+async function newWriteLocal(basisHash, mutatorName, mutatorArgsJSON, originalHash, dagWrite, timestamp, clientID, formatVersion) {
+	const basis = await commitFromHash(basisHash, dagWrite);
+	const bTreeWrite = new BTreeWrite(dagWrite, formatVersion, basis.valueHash);
+	const mutationID = await basis.getNextMutationID(clientID, dagWrite);
+	const indexes = readIndexesForWrite(basis, dagWrite, formatVersion);
+	assert(formatVersion >= 5, "Expected formatVersion >= DD31 for newWriteLocal");
+	return new Write(dagWrite, bTreeWrite, basis, {
+		type: 4,
+		basisHash,
+		baseSnapshotHash: await baseSnapshotHashFromHash(basisHash, dagWrite),
+		mutatorName,
+		mutatorArgsJSON,
+		mutationID,
+		originalHash,
+		timestamp,
+		clientID
+	}, indexes, clientID, formatVersion);
+}
+async function newWriteSnapshotDD31(basisHash, lastMutationIDs, cookieJSON, dagWrite, clientID, formatVersion) {
+	const basis = await commitFromHash(basisHash, dagWrite);
+	return new Write(dagWrite, new BTreeWrite(dagWrite, formatVersion, basis.valueHash), basis, {
+		basisHash,
+		type: 5,
+		lastMutationIDs,
+		cookieJSON
+	}, readIndexesForWrite(basis, dagWrite, formatVersion), clientID, formatVersion);
+}
+async function updateIndexes(lc, indexes, key, oldValGetter, newVal) {
+	const ps = [];
+	for (const idx of indexes.values()) {
+		const { keyPrefix } = idx.meta.definition;
+		if (!keyPrefix || key.startsWith(keyPrefix)) {
+			const oldVal = await oldValGetter();
+			if (oldVal !== void 0) ps.push(indexValue(lc, idx.map, 1, key, oldVal, idx.meta.definition.jsonPointer, idx.meta.definition.allowEmpty ?? false));
+			if (newVal !== void 0) ps.push(indexValue(lc, idx.map, 0, key, newVal, idx.meta.definition.jsonPointer, idx.meta.definition.allowEmpty ?? false));
+		}
+	}
+	await Promise.all(ps);
+}
+function readIndexesForWrite(commit, dagWrite, formatVersion) {
+	const m = /* @__PURE__ */ new Map();
+	for (const index of commit.indexes) m.set(index.definition.name, new IndexWrite(index, new BTreeWrite(dagWrite, formatVersion, index.valueHash)));
+	return m;
+}
+async function createIndexBTree(lc, dagWrite, valueMap, prefix, jsonPointer, allowEmpty, formatVersion) {
+	const indexMap = new BTreeWrite(dagWrite, formatVersion);
+	for await (const entry of valueMap.scan(prefix)) {
+		const key = entry[0];
+		if (!key.startsWith(prefix)) break;
+		await indexValue(lc, indexMap, 0, key, entry[1], jsonPointer, allowEmpty);
+	}
+	return indexMap;
+}
+//#endregion
+export { createIndexBTree, newWriteLocal, newWriteSnapshotDD31 };
+
+//# sourceMappingURL=write.js.map

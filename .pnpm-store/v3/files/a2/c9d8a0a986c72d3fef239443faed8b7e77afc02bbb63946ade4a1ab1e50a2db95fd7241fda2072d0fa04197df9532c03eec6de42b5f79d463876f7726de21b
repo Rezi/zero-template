@@ -1,0 +1,27 @@
+import { assert } from "../../../shared/src/asserts.js";
+import { versionFromLexi, versionToLexi } from "./lexi-version.js";
+//#region ../zero-cache/src/types/state-version.ts
+function stateVersionFromString(ver) {
+	if (!ver.includes(".")) return { major: versionFromLexi(ver) };
+	const parts = ver.split(".");
+	assert(parts.length === 2, () => `Invalid stateVersion ${ver}`);
+	return {
+		major: versionFromLexi(parts[0]),
+		minor: versionFromLexi(parts[1])
+	};
+}
+function stateVersionToString(ver) {
+	return ver.minor === void 0 ? versionToLexi(ver.major) : `${versionToLexi(ver.major)}.${versionToLexi(ver.minor)}`;
+}
+function majorVersionFromString(ver) {
+	if (!ver.includes(".")) return versionFromLexi(ver);
+	const { major } = stateVersionFromString(ver);
+	return major;
+}
+function majorVersionToString(major) {
+	return versionToLexi(major);
+}
+//#endregion
+export { majorVersionFromString, majorVersionToString, stateVersionFromString, stateVersionToString };
+
+//# sourceMappingURL=state-version.js.map

@@ -1,0 +1,6 @@
+import { assert } from "../../shared/src/asserts.js";
+assert(true, "MIN_SERVER_SUPPORTED_SYNC_PROTOCOL must be less than PROTOCOL_VERSION");
+//#endregion
+export {};
+
+//# sourceMappingURL=protocol-version.js.map

@@ -1,0 +1,2 @@
+export declare function parseBigInt(val: string, radix: number): bigint;
+//# sourceMappingURL=parse-big-int.d.ts.map

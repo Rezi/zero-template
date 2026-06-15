@@ -1,0 +1,19 @@
+//#region ../zero-cache/src/types/http.ts
+function serializableSubset(msg) {
+	const { headers, headersDistinct, httpVersion, method = "GET", rawHeaders, rawTrailers, trailers, trailersDistinct, url } = msg;
+	return {
+		headers,
+		headersDistinct,
+		httpVersion,
+		method,
+		rawHeaders,
+		rawTrailers,
+		trailers,
+		trailersDistinct,
+		url
+	};
+}
+//#endregion
+export { serializableSubset };
+
+//# sourceMappingURL=http.js.map

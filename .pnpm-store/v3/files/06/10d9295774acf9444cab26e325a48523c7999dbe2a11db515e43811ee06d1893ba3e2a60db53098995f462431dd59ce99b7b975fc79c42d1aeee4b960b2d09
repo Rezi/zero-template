@@ -1,0 +1,50 @@
+import type { NoIndexDiff } from '../../../replicache/src/btree/node.ts';
+import type { LazyStore } from '../../../replicache/src/dag/lazy-store.ts';
+import { type Store } from '../../../replicache/src/dag/store.ts';
+import type { Hash } from '../../../replicache/src/hash.ts';
+import type { ZeroReadOptions } from '../../../replicache/src/replicache-options.ts';
+import type { TableSchema } from '../../../zero-schema/src/table-schema.ts';
+import { MemorySource } from '../../../zql/src/ivm/memory-source.ts';
+/**
+ * Replicache needs to rebase mutations onto different
+ * commits of it's b-tree. These mutations can have reads
+ * in them and those reads must be run against the IVM sources.
+ *
+ * To ensure the reads get the correct state, the IVM
+ * sources need to reflect the state of the commit
+ * being rebased onto. `IVMSourceBranch` allows us to:
+ * 1. fork the IVM sources
+ * 2. patch them up to match the desired head
+ * 3. run the reads against the forked sources
+ *
+ * (2) is expected to be a cheap operation as there should only
+ * ever be a few outstanding diffs to apply given Zero is meant
+ * to be run in a connected state.
+ */
+export declare class IVMSourceBranch {
+    #private;
+    hash: Hash | undefined;
+    constructor(tables: Record<string, TableSchema>, hash?: Hash, sources?: Map<string, MemorySource | undefined>);
+    getSource(name: string): MemorySource | undefined;
+    clear(): void;
+    /**
+     * Mutates the current branch, advancing it to the new head
+     * by applying the given diffs.
+     */
+    advance(expectedHead: Hash | undefined, newHead: Hash, diffs: NoIndexDiff): void;
+    /**
+     * Fork the branch and patch it up to match the desired head.
+     */
+    forkToHead(store: LazyStore, desiredHead: Hash, readOptions?: ZeroReadOptions): Promise<IVMSourceBranch>;
+    /**
+     * Creates a new IVMSourceBranch that is a copy of the current one.
+     * This is a cheap operation since the b-trees are shared until a write is performed
+     * and then only the modified nodes are copied.
+     *
+     * IVM branches are forked when we need to rebase mutations.
+     * The mutations modify the fork rather than original branch.
+     */
+    fork(): IVMSourceBranch;
+}
+export declare function initFromStore(branch: IVMSourceBranch, hash: Hash, store: Store): Promise<void>;
+//# sourceMappingURL=ivm-branch.d.ts.map

@@ -1,0 +1,330 @@
+import { assert } from "../../../../../../shared/src/asserts.js";
+import { parse, valita_exports } from "../../../../../../shared/src/valita.js";
+import { jsonObjectSchema, stringify } from "../../../../../../shared/src/bigint-json.js";
+import { appSchema, check, upstreamSchema } from "../../../../types/shards.js";
+import { id } from "../../../../types/sql.js";
+import { getPublicationInfo, publishedSchema } from "./published.js";
+import { createEventFunctionStatements, createEventTriggerStatements } from "./ddl.js";
+import { validate } from "./validation.js";
+import postgres from "postgres";
+import { PG_INSUFFICIENT_PRIVILEGE } from "@drdgvhbh/postgres-error-codes";
+import { literal } from "pg-format";
+//#region ../zero-cache/src/services/change-source/pg/schema/shard.ts
+/**
+* PostgreSQL unquoted identifiers must start with a letter or underscore
+* and contain only letters, digits, and underscores.
+*/
+var VALID_PUBLICATION_NAME = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+/**
+* Validates that a publication name is a valid PostgreSQL identifier.
+* This provides defense-in-depth against SQL injection when publication
+* names are used in replication commands.
+*/
+function validatePublicationName(name) {
+	if (!VALID_PUBLICATION_NAME.test(name)) throw new Error(`Invalid publication name "${name}". Publication names must start with a letter or underscore and contain only letters, digits, and underscores.`);
+	if (name.length > 63) throw new Error(`Publication name "${name}" exceeds PostgreSQL's 63-character identifier limit.`);
+}
+function internalPublicationPrefix({ appID }) {
+	return `_${appID}_`;
+}
+function legacyReplicationSlot({ appID, shardNum }) {
+	return `${appID}_${shardNum}`;
+}
+function replicationSlotPrefix(shard) {
+	const { appID, shardNum } = check(shard);
+	return `${appID}_${shardNum}_`;
+}
+/**
+* An expression used to match replication slots in the shard
+* in a Postgres `LIKE` operator.
+*/
+function replicationSlotExpression(shard) {
+	return `${replicationSlotPrefix(shard)}%`.replaceAll("_", "\\_");
+}
+function defaultPublicationName(appID, shardID) {
+	return `_${appID}_public_${shardID}`;
+}
+function metadataPublicationName(appID, shardID) {
+	return `_${appID}_metadata_${shardID}`;
+}
+function globalSetup(appID) {
+	const app = id(appSchema(appID));
+	return `
+  CREATE SCHEMA IF NOT EXISTS ${app};
+
+  CREATE TABLE IF NOT EXISTS ${app}.permissions (
+    "permissions" JSONB,
+    "hash"        TEXT,
+
+    -- Ensure that there is only a single row in the table.
+    -- Application code can be agnostic to this column, and
+    -- simply invoke UPDATE statements on the version columns.
+    "lock" BOOL PRIMARY KEY DEFAULT true CHECK (lock)
+  );
+
+  CREATE OR REPLACE FUNCTION ${app}.set_permissions_hash()
+  RETURNS TRIGGER AS $$
+  BEGIN
+      NEW.hash = md5(NEW.permissions::text);
+      RETURN NEW;
+  END;
+  $$ LANGUAGE plpgsql;
+
+  CREATE OR REPLACE TRIGGER on_set_permissions 
+    BEFORE INSERT OR UPDATE ON ${app}.permissions
+    FOR EACH ROW
+    EXECUTE FUNCTION ${app}.set_permissions_hash();
+
+  INSERT INTO ${app}.permissions (permissions) VALUES (NULL) ON CONFLICT DO NOTHING;
+`;
+}
+async function ensureGlobalTables(db, appID) {
+	await db.unsafe(globalSetup(appID));
+}
+function getClientsTableDefinition(schema) {
+	return `
+  CREATE TABLE ${schema}."clients" (
+    "clientGroupID"  TEXT NOT NULL,
+    "clientID"       TEXT NOT NULL,
+    "lastMutationID" BIGINT NOT NULL,
+    "userID"         TEXT,
+    PRIMARY KEY("clientGroupID", "clientID")
+  );`;
+}
+/**
+* Tracks the results of mutations.
+* 1. It is an error for the same mutation ID to be used twice.
+* 2. The result is JSONB to allow for arbitrary results.
+*
+* The tables must be cleaned up as the clients
+* receive the mutation responses and as clients are removed.
+*/
+function getMutationsTableDefinition(schema) {
+	return `
+  CREATE TABLE ${schema}."mutations" (
+    "clientGroupID"  TEXT NOT NULL,
+    "clientID"       TEXT NOT NULL,
+    "mutationID"     BIGINT NOT NULL,
+    "result"         JSON NOT NULL,
+    PRIMARY KEY("clientGroupID", "clientID", "mutationID")
+  );`;
+}
+var SHARD_CONFIG_TABLE = "shardConfig";
+function shardSetup(shardConfig, metadataPublication) {
+	const app = id(appSchema(shardConfig));
+	const shard = id(upstreamSchema(shardConfig));
+	const pubs = shardConfig.publications.toSorted();
+	assert(pubs.includes(metadataPublication), () => `Publications must include ${metadataPublication}`);
+	return `
+  CREATE SCHEMA IF NOT EXISTS ${shard};
+
+  ${getClientsTableDefinition(shard)}
+  ${getMutationsTableDefinition(shard)}
+
+  DROP PUBLICATION IF EXISTS ${id(metadataPublication)};
+  CREATE PUBLICATION ${id(metadataPublication)}
+    FOR TABLE ${app}."permissions", TABLE ${shard}."clients", ${shard}."mutations";
+
+  CREATE TABLE ${shard}."${SHARD_CONFIG_TABLE}" (
+    "publications"  TEXT[] NOT NULL,
+    "ddlDetection"  BOOL NOT NULL,
+
+    -- Ensure that there is only a single row in the table.
+    "lock" BOOL PRIMARY KEY DEFAULT true CHECK (lock)
+  );
+
+  INSERT INTO ${shard}."${SHARD_CONFIG_TABLE}" (
+      "publications",
+      "ddlDetection" 
+    ) VALUES (
+      ARRAY[${literal(pubs)}], 
+      false  -- set in SAVEPOINT with triggerSetup() statements
+    );
+
+  CREATE TABLE ${shard}.replicas (
+    -- The DEFAULT exists purely for backwards compatibility support.
+    -- New code always specifies a value based on Date.now().
+    "id"                 TEXT PRIMARY KEY DEFAULT replace(gen_random_uuid()::text, '-', ''),
+    "rank"               BIGSERIAL,
+    "slot"               TEXT NOT NULL,
+    "version"            TEXT NOT NULL,
+    "initialSchema"      JSON,  -- set after initial sync
+    "initialSyncContext" JSON,
+    "subscriberContext"  JSON
+  );
+  `;
+}
+function dropShard(appID, shardID) {
+	const schema = `${appID}_${shardID}`;
+	const metadataPublication = metadataPublicationName(appID, shardID);
+	return `
+    DROP PUBLICATION IF EXISTS ${id(defaultPublicationName(appID, shardID))};
+    DROP PUBLICATION IF EXISTS ${id(metadataPublication)};
+    DROP SCHEMA IF EXISTS ${id(schema)} CASCADE;
+  `;
+}
+var internalShardConfigSchema = valita_exports.object({
+	publications: valita_exports.array(valita_exports.string()),
+	ddlDetection: valita_exports.boolean()
+});
+var replicaSchema = internalShardConfigSchema.extend({
+	id: valita_exports.string(),
+	rank: valita_exports.bigint(),
+	slot: valita_exports.string(),
+	version: valita_exports.string(),
+	initialSchema: publishedSchema,
+	initialSyncContext: jsonObjectSchema.nullable(),
+	subscriberContext: jsonObjectSchema.nullable()
+});
+function triggerSetup(shard) {
+	const schema = id(upstreamSchema(shard));
+	return createEventTriggerStatements(shard) + `UPDATE ${schema}."shardConfig" SET "ddlDetection" = true;`;
+}
+/**
+* Creates a new replica to mark it as the owner of a specified `slot`.
+* This should be done with an advisory lock for replica/slot management
+* to ensure that the slot does not get dropped by concurrent cleanup
+* logic.
+*
+* Once initial sync is complete, {@link initReplica} should be called to
+* make the replica usable for incremental sync.
+*/
+async function createReplica(sql, shard, id, slot, replicaVersion) {
+	const schema = upstreamSchema(shard);
+	const values = {
+		id,
+		slot,
+		version: replicaVersion
+	};
+	await sql`INSERT INTO ${sql(schema)}.replicas ${sql(values)}`;
+}
+async function initReplica(sql, shard, id, { tables, indexes }, initialSyncContext) {
+	const schema = upstreamSchema(shard);
+	const values = {
+		initialSchema: {
+			tables,
+			indexes
+		},
+		initialSyncContext
+	};
+	await sql`UPDATE ${sql(schema)}.replicas SET ${sql(values)} WHERE id = ${id}`;
+}
+/**
+* Gets the latest initialized replica at the specified version.
+*/
+async function getReplicaAtVersion(lc, sql, shard, replicaVersion, context) {
+	const schema = sql(upstreamSchema(shard));
+	const result = await sql`
+    SELECT
+      replicas."id",
+      replicas."rank",
+      replicas."slot",
+      replicas."version",
+      replicas."initialSchema",
+      replicas."initialSyncContext",
+      replicas."subscriberContext",
+      "shardConfig"."publications",
+      "shardConfig"."ddlDetection"
+    FROM ${schema}.replicas JOIN ${schema}."shardConfig" ON true
+      WHERE version = ${replicaVersion} AND "initialSyncContext" IS NOT NULL
+      ORDER BY rank DESC LIMIT 1;
+  `;
+	if (result.length === 0) {
+		const allReplicas = await sql`
+      SELECT id, slot, version, "initialSyncContext", "subscriberContext" 
+        FROM ${schema}.replicas`;
+		lc.info?.(`Replica ${replicaVersion} ` + (context ? `(context: ${stringify(context)}) ` : "") + `not found in: ${stringify(allReplicas)}`);
+		return null;
+	}
+	return parse(result[0], replicaSchema, "passthrough");
+}
+async function getInternalShardConfig(sql, shard) {
+	const result = await sql`
+    SELECT "publications", "ddlDetection"
+      FROM ${sql(upstreamSchema(shard))}."shardConfig";
+  `;
+	assert(result.length === 1, () => `Expected exactly one shardConfig row, got ${result.length}`);
+	return parse(result[0], internalShardConfigSchema, "passthrough");
+}
+/**
+* Sets up and returns all publications (including internal ones) for
+* the given shard.
+*/
+async function setupTablesAndReplication(lc, sql, requested) {
+	const { publications } = requested;
+	for (const pub of publications) {
+		validatePublicationName(pub);
+		if (pub.startsWith("_")) throw new Error(`Publication names starting with "_" are reserved for internal use.\nPlease use a different name for publication "${pub}".`);
+	}
+	const allPublications = [];
+	if (publications.length) {
+		const results = await sql`
+    SELECT pubname from pg_publication WHERE pubname IN ${sql(publications)}`.values();
+		if (results.length !== publications.length) throw new Error(`Unknown or invalid publications. Specified: [${publications}]. Found: [${results.flat()}]`);
+		allPublications.push(...publications);
+	} else {
+		const defaultPublication = defaultPublicationName(requested.appID, requested.shardNum);
+		await sql`
+      DROP PUBLICATION IF EXISTS ${sql(defaultPublication)}`;
+		await sql`
+      CREATE PUBLICATION ${sql(defaultPublication)} 
+        FOR TABLES IN SCHEMA public
+        WITH (publish_via_partition_root = true)`;
+		allPublications.push(defaultPublication);
+	}
+	const metadataPublication = metadataPublicationName(requested.appID, requested.shardNum);
+	allPublications.push(metadataPublication);
+	const shard = {
+		...requested,
+		publications: allPublications
+	};
+	await sql.unsafe(globalSetup(shard) + shardSetup(shard, metadataPublication));
+	await replicaIdentitiesForTablesWithoutPrimaryKeys(await getPublicationInfo(sql, allPublications))?.apply(lc, sql);
+	await setupTriggers(lc, sql, shard);
+}
+async function setupTriggers(lc, tx, shard) {
+	const [{ ddlDetection }] = await tx`
+    SELECT "ddlDetection" FROM ${tx(upstreamSchema(shard))}."shardConfig"`;
+	await tx.unsafe(createEventFunctionStatements(shard));
+	try {
+		await tx.savepoint((sub) => sub.unsafe(triggerSetup(shard)));
+	} catch (e) {
+		if (ddlDetection) throw e;
+		if (!(e instanceof postgres.PostgresError && e.code === PG_INSUFFICIENT_PRIVILEGE)) throw e;
+		lc.warn?.(`Unable to create event triggers for schema change detection:\n\n"${e.hint ?? e.message}"\n\nProceeding in degraded mode: schema changes will halt replication,\nrequiring the replica to be reset (manually or with --auto-reset).`);
+	}
+}
+function validatePublications(lc, published) {
+	published.publications.forEach((pub) => {
+		if (!pub.pubinsert || !pub.pubupdate || !pub.pubdelete || !pub.pubtruncate) throw new Error(`PUBLICATION ${pub.pubname} must publish insert, update, delete, and truncate`);
+	});
+	published.tables.forEach((table) => validate(lc, table));
+}
+function replicaIdentitiesForTablesWithoutPrimaryKeys(pubs) {
+	const replicaIdentities = [];
+	for (const table of pubs.tables) if (!table.primaryKey?.length && table.replicaIdentity === "d") {
+		const { schema, name: tableName } = table;
+		for (const { columns, name: indexName } of pubs.indexes.filter((idx) => idx.schema === schema && idx.tableName === tableName && idx.unique && idx.isImmediate)) {
+			if (Object.keys(columns).some((col) => !table.columns[col].notNull)) continue;
+			replicaIdentities.push({
+				schema,
+				tableName,
+				indexName
+			});
+			break;
+		}
+	}
+	if (replicaIdentities.length === 0) return;
+	return { apply: async (lc, sql) => {
+		for (const { schema, tableName, indexName } of replicaIdentities) {
+			lc.info?.(`setting "${indexName}" as the REPLICA IDENTITY for "${tableName}"`);
+			await sql`
+        ALTER TABLE ${sql(schema)}.${sql(tableName)} 
+          REPLICA IDENTITY USING INDEX ${sql(indexName)}`;
+		}
+	} };
+}
+//#endregion
+export { SHARD_CONFIG_TABLE, createReplica, dropShard, ensureGlobalTables, getInternalShardConfig, getMutationsTableDefinition, getReplicaAtVersion, initReplica, internalPublicationPrefix, legacyReplicationSlot, metadataPublicationName, replicaIdentitiesForTablesWithoutPrimaryKeys, replicationSlotExpression, replicationSlotPrefix, setupTablesAndReplication, setupTriggers, validatePublications };
+
+//# sourceMappingURL=shard.js.map

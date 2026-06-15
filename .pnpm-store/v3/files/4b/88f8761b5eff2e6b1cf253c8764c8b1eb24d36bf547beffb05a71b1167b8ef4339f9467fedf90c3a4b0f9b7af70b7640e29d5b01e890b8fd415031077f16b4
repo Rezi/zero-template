@@ -1,0 +1,3 @@
+import type { LogContext } from '@rocicorp/logger';
+export declare function getTaskID(lc: LogContext): Promise<string>;
+//# sourceMappingURL=runtime.d.ts.map

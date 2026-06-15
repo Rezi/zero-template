@@ -1,0 +1,37 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { PostgresDB } from '../../types/pg.ts';
+import type { ShardID } from '../../types/shards.ts';
+import type { ChangeSource } from '../change-source/change-source.ts';
+import { type ChangeStreamData } from '../change-source/protocol/current/downstream.ts';
+import { type ReplicationStatusPublisher } from '../replicator/replication-status.ts';
+import type { SubscriptionState } from '../replicator/schema/replication-state.ts';
+import { type ChangeStreamerService } from './change-streamer.ts';
+import { type PurgeLock, type TuningOptions as StorerOptions } from './storer.ts';
+export type TuningOptions = StorerOptions & {
+    flowControlConsensusPaddingSeconds: number;
+};
+/**
+ * Performs initialization and schema migrations to initialize a ChangeStreamerImpl.
+ */
+export declare function initializeStreamer(lc: LogContext, shard: ShardID, taskID: string, discoveryAddress: string, discoveryProtocol: string, changeDB: PostgresDB, changeSource: ChangeSource, replicationStatusPublisher: ReplicationStatusPublisher, subscriptionState: SubscriptionState, purgeLock: PurgeLock | null, autoReset: boolean, opts: TuningOptions, setTimeoutFn?: typeof setTimeout): Promise<ChangeStreamerService>;
+export type ChangeTag = ChangeStreamData[1]['tag'];
+/**
+ * Internally all Downstream messages (not just commits) are given a watermark.
+ * These are used for internal ordering for:
+ * 1. Replaying new changes in the Storer
+ * 2. Filtering old changes in the Subscriber
+ *
+ * However, only the watermark for `Commit` messages are exposed to
+ * subscribers, as that is the only semantically correct watermark to
+ * use for tracking a position in a replication stream.
+ *
+ * Additionally, the ChangeStreamData is eagerly stringified once, after which
+ * the string is passed to the changeLog and all subscribers, eliminating
+ * redundant stringification and reducing GC churn.
+ */
+export type WatermarkedChange = [
+    watermark: string,
+    tag: ChangeTag,
+    json: string
+];
+//# sourceMappingURL=change-streamer-service.d.ts.map

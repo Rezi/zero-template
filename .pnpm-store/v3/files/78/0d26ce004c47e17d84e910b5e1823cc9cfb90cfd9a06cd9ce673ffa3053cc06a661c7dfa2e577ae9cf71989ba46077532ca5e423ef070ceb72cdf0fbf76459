@@ -1,0 +1,7 @@
+export declare const Applied = 0;
+export declare const NoOp = 1;
+export declare const CookieMismatch = 2;
+export type Applied = typeof Applied;
+export type NoOp = typeof NoOp;
+export type CookieMismatch = typeof CookieMismatch;
+//# sourceMappingURL=handle-pull-response-result-type-enum.d.ts.map

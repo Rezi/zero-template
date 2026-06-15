@@ -1,0 +1,27 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { JWTPayload } from 'jose';
+import { type ErrorBody } from '../../../zero-protocol/src/error.ts';
+import type { PushError } from '../../../zero-protocol/src/push.ts';
+/** @deprecated JWT auth is deprecated */
+export type JWTAuth = {
+    readonly type: 'jwt';
+    readonly raw: string;
+    readonly decoded: JWTPayload;
+};
+export type OpaqueAuth = {
+    readonly type: 'opaque';
+    readonly raw: string;
+};
+export type Auth = OpaqueAuth | JWTAuth;
+export type ValidateLegacyJWT = (token: string, ctx: {
+    readonly userID: string | undefined;
+}) => Promise<JWTAuth>;
+export declare function authEquals(a: Auth | undefined, b: Auth | undefined): boolean;
+/**
+ * Resolves one auth snapshot transition without binding it to a client group.
+ */
+export declare function resolveAuth(lc: LogContext, previousAuth: Auth | undefined, userID: string | null, wireAuth: string | undefined, validateLegacyJWT: ValidateLegacyJWT | undefined): Promise<Auth | undefined>;
+/** @deprecated used only in old JWT validation/rotation auth */
+export declare function pickToken(lc: LogContext, previousToken: Auth | undefined, newToken: Auth | undefined | null): Auth | undefined;
+export declare function isAuthErrorBody(ex: unknown): ex is ErrorBody | PushError;
+//# sourceMappingURL=auth.d.ts.map

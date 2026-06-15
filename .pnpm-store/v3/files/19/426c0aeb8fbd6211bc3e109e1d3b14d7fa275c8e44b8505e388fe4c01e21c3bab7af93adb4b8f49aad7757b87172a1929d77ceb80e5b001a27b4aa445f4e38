@@ -1,0 +1,47 @@
+import { valita_exports } from "../../shared/src/valita.js";
+import { clientSchemaSchema } from "./client-schema.js";
+import { deleteClientsBodySchema } from "./delete-clients.js";
+import { upQueriesPatchSchema } from "./queries-patch.js";
+//#region ../zero-protocol/src/connect.ts
+/**
+* After opening a websocket the client waits for a `connected` message
+* from the server.  It then sends an `initConnection` message to the
+* server.  The server waits for the `initConnection` message before
+* beginning to send pokes to the newly connected client, so as to avoid
+* syncing lots of queries which are no longer desired by the client.
+*/
+var connectedBodySchema = valita_exports.object({
+	wsid: valita_exports.string(),
+	timestamp: valita_exports.number().optional()
+});
+var connectedMessageSchema = valita_exports.tuple([valita_exports.literal("connected"), connectedBodySchema]);
+var initConnectionBodySchema = valita_exports.object({
+	desiredQueriesPatch: upQueriesPatchSchema,
+	clientSchema: clientSchemaSchema.optional(),
+	deleted: deleteClientsBodySchema.optional(),
+	userPushURL: valita_exports.string().optional(),
+	userPushHeaders: valita_exports.record(valita_exports.string()).optional(),
+	userQueryURL: valita_exports.string().optional(),
+	userQueryHeaders: valita_exports.record(valita_exports.string()).optional(),
+	activeClients: valita_exports.array(valita_exports.string()).optional(),
+	traceparent: valita_exports.string().optional()
+});
+var initConnectionMessageSchema = valita_exports.tuple([valita_exports.literal("initConnection"), initConnectionBodySchema]);
+function encodeSecProtocols(initConnectionMessage, authToken) {
+	const protocols = {
+		initConnectionMessage,
+		authToken
+	};
+	const bytes = new TextEncoder().encode(JSON.stringify(protocols));
+	const s = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
+	return encodeURIComponent(btoa(s));
+}
+function decodeSecProtocols(secProtocol) {
+	const binString = atob(decodeURIComponent(secProtocol));
+	const bytes = Uint8Array.from(binString, (c) => c.charCodeAt(0));
+	return JSON.parse(new TextDecoder().decode(bytes));
+}
+//#endregion
+export { connectedMessageSchema, decodeSecProtocols, encodeSecProtocols, initConnectionMessageSchema };
+
+//# sourceMappingURL=connect.js.map

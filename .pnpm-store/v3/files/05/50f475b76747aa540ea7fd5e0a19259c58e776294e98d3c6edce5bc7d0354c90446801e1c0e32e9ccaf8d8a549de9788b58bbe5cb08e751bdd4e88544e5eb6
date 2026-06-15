@@ -1,0 +1,29 @@
+import * as v from '../../shared/src/valita.ts';
+export type ValueType = 'string' | 'number' | 'boolean' | 'null' | 'json';
+export declare const valueTypeSchema: v.Type<ValueType>;
+export declare const columnSchemaSchema: v.ObjectType<{
+    type: v.Type<ValueType>;
+}, undefined>;
+export type ColumnSchema = v.Infer<typeof columnSchemaSchema>;
+export declare const tableSchemaSchema: v.ObjectType<{
+    columns: v.Type<Record<string, {
+        type: ValueType;
+    }>>;
+    primaryKey: v.ArrayType<v.Type<string>>;
+}, undefined>;
+export type TableSchema = v.Infer<typeof tableSchemaSchema>;
+export declare const clientSchemaSchema: v.ObjectType<{
+    tables: v.Type<Record<string, {
+        columns: Record<string, {
+            type: ValueType;
+        }>;
+        primaryKey: string[];
+    }>>;
+}, undefined>;
+export type ClientSchema = v.Infer<typeof clientSchemaSchema>;
+/**
+ * Returns a normalized schema (with the tables and columns sorted)
+ * suitable for hashing.
+ */
+export declare function normalizeClientSchema(schema: ClientSchema): ClientSchema;
+//# sourceMappingURL=client-schema.d.ts.map

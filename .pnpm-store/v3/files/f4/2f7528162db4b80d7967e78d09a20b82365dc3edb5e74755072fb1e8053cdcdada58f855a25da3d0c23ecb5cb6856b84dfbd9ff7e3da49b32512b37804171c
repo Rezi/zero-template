@@ -1,0 +1,110 @@
+import { promiseVoid } from "../../../../shared/src/resolved-promises.js";
+import { cvrSchema } from "../../types/shards.js";
+import "../../types/pg.js";
+import { RunningState } from "../running-state.js";
+import { READ_COMMITTED } from "../../db/mode-enum.js";
+import { runTx } from "../../db/run-transaction.js";
+//#region ../zero-cache/src/services/view-syncer/cvr-purger.ts
+var MAX_PURGE_INTERVAL_MS = 16 * (60 * 1e3);
+var TOMBSTONE_PURGE_THRESHOLD = 744 * 60 * 60 * 1e3;
+var CVRPurger = class {
+	id = "reaper";
+	#lc;
+	#db;
+	#schema;
+	#inactivityThresholdMs;
+	#tombstonePurgeThresholdMs;
+	#initialBatchSize;
+	#initialIntervalMs;
+	#state = new RunningState("reaper");
+	constructor(lc, db, shard, { inactivityThresholdMs, initialBatchSize, initialIntervalMs }, tombstonePurgeThreshold = TOMBSTONE_PURGE_THRESHOLD) {
+		this.#lc = lc;
+		this.#db = db;
+		this.#schema = cvrSchema(shard);
+		this.#inactivityThresholdMs = inactivityThresholdMs;
+		this.#tombstonePurgeThresholdMs = Math.max(tombstonePurgeThreshold, inactivityThresholdMs);
+		this.#initialBatchSize = initialBatchSize;
+		this.#initialIntervalMs = initialIntervalMs;
+	}
+	async run() {
+		let purgeable;
+		let maxCVRsPerPurge = this.#initialBatchSize;
+		let purgeInterval = this.#initialIntervalMs;
+		if (this.#initialBatchSize === 0) {
+			this.#lc.warn?.(`CVR garbage collection is disabled (initialBatchSize = 0)`);
+			await this.#state.stopped();
+		} else this.#lc.info?.(`running cvr-purger with`, await this.#db`SHOW statement_timeout`);
+		while (this.#state.shouldRun()) try {
+			const start = performance.now();
+			const { purged, remaining } = await this.purgeInactiveCVRs(maxCVRsPerPurge);
+			this.#state.resetBackoff();
+			if (purgeable !== void 0 && remaining > purgeable) {
+				maxCVRsPerPurge += this.#initialBatchSize;
+				this.#lc.info?.(`increased CVRs per purge to ${maxCVRsPerPurge}`);
+			}
+			purgeable = remaining;
+			purgeInterval = purgeable > 0 ? this.#initialIntervalMs : Math.min(purgeInterval * 2, MAX_PURGE_INTERVAL_MS);
+			const elapsed = performance.now() - start;
+			this.#lc.info?.(`purged ${purged} inactive CVRs (${elapsed.toFixed(2)} ms). Next purge in ${purgeInterval} ms`);
+			await this.#state.sleep(purgeInterval);
+		} catch (e) {
+			await this.#state.backoff(this.#lc, e);
+		}
+	}
+	purgeInactiveCVRs(maxCVRs) {
+		return runTx(this.#db, async (sql) => {
+			const now = Date.now();
+			const threshold = now - this.#inactivityThresholdMs;
+			const tombstonePurgeThreshold = now - this.#tombstonePurgeThresholdMs;
+			const ids = (await sql`
+          SELECT "clientGroupID" FROM ${sql(this.#schema)}.instances
+            WHERE NOT "deleted" AND "lastActive" < ${threshold}
+            ORDER BY "lastActive" ASC
+            LIMIT ${maxCVRs}
+            FOR UPDATE SKIP LOCKED
+      `.values()).flat();
+			if (ids.length > 0) {
+				const stmts = [
+					"desires",
+					"queries",
+					"clients",
+					"rows",
+					"rowsVersion"
+				].map((table) => sql`
+            DELETE FROM ${sql(this.#schema)}.${sql(table)} 
+              WHERE "clientGroupID" IN ${sql(ids)}`.execute());
+				stmts.push(sql`
+            UPDATE ${sql(this.#schema)}.instances
+              SET "deleted" = TRUE, 
+                  "version" = '00', 
+                  "ttlClock" = 0,
+                  "replicaVersion" = NULL, 
+                  "owner" = NULL,
+                  "grantedAt" = NULL,
+                  "clientSchema" = NULL
+              WHERE "clientGroupID" IN ${sql(ids)}`.execute());
+				stmts.push(sql`
+            DELETE FROM ${sql(this.#schema)}.instances
+              WHERE "deleted" AND "lastActive" < ${tombstonePurgeThreshold}
+          `.execute());
+				await Promise.all(stmts);
+			}
+			const [{ remaining }] = await sql`
+        SELECT COUNT(*) AS remaining FROM ${sql(this.#schema)}.instances
+          WHERE NOT "deleted" AND "lastActive" < ${threshold}
+      `;
+			return {
+				purged: ids.length,
+				remaining: Number(remaining)
+			};
+		}, { mode: READ_COMMITTED });
+	}
+	stop() {
+		this.#state.stop(this.#lc);
+		return promiseVoid;
+	}
+};
+//#endregion
+export { CVRPurger };
+
+//# sourceMappingURL=cvr-purger.js.map

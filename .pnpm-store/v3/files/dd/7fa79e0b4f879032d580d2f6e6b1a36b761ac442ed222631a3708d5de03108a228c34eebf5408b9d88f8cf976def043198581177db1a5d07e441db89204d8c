@@ -1,0 +1,13 @@
+import "./skip-yields.js";
+//#region ../zql/src/ivm/operator.ts
+/**
+* An implementation of Output that throws if pushed to. It is used as the
+* initial value for for an operator's output before it is set.
+*/
+var throwOutput = { push(_change) {
+	throw new Error("Output not set");
+} };
+//#endregion
+export { throwOutput };
+
+//# sourceMappingURL=operator.js.map

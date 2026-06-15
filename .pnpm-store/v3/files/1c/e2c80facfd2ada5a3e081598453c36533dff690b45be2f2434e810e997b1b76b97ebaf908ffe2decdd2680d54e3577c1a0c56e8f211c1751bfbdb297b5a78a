@@ -1,0 +1,5 @@
+import * as valita from '@badrap/valita';
+import type { ReadonlyJSONObject, ReadonlyJSONValue } from './json.ts';
+export declare const jsonSchema: valita.Type<ReadonlyJSONValue>;
+export declare const jsonObjectSchema: valita.Type<ReadonlyJSONObject>;
+//# sourceMappingURL=json-schema.d.ts.map

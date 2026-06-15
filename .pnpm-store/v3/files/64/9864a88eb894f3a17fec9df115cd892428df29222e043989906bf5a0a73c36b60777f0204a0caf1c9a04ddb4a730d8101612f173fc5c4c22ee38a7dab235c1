@@ -1,0 +1,26 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { BackfillCompleted, BackfillRequest, MessageBackfill } from '../protocol/current.ts';
+import type { Replica } from './schema/shard.ts';
+type StreamOptions = {
+    /**
+     * The number of bytes at which to flush a batch of rows in a
+     * backfill message. Defaults to Node's getDefaultHighWatermark().
+     */
+    flushThresholdBytes?: number | undefined;
+    /**
+     * Use text-format COPY instead of binary COPY.
+     * Binary is faster and handles all types (unknown types are cast to
+     * `::text` in the SELECT). This flag exists as an escape hatch to
+     * revert to the old code path if needed.
+     */
+    textCopy?: boolean | undefined;
+};
+/**
+ * Streams a series of `backfill` messages (ending with `backfill-complete`)
+ * at a set watermark (i.e. LSN). The data is retrieved via a COPY stream
+ * made at a transaction snapshot corresponding to specific LSN, obtained by
+ * creating a short-lived replication slot.
+ */
+export declare function streamBackfill(lc: LogContext, upstreamURI: string, { slot, publications }: Pick<Replica, 'slot' | 'publications'>, bf: BackfillRequest, opts?: StreamOptions): AsyncGenerator<MessageBackfill | BackfillCompleted>;
+export {};
+//# sourceMappingURL=backfill-stream.d.ts.map

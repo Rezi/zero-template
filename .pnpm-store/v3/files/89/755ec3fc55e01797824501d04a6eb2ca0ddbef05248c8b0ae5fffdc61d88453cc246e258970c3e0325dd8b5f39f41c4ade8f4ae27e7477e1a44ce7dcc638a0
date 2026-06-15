@@ -1,0 +1,38 @@
+import { assert } from "../../../shared/src/asserts.js";
+import { parseBigInt } from "../../../shared/src/parse-big-int.js";
+//#region ../zero-cache/src/types/lexi-version.ts
+function versionToLexi(v) {
+	assert(v >= 0, "Negative versions are not supported");
+	assert(typeof v === "bigint" || v <= Number.MAX_SAFE_INTEGER && Number.isInteger(v), `Invalid or unsafe version ${v}`);
+	const base36Version = BigInt(v).toString(36);
+	const length = BigInt(base36Version.length - 1).toString(36);
+	assert(length.length === 1, `Value is too large to be encoded as a LexiVersion: ${v.toString()}`);
+	return `${length}${base36Version}`;
+}
+function versionFromLexi(lexiVersion) {
+	assert(lexiVersion.length >= 2, () => `LexiVersion must have at least 2 characters, got ${lexiVersion.length}`);
+	const length = lexiVersion.substring(0, 1);
+	const base36Version = lexiVersion.substring(1);
+	assert(base36Version.length === parseInt(length, 36) + 1, `Invalid LexiVersion: ${lexiVersion}`);
+	return parseBigInt(base36Version, 36);
+}
+function max(...versions) {
+	let winner = versions[0];
+	for (let i = 1; i < versions.length; i++) {
+		const b = versions[i];
+		winner = winner > b ? winner : b;
+	}
+	return winner;
+}
+function min(...versions) {
+	let winner = versions[0];
+	for (let i = 1; i < versions.length; i++) {
+		const b = versions[i];
+		winner = winner < b ? winner : b;
+	}
+	return winner;
+}
+//#endregion
+export { max, min, versionFromLexi, versionToLexi };
+
+//# sourceMappingURL=lexi-version.js.map

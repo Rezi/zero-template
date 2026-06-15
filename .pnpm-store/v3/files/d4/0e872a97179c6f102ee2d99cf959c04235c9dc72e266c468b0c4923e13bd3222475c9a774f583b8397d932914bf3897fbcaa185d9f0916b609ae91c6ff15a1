@@ -1,0 +1,19 @@
+import { assert } from "../../../shared/src/asserts.js";
+//#region ../zql/src/query/query-internals.ts
+var queryInternalsTag = Symbol();
+/**
+* Helper function to cast a Query to QueryInternals.
+* This is used in tests and internal code to access query implementation details.
+* The function asserts that the query has the queryInternalsTag to ensure it
+* properly implements the QueryInternals interface.
+*
+* @internal
+*/
+function asQueryInternals(query) {
+	assert(queryInternalsTag in query, "Query does not implement QueryInternals. This likely means there are two copies of Zero in your runtime.");
+	return query;
+}
+//#endregion
+export { asQueryInternals, queryInternalsTag };
+
+//# sourceMappingURL=query-internals.js.map

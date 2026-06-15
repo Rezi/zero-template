@@ -1,0 +1,158 @@
+import { parse } from "../../../shared/src/valita.js";
+import { must } from "../../../shared/src/must.js";
+import { primaryKeySchema } from "../../../zero-protocol/src/primary-key.js";
+import { difference } from "../../../shared/src/set-utils.js";
+import { isArray, isEnum, liteTypeToZqlValueType, mapLiteDataTypeToZqlSchemaValue, nullableUpstream } from "../types/lite.js";
+import { ColumnMetadataStore, metadataToLiteTypeString } from "../services/replicator/schema/column-metadata.js";
+import { TableMetadataTracker } from "../services/replicator/schema/table-metadata.js";
+//#region ../zero-cache/src/db/lite-tables.ts
+function listTables(db, useColumnMetadata = true, useTableMetadata = true) {
+	const columns = db.prepare(`
+      SELECT
+        m.name as "table",
+        p.name as name,
+        p.type as type,
+        p."notnull" as "notNull",
+        p.dflt_value as "dflt",
+        p.pk as keyPos
+      FROM sqlite_master as m
+      LEFT JOIN pragma_table_info(m.name) as p
+      WHERE m.type = 'table'
+      AND m.name NOT LIKE 'sqlite_%'
+      AND m.name NOT LIKE '_zero.%'
+      AND m.name NOT LIKE '_litestream_%'
+      `).all();
+	const minRowVersions = useTableMetadata ? new TableMetadataTracker(db).getMinRowVersions() : /* @__PURE__ */ new Map();
+	const tables = [];
+	let table;
+	columns.forEach((col) => {
+		if (col.table !== table?.name) {
+			table = {
+				name: col.table,
+				columns: {},
+				backfilling: [],
+				minRowVersion: minRowVersions.get(col.table) ?? null
+			};
+			tables.push(table);
+		}
+		let dataType;
+		let elemPgTypeClass;
+		const metadata = useColumnMetadata ? ColumnMetadataStore.getInstance(db)?.getColumn(col.table, col.name) : void 0;
+		if (metadata) {
+			dataType = metadataToLiteTypeString(metadata);
+			elemPgTypeClass = metadata.isArray ? metadata.isEnum ? "e" : "b" : null;
+		} else {
+			dataType = col.type;
+			elemPgTypeClass = isArray(col.type) ? isEnum(col.type) ? "e" : "b" : null;
+		}
+		table.columns[col.name] = {
+			pos: Object.keys(table.columns).length + 1,
+			dataType,
+			characterMaximumLength: null,
+			notNull: col.notNull !== 0,
+			dflt: col.dflt,
+			elemPgTypeClass
+		};
+		if (metadata?.isBackfilling) table.backfilling.push(col.name);
+		if (col.keyPos) {
+			table.primaryKey ??= [];
+			while (table.primaryKey.length < col.keyPos) table.primaryKey.push("");
+			table.primaryKey[col.keyPos - 1] = col.name;
+		}
+	});
+	return tables;
+}
+function listIndexes(db) {
+	const indexes = db.prepare(`SELECT 
+         idx.name as indexName, 
+         idx.tbl_name as tableName, 
+         info."unique" as "unique",
+         col.name as column,
+         CASE WHEN col.desc = 0 THEN 'ASC' ELSE 'DESC' END as dir
+      FROM sqlite_master as idx
+       JOIN pragma_index_list(idx.tbl_name) AS info ON info.name = idx.name
+       JOIN pragma_index_xinfo(idx.name) as col
+       WHERE idx.type = 'index' AND 
+             col.key = 1 AND
+             idx.tbl_name NOT LIKE '_zero.%'
+       ORDER BY idx.name, col.seqno ASC`).all();
+	const ret = [];
+	for (const { indexName: name, tableName, unique, column, dir } of indexes) if (ret.at(-1)?.name === name) must(ret.at(-1)).columns[column] = dir;
+	else ret.push({
+		tableName,
+		name,
+		columns: { [column]: dir },
+		unique: unique !== 0
+	});
+	return ret;
+}
+/**
+* Computes a TableSpec "view" of the replicated data that is
+* suitable for processing / consumption for the client. This
+* includes:
+* * excluding tables without a PRIMARY KEY or UNIQUE INDEX
+* * excluding columns with types that are not supported by ZQL
+* * choosing columns to use as the primary key amongst those
+*   in unique indexes
+*
+* @param tableSpecs an optional map to reset and populate
+* @param fullTables an optional map to receive the full table specs,
+*        which may include tables and columns that are not synced to
+*        the client because they lack a primary key or are of unsupported
+*        data types.
+*/
+function computeZqlSpecs(lc, replica, opts, tableSpecs = /* @__PURE__ */ new Map(), fullTables) {
+	return computeZqlSpecsFromLiteSpecs(listTables(replica), listIndexes(replica), opts, tableSpecs, fullTables, lc);
+}
+function computeZqlSpecsFromLiteSpecs(tables, indexes, { includeBackfillingColumns }, tableSpecs = /* @__PURE__ */ new Map(), fullTables, lc) {
+	tableSpecs.clear();
+	fullTables?.clear();
+	const uniqueIndexColumns = /* @__PURE__ */ new Map();
+	for (const { tableName, columns } of indexes.filter((idx) => idx.unique)) {
+		if (!uniqueIndexColumns.has(tableName)) uniqueIndexColumns.set(tableName, []);
+		uniqueIndexColumns.get(tableName)?.push(Object.keys(columns));
+	}
+	tables.forEach((fullTable) => {
+		fullTables?.set(fullTable.name, fullTable);
+		const backfilling = new Set(fullTable.backfilling);
+		const visibleColumns = Object.entries(fullTable.columns).filter(([col, { dataType }]) => liteTypeToZqlValueType(dataType) && (includeBackfillingColumns || !backfilling.has(col)));
+		const notNullColumns = new Set(visibleColumns.filter(([col, { dataType }]) => !nullableUpstream(dataType) || fullTable.primaryKey?.includes(col)).map(([col]) => col));
+		const uniqueKeys = uniqueIndexColumns.get(fullTable.name) ?? [];
+		const keys = uniqueKeys.filter((key) => difference(new Set(key), notNullColumns).size === 0);
+		if (keys.length === 0) {
+			lc?.debug?.(`not syncing table ${fullTable.name} because it ` + (backfilling.size ? "is being backfilled" : "has no primary key"));
+			return;
+		}
+		const primaryKey = keys.sort(keyCmp)[0];
+		const tableSpec = {
+			...fullTable,
+			columns: Object.fromEntries(visibleColumns),
+			primaryKey: parse(primaryKey, primaryKeySchema),
+			uniqueKeys: uniqueKeys.map((key) => parse(key, primaryKeySchema)),
+			allPotentialPrimaryKeys: keys.map((key) => parse(key, primaryKeySchema)),
+			minRowVersion: fullTable.minRowVersion ?? null
+		};
+		tableSpecs.set(tableSpec.name, {
+			tableSpec,
+			zqlSpec: Object.fromEntries(Object.entries(tableSpec.columns).map(([name, { dataType }]) => [name, mapLiteDataTypeToZqlSchemaValue(dataType)]))
+		});
+	});
+	return tableSpecs;
+}
+function mustGetTableSpec(tableSpecs, tableName) {
+	const tableSpec = tableSpecs.get(tableName);
+	if (!tableSpec) throw new Error(`table '${tableName}' is not one of: ${[...tableSpecs.keys()].filter((t) => !t.includes(".") && !t.startsWith("_litestream_")).sort()}. Check the spelling and ensure that the table has a primary key.`);
+	return tableSpec;
+}
+function keyCmp(a, b) {
+	if (a.length !== b.length) return a.length - b.length;
+	for (let i = 0; i < a.length; i++) {
+		if (a[i] < b[i]) return -1;
+		if (a[i] > b[i]) return 1;
+	}
+	return 0;
+}
+//#endregion
+export { computeZqlSpecs, computeZqlSpecsFromLiteSpecs, listIndexes, listTables, mustGetTableSpec };
+
+//# sourceMappingURL=lite-tables.js.map

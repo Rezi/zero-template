@@ -1,0 +1,9 @@
+import { asyncIterableToArray } from "../async-iterable-to-array.js";
+//#region ../replicache/src/btree/diff.ts
+function diff(oldMap, newMap) {
+	return asyncIterableToArray(newMap.diff(oldMap));
+}
+//#endregion
+export { diff };
+
+//# sourceMappingURL=diff.js.map

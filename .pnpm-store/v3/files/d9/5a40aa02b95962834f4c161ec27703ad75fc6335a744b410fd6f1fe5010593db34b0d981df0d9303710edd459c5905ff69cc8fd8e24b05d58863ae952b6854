@@ -1,0 +1,50 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { Config } from '../../../shared/src/options.ts';
+export declare const decommissionOptions: {
+    app: {
+        id: {
+            type: import("@badrap/valita").Type<string>;
+            desc: string[];
+        };
+    };
+    shard: {
+        num: {
+            type: import("@badrap/valita").Type<number>;
+            desc: string[];
+            hidden: boolean;
+        };
+    };
+    upstream: {
+        db: {
+            type: import("@badrap/valita").Type<string>;
+            desc: string[];
+        };
+        type: {
+            type: import("@badrap/valita").Type<"pg" | "custom">;
+            desc: string[];
+            hidden: boolean;
+        };
+    };
+    cvr: {
+        db: {
+            type: import("@badrap/valita").Optional<string>;
+            desc: string[];
+        };
+    };
+    change: {
+        db: {
+            type: import("@badrap/valita").Optional<string>;
+            desc: string[];
+        };
+    };
+    log: {
+        level: import("@badrap/valita").Type<"info" | "error" | "debug" | "warn">;
+        format: {
+            type: import("@badrap/valita").Type<"text" | "json">;
+            desc: string[];
+        };
+    };
+};
+export type DecommissionConfig = Config<typeof decommissionOptions>;
+export declare function decommissionZero(lc: LogContext, cfg: DecommissionConfig): Promise<void>;
+//# sourceMappingURL=decommission.d.ts.map

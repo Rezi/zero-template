@@ -1,0 +1,34 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { MutatorDefs } from '../../../replicache/src/types.ts';
+import type { Schema } from '../../../zero-types/src/schema.ts';
+import { type AnyMutatorRegistry } from '../../../zql/src/mutate/mutator-registry.ts';
+import { type CRUDMutator } from './crud.ts';
+import type { CustomMutatorDefs } from './custom.ts';
+export declare function extendReplicacheMutators<S extends Schema, C>(lc: LogContext, context: C, mutators: AnyMutatorRegistry | CustomMutatorDefs, schema: S, mutateObject: Record<string, unknown>): void;
+/**
+ * Creates Replicache mutators from mutator definitions.
+ *
+ * This function processes mutator definitions at arbitrary depth, supporting both
+ * new-style mutator definitions and legacy custom mutator implementations. It creates
+ * a mutator object with the CRUD mutator and any provided custom mutators, with keys
+ * generated based on their path in the mutator definition hierarchy.
+ *
+ * @template S - The schema type that defines the structure of the data
+ * @template C - The type of the context object passed to mutators
+ *
+ * @param schema - The schema instance used for validation and type checking
+ * @param mutators - The mutator definitions to process, can be nested objects or custom mutator definitions
+ * @param context - The context to be passed to mutators
+ * @param lc - The log context used for logging operations
+ *
+ * @returns A mutator definitions object containing the CRUD mutator and any custom mutators
+ *
+ * @remarks
+ * - New-style mutator definitions use '.' as a separator in their keys
+ * - Legacy custom mutator implementations use '|' as a separator in their keys
+ * - The CRUD mutator can be disabled by setting `enableLegacyMutators: false` in the schema
+ */
+export declare function makeReplicacheMutators<const S extends Schema, C>(schema: S, mutators: AnyMutatorRegistry | CustomMutatorDefs | undefined, context: C, lc: LogContext): MutatorDefs & {
+    _zero_crud: CRUDMutator;
+};
+//# sourceMappingURL=make-replicache-mutators.d.ts.map

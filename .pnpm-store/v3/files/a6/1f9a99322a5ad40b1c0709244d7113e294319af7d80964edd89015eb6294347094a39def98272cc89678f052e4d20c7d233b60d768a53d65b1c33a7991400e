@@ -1,0 +1,17 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { Service } from '../services/service.ts';
+import type { Worker } from '../types/processes.ts';
+export declare class WorkerDispatcher implements Service {
+    #private;
+    readonly id = "worker-dispatcher";
+    constructor(lc: LogContext, taskID: string, parent: Worker, syncers: Worker[], mutator: Worker | undefined, changeStreamer: Worker | undefined);
+    run(): Promise<void>;
+    stop(): Promise<void>;
+}
+export declare function parsePath(url: URL): {
+    base?: string;
+    worker: 'sync' | 'mutate' | 'replication';
+    version: string;
+    action: string;
+} | undefined;
+//# sourceMappingURL=worker-dispatcher.d.ts.map

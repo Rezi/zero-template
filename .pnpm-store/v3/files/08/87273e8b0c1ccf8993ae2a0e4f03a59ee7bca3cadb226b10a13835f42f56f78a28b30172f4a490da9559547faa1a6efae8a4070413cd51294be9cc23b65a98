@@ -1,0 +1,25 @@
+import { resolver } from "@rocicorp/resolver";
+import { pid } from "node:process";
+//#region ../zero-cache/src/workers/mutator.ts
+var Mutator = class {
+	id = `mutator-${pid}`;
+	#stopped;
+	constructor() {
+		this.#stopped = resolver();
+	}
+	run() {
+		return this.#stopped.promise;
+	}
+	stop() {
+		this.#stopped.resolve();
+		return this.#stopped.promise;
+	}
+	drain() {
+		this.#stopped.resolve();
+		return this.#stopped.promise;
+	}
+};
+//#endregion
+export { Mutator };
+
+//# sourceMappingURL=mutator.js.map

@@ -1,0 +1,9 @@
+export type Splice = [at: number, removed: number, added: number, from: number];
+export declare const SPLICE_AT = 0;
+export declare const SPLICE_REMOVED = 1;
+export declare const SPLICE_ADDED = 2;
+export declare const SPLICE_FROM = 3;
+type Entry<V> = readonly [key: string, value: V, ...rest: unknown[]];
+export declare function computeSplices<T>(previous: readonly Entry<T>[], current: readonly Entry<T>[]): Generator<Splice, void>;
+export {};
+//# sourceMappingURL=splice.d.ts.map

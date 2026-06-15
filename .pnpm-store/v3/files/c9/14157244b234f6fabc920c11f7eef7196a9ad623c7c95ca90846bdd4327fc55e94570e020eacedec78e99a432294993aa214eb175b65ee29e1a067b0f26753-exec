@@ -1,0 +1,135 @@
+#!/usr/bin/env node
+import { valita_exports } from "../../shared/src/valita.js";
+import "../../shared/src/dotenv.js";
+import { createLogContext } from "../../shared/src/logging.js";
+import { parseOptionsAdvanced } from "../../shared/src/options.js";
+import { ZERO_ENV_VAR_PREFIX, zeroOptions } from "../../zero-cache/src/config/zero-config.js";
+import { deployPermissionsOptions } from "../../zero-cache/src/scripts/permissions.js";
+import { resolver } from "@rocicorp/resolver";
+import { spawn } from "node:child_process";
+import { watch } from "chokidar";
+//#region src/zero-cache-dev.ts
+var deployPermissionsScript = "zero-deploy-permissions";
+var zeroCacheScript = "zero-cache";
+var startupMessageEnv = "ZERO_ENABLE_STARTUP_MESSAGE";
+function killProcess(childProcess) {
+	if (!childProcess || childProcess.exitCode !== null) return Promise.resolve();
+	const { resolve, promise } = resolver();
+	childProcess.on("exit", resolve);
+	childProcess.kill("SIGQUIT");
+	return promise;
+}
+async function main() {
+	const { config } = parseOptionsAdvanced({
+		schema: { path: {
+			type: valita_exports.string().optional(),
+			desc: ["Relative path to the file containing permissions."],
+			alias: "p",
+			deprecated: ["Permissions are deprecated and will be removed in an upcoming release. See: https://zero.rocicorp.dev/docs/auth."]
+		} },
+		...zeroOptions
+	}, {
+		envNamePrefix: ZERO_ENV_VAR_PREFIX,
+		allowPartial: true,
+		emitDeprecationWarnings: false
+	});
+	const lc = createLogContext(config);
+	process.on("unhandledRejection", (reason) => {
+		lc.error?.("Unexpected unhandled rejection.", reason);
+		lc.error?.("Exiting");
+		process.exit(-1);
+	});
+	const { env: deployPermissionsEnv } = parseOptionsAdvanced(deployPermissionsOptions, {
+		envNamePrefix: ZERO_ENV_VAR_PREFIX,
+		allowUnknown: true,
+		includeDefaults: false,
+		emitDeprecationWarnings: false
+	});
+	const { env: zeroCacheEnv } = parseOptionsAdvanced(zeroOptions, {
+		envNamePrefix: ZERO_ENV_VAR_PREFIX,
+		allowUnknown: true,
+		includeDefaults: false,
+		emitDeprecationWarnings: false
+	});
+	let permissionsProcess;
+	let zeroCacheProcess;
+	process.on("exit", () => {
+		permissionsProcess?.kill("SIGQUIT");
+		zeroCacheProcess?.kill("SIGQUIT");
+	});
+	async function deployPermissions() {
+		if (config.upstream.type !== "pg") {
+			lc.warn?.(`Skipping permissions deployment for ${config.upstream.type} upstream`);
+			return true;
+		}
+		permissionsProcess?.removeAllListeners("exit");
+		await killProcess(permissionsProcess);
+		permissionsProcess = void 0;
+		lc.info?.(`Running ${deployPermissionsScript}.`);
+		permissionsProcess = spawn(deployPermissionsScript, [], {
+			env: {
+				...process.env,
+				...deployPermissionsEnv
+			},
+			stdio: "inherit",
+			shell: true
+		});
+		const { promise: code, resolve } = resolver();
+		permissionsProcess.on("exit", resolve);
+		if (await code === 0) {
+			lc.info?.(`${deployPermissionsScript} completed successfully.`);
+			return true;
+		}
+		lc.error?.(`Failed to deploy permissions from ${config.schema.path}.`);
+		return false;
+	}
+	async function startZeroCache() {
+		zeroCacheProcess?.removeAllListeners("exit");
+		await killProcess(zeroCacheProcess);
+		zeroCacheProcess = void 0;
+		lc.info?.(`Running ${zeroCacheScript} at\n\n\thttp://localhost:${config.port}\n`);
+		zeroCacheProcess = spawn(zeroCacheScript, [], {
+			env: {
+				["ZERO_NUM_SYNC_WORKERS"]: "3",
+				["ZERO_CVR_MAX_CONNS"]: "6",
+				["ZERO_UPSTREAM_MAX_CONNS"]: "6",
+				["NODE_ENV"]: "development",
+				[startupMessageEnv]: "1",
+				...process.env,
+				...zeroCacheEnv
+			},
+			stdio: "inherit",
+			shell: true
+		});
+		zeroCacheProcess.on("exit", () => {
+			lc.error?.(`${zeroCacheScript} exited. Exiting.`);
+			process.exit(-1);
+		});
+	}
+	async function deployPermissionsAndStartZeroCache() {
+		if (await deployPermissions()) await startZeroCache();
+	}
+	if (config.schema.path) {
+		if (config.query.url && config.mutate.url) lc.warn?.("Using -p/--path/ZERO_SCHEMA_PATH with ZERO_MUTATE_URL and ZERO_QUERY_URL. Continuing in hybrid mode: legacy permissions will still be deployed/watched, and custom queries/mutations will use the API endpoints.");
+		await deployPermissionsAndStartZeroCache();
+		const watcher = watch(config.schema.path, {
+			ignoreInitial: true,
+			awaitWriteFinish: {
+				stabilityThreshold: 500,
+				pollInterval: 100
+			}
+		});
+		const onFileChange = async () => {
+			lc.info?.(`Detected ${config.schema.path} change.`);
+			await deployPermissions();
+		};
+		watcher.on("add", onFileChange);
+		watcher.on("change", onFileChange);
+		watcher.on("unlink", onFileChange);
+	} else await startZeroCache();
+}
+main();
+//#endregion
+export {};
+
+//# sourceMappingURL=zero-cache-dev.js.map

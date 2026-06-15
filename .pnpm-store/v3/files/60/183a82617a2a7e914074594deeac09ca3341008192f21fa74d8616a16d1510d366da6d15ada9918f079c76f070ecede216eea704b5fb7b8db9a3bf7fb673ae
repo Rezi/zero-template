@@ -1,0 +1,2 @@
+export * from '../../../zero-server/src/adapters/prisma.ts';
+//# sourceMappingURL=prisma.d.ts.map

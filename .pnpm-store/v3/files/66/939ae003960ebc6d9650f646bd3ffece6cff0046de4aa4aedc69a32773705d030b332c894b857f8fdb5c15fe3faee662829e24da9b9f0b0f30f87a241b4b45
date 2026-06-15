@@ -1,0 +1,83 @@
+import * as v from '../../../shared/src/valita.ts';
+import { type PermissionsConfig } from '../../../zero-schema/src/compiled-permissions.ts';
+import type { Schema } from '../../../zero-types/src/schema.ts';
+export declare const deployPermissionsOptions: {
+    schema: {
+        path: {
+            type: v.Type<string>;
+            desc: string[];
+            alias: string;
+        };
+    };
+    upstream: {
+        db: {
+            type: v.Optional<string>;
+            desc: string[];
+        };
+        type: {
+            type: v.Type<"pg" | "custom">;
+            desc: string[];
+            hidden: boolean;
+        };
+    };
+    app: {
+        id: {
+            type: v.Type<string>;
+            desc: string[];
+        };
+    };
+    shard: {
+        id: {
+            type: v.Optional<string>;
+            hidden: boolean;
+        };
+        num: {
+            type: v.Type<number>;
+            desc: string[];
+            hidden: boolean;
+        };
+    };
+    log: {
+        level: v.Type<"info" | "error" | "debug" | "warn">;
+        format: {
+            type: v.Type<"text" | "json">;
+            desc: string[];
+        };
+        slowRowThreshold: {
+            type: v.Type<number>;
+            desc: string[];
+        };
+        slowHydrateThreshold: {
+            type: v.Type<number>;
+            desc: string[];
+        };
+        ivmSampling: {
+            type: v.Type<number>;
+            desc: string[];
+        };
+    };
+    output: {
+        file: {
+            type: v.Optional<string>;
+            desc: string[];
+        };
+        format: {
+            type: v.Type<"sql" | "json" | "pretty">;
+            desc: string[];
+        };
+    };
+    force: {
+        type: v.Type<boolean>;
+        desc: string[];
+        alias: string;
+    };
+};
+export declare function loadSchemaAndPermissions(schemaPath: string, allowMissing: true): Promise<{
+    schema: Schema;
+    permissions: PermissionsConfig;
+} | undefined>;
+export declare function loadSchemaAndPermissions(schemaPath: string, allowMissing?: false): Promise<{
+    schema: Schema;
+    permissions: PermissionsConfig;
+}>;
+//# sourceMappingURL=permissions.d.ts.map

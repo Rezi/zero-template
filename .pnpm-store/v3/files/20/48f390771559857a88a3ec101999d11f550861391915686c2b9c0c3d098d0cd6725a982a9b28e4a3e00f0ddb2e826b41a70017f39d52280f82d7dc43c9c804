@@ -1,0 +1,1 @@
+{"version":3,"file":"client-error-kind.d.ts","sourceRoot":"","sources":["../../../../../zero-client/src/client/client-error-kind.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAC,IAAI,EAAC,MAAM,6BAA6B,CAAC;AACtD,OAAO,KAAK,mBAAmB,MAAM,6BAA6B,CAAC;AAEnE,OAAO,EAAC,mBAAmB,IAAI,eAAe,EAAC,CAAC;AAChD,MAAM,MAAM,eAAe,GAAG,IAAI,CAAC,OAAO,mBAAmB,CAAC,CAAC"}

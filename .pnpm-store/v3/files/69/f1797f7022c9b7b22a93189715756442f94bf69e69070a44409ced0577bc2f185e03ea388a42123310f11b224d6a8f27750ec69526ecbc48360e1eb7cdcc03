@@ -1,0 +1,69 @@
+//#region ../zero-cache/src/types/pg-data-type.ts
+var pgToZqlNumericTypeMap = Object.freeze({
+	"smallint": "number",
+	"integer": "number",
+	"int": "number",
+	"int2": "number",
+	"int4": "number",
+	"int8": "number",
+	"bigint": "number",
+	"smallserial": "number",
+	"serial": "number",
+	"serial2": "number",
+	"serial4": "number",
+	"serial8": "number",
+	"bigserial": "number",
+	"decimal": "number",
+	"numeric": "number",
+	"real": "number",
+	"double precision": "number",
+	"float": "number",
+	"float4": "number",
+	"float8": "number"
+});
+function isPgNumberType(pgType) {
+	return Object.hasOwn(pgToZqlNumericTypeMap, formatTypeForLookup(pgType));
+}
+var pgToZqlStringTypeMap = Object.freeze({
+	"bpchar": "string",
+	"character": "string",
+	"character varying": "string",
+	"text": "string",
+	"uuid": "string",
+	"varchar": "string"
+});
+function isPgStringType(pgType) {
+	return Object.hasOwn(pgToZqlStringTypeMap, formatTypeForLookup(pgType));
+}
+var pgToZqlTypeMap = Object.freeze({
+	...pgToZqlNumericTypeMap,
+	"date": "number",
+	"time": "number",
+	"timetz": "number",
+	"time with time zone": "number",
+	"time without time zone": "number",
+	"timestamp": "number",
+	"timestamptz": "number",
+	"timestamp with time zone": "number",
+	"timestamp without time zone": "number",
+	...pgToZqlStringTypeMap,
+	"bool": "boolean",
+	"boolean": "boolean",
+	"json": "json",
+	"jsonb": "json"
+});
+function dataTypeToZqlValueType(pgType, isEnum, isArray) {
+	if (isArray) return "json";
+	const valueType = pgToZqlTypeMap[formatTypeForLookup(pgType)];
+	if (valueType === void 0 && isEnum) return "string";
+	return valueType;
+}
+function formatTypeForLookup(pgType) {
+	const startOfArgs = pgType.indexOf("(");
+	if (startOfArgs === -1) return pgType.toLocaleLowerCase();
+	return pgType.toLocaleLowerCase().substring(0, startOfArgs);
+}
+//#endregion
+export { dataTypeToZqlValueType, isPgNumberType, isPgStringType };
+
+//# sourceMappingURL=pg-data-type.js.map

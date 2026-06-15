@@ -1,0 +1,11 @@
+//#region ../zero-cache/src/types/configuration-error.ts
+var ConfigurationError = class extends Error {
+	constructor(message, options) {
+		super(message, options);
+		this.name = "ConfigurationError";
+	}
+};
+//#endregion
+export { ConfigurationError };
+
+//# sourceMappingURL=configuration-error.js.map

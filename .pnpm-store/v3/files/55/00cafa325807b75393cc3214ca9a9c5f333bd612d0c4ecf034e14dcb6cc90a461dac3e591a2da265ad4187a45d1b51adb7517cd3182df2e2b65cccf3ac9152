@@ -1,0 +1,55 @@
+//#region ../shared/src/custom-key-map.ts
+/**
+* A {@link Map} that uses a custom key transformation function to convert keys
+* to a primitive type that can be used as a {@link Map} key.
+*
+* This allows for using objects as keys in a {@link Map} without worrying about
+* reference equality.
+*/
+var CustomKeyMap = class {
+	[Symbol.toStringTag] = "CustomKeyMap";
+	#toKey;
+	#map = /* @__PURE__ */ new Map();
+	constructor(toKey, iterable) {
+		this.#toKey = toKey;
+		if (iterable) for (const [key, value] of iterable ?? []) this.#map.set(toKey(key), [key, value]);
+	}
+	clear() {
+		this.#map.clear();
+	}
+	delete(key) {
+		return this.#map.delete(this.#toKey(key));
+	}
+	forEach(callbackfn, thisArg) {
+		for (const [key, value] of this.#map.values()) callbackfn.call(thisArg, value, key, this);
+	}
+	get(key) {
+		return this.#map.get(this.#toKey(key))?.[1];
+	}
+	has(key) {
+		return this.#map.has(this.#toKey(key));
+	}
+	set(key, value) {
+		this.#map.set(this.#toKey(key), [key, value]);
+		return this;
+	}
+	get size() {
+		return this.#map.size;
+	}
+	*entries() {
+		for (const entry of this.#map.values()) yield entry.slice(0, 2);
+	}
+	*keys() {
+		for (const entry of this.#map.values()) yield entry[0];
+	}
+	*values() {
+		for (const entry of this.#map.values()) yield entry[1];
+	}
+	[Symbol.iterator]() {
+		return this.entries();
+	}
+};
+//#endregion
+export { CustomKeyMap };
+
+//# sourceMappingURL=custom-key-map.js.map

@@ -1,0 +1,5 @@
+import type { Schema } from '../../../zero-types/src/schema.ts';
+import type { PullRow, Query } from './query.ts';
+export declare function newStaticQuery<TTable extends keyof TSchema['tables'] & string, TSchema extends Schema, TReturn = PullRow<TTable, TSchema>>(schema: TSchema, tableName: TTable): Query<TTable, TSchema, TReturn>;
+export declare function newExpressionBuilder<TTable extends keyof TSchema['tables'] & string, TSchema extends Schema>(schema: TSchema, tableName: TTable): import("./expression.ts").ExpressionBuilder<string, Schema>;
+//# sourceMappingURL=static-query.d.ts.map

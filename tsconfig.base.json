@@ -1,0 +1,29 @@
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "target": "ES2022",
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true,
+    "types": ["vite/client", "node"],
+    "paths": {
+      "@zero-music/auth": ["./libs/auth/src/index.ts"],
+      "@zero-music/auth/server": ["./libs/auth/src/server.ts"],
+      "@zero-music/db": ["./libs/db/src/index.ts"],
+      "@zero-music/ui-library": ["./libs/ui-library/src/index.ts"],
+      "@zero-music/zero-app-components": ["./libs/zero-app-components/src/index.ts"],
+      "@zero-music/zero": ["./libs/zero/src/index.ts"],
+      "@zero-music/zero/server": ["./libs/zero/src/server.ts"]
+    }
+  }
+}

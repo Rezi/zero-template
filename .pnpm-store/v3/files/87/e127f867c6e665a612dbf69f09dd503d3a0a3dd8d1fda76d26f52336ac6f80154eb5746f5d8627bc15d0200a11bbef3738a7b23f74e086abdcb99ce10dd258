@@ -1,0 +1,71 @@
+import type { LogContext } from '@rocicorp/logger';
+import type postgres from 'postgres';
+import { AbortError } from '../../../../../shared/src/abort-error.ts';
+import { type PostgresDB } from '../../../types/pg.ts';
+import { type ShardID } from '../../../types/shards.ts';
+import type { BackfillID, Change, TableMetadata } from '../../change-source/protocol/current/data.ts';
+import type { SubscriptionState } from '../../replicator/schema/replication-state.ts';
+export declare const PG_SCHEMA = "cdc";
+export type ChangeLogEntry = {
+    watermark: string;
+    change: Change;
+};
+/**
+ * Tracks the watermark from which to resume the change stream and the
+ * current owner (task ID) acting as the single writer to the changeLog.
+ */
+export type ReplicationState = {
+    lastWatermark: string;
+    owner: string | null;
+    ownerAddress: string | null;
+};
+export declare function createReplicationStateTable(shard: ShardID): string;
+export declare function discoverChangeStreamerAddress(shard: ShardID, sql: PostgresDB): Promise<string | null>;
+/**
+ * This mirrors the analogously named table in the SQLite replica
+ * (`services/replicator/schema/replication-state.ts`), and is used
+ * to detect when the replica has been reset and is no longer compatible
+ * with the current ChangeLog.
+ */
+export type ReplicationConfig = {
+    replicaVersion: string;
+    publications: readonly string[];
+};
+export declare function createBackfillTables(shard: ShardID): string;
+export type TableMetadataRow = {
+    schema: string;
+    table: string;
+    metadata: TableMetadata;
+};
+export type BackfillingColumn = {
+    schema: string;
+    table: string;
+    column: string;
+    backfill: BackfillID;
+};
+export declare function setupCDCTables(lc: LogContext, db: postgres.TransactionSql, shard: ShardID): Promise<void>;
+export declare function markResetRequired(sql: PostgresDB, shard: ShardID): Promise<void>;
+export declare function ensureReplicationConfig(lc: LogContext, db: PostgresDB, subscriptionState: Pick<SubscriptionState, 'publications' | 'replicaVersion' | 'watermark'>, shard: ShardID, autoReset: boolean, setTimeoutFn?: typeof setTimeout): Promise<void>;
+export declare const CHANGE_STREAMER_APP_NAME = "zero-change-streamer";
+export declare class AutoResetSignal extends AbortError {
+    readonly name = "AutoResetSignal";
+}
+/**
+ * Terminates zero-cache backends that are blocking the current backend
+ * from acquiring locks on CDC tables (e.g., during TRUNCATE).
+ *
+ * This is used during change-DB takeover when the new replication-manager's
+ * `ensureReplicationConfig` needs to TRUNCATE tables, but the old
+ * replication-manager's storer is still reading from them (e.g., large
+ * catchup cursors).
+ *
+ * The function:
+ * 1. Finds backends waiting for a lock on a TRUNCATE in {schema}
+ * 2. Uses `pg_blocking_pids()` to identify which backends are blocking them
+ * 3. Terminates blocking backends that have `application_name = 'zero-change-streamer'`
+ *
+ * Must be called on a **separate connection** from the one that is blocked,
+ * since the blocked connection is inside a pending transaction.
+ */
+export declare function terminateChangeDBLockHolders(lc: LogContext, db: PostgresDB, shard: ShardID): Promise<void>;
+//# sourceMappingURL=tables.d.ts.map

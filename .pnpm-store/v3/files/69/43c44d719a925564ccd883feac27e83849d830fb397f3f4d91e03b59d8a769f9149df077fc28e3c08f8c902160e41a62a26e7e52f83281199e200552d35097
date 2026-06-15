@@ -1,0 +1,869 @@
+import { assert } from "../../shared/src/asserts.js";
+import { assertCookie } from "./cookies.js";
+import { isClientStateNotFoundResponse, isVersionNotSupportedResponse } from "./error-responses.js";
+import { getDefaultPuller, isDefaultPuller } from "./get-default-puller.js";
+import { getBrowserGlobal } from "../../shared/src/browser-env.js";
+import { promiseVoid } from "../../shared/src/resolved-promises.js";
+import { deepFreeze } from "./frozen-json.js";
+import { makeIDBName } from "./make-idb-name.js";
+import { AbortError } from "../../shared/src/abort-error.js";
+import { assertHash, emptyHash, newRandomHash } from "./hash.js";
+import { ChunkNotFoundError, mustGetHeadHash } from "./dag/store.js";
+import { StoreImpl } from "./dag/store-impl.js";
+import { DEFAULT_HEAD_NAME, baseSnapshotFromHash, isLocalMetaDD31 } from "./db/commit.js";
+import { readFromDefaultHead } from "./db/read.js";
+import { newWriteLocal } from "./db/write.js";
+import { withRead, withWrite, withWriteNoImplicitCommit } from "./with-transactions.js";
+import { disableClientGroup } from "./persist/client-groups.js";
+import { makeClientID } from "./persist/make-client-id.js";
+import { ClientStateNotFoundError, hasClientState, initClientV6 } from "./persist/clients.js";
+import { getKVStoreProvider } from "./get-kv-store-provider.js";
+import { createLogContext } from "./log-options.js";
+import { IDBDatabasesStore } from "./persist/idb-databases-store.js";
+import { COLLECT_IDB_INTERVAL, INITIAL_COLLECT_IDB_DELAY, initCollectIDBDatabases } from "./persist/collect-idb-databases.js";
+import { throwIfClosed } from "./transaction-closed-error.js";
+import { getDocumentVisibilityWatcher } from "../../shared/src/document-visible.js";
+import { PullDelegate, PushDelegate } from "./connection-loop-delegates.js";
+import { ConnectionLoop, MAX_DELAY_MS } from "./connection-loop.js";
+import { LazyStore } from "./dag/lazy-store.js";
+import { ReadTransactionImpl, WriteTransactionImpl } from "./transactions.js";
+import { rebaseMutationAndCommit } from "./db/rebase.js";
+import { getDefaultPusher, isDefaultPusher } from "./get-default-pusher.js";
+import { ReportError } from "./report-error.js";
+import { PullError } from "./sync/pull-error.js";
+import { SYNC_HEAD_NAME } from "./sync/sync-head-name.js";
+import { beginPullV1, handlePullResponseV1, maybeEndPull } from "./sync/pull.js";
+import { PushError } from "./pusher.js";
+import { push } from "./sync/push.js";
+import "./mutation-recovery.js";
+import { initNewClientChannel } from "./new-client-channel.js";
+import { initOnPersistChannel } from "./on-persist-channel.js";
+import { pendingMutationsForAPI } from "./pending-mutations.js";
+import { CLIENT_MAX_INACTIVE_TIME, GC_INTERVAL, initClientGC } from "./persist/client-gc.js";
+import { initClientGroupGC } from "./persist/client-group-gc.js";
+import { HEARTBEAT_INTERVAL, startHeartbeats } from "./persist/heartbeat.js";
+import { persistDD31 } from "./persist/persist.js";
+import { refresh } from "./persist/refresh.js";
+import { ProcessScheduler } from "./process-scheduler.js";
+import { setIntervalWithSignal } from "./set-interval-with-signal.js";
+import { SubscriptionImpl, SubscriptionsManagerImpl, WatchSubscription } from "./subscriptions.js";
+import { newRequestID } from "./sync/request-id.js";
+import { version } from "./version.js";
+import { resolver } from "@rocicorp/resolver";
+import { Lock } from "@rocicorp/lock";
+import { consoleLogSink } from "@rocicorp/logger";
+//#region ../replicache/src/replicache-impl.ts
+/**
+* The maximum number of time to call out to getAuth before giving up
+* and throwing an error.
+*/
+var MAX_REAUTH_TRIES = 8;
+var PERSIST_IDLE_TIMEOUT_MS = 1e3;
+var REFRESH_IDLE_TIMEOUT_MS = 1e3;
+var PERSIST_THROTTLE_MS = 500;
+var REFRESH_THROTTLE_MS = 500;
+var LAZY_STORE_SOURCE_CHUNK_CACHE_SIZE_LIMIT = 100 * 2 ** 20;
+var RECOVER_MUTATIONS_INTERVAL_MS = 300 * 1e3;
+var noop = () => {};
+var updateNeededReasonNewClientGroup = { type: "NewClientGroup" };
+var ReplicacheImpl = class {
+	/** The URL to use when doing a pull request. */
+	pullURL;
+	/** The URL to use when doing a push request. */
+	pushURL;
+	/** The authorization token used when doing a push request. */
+	#auth;
+	/** The name of the Replicache database. Populated by {@link ReplicacheOptions#name}. */
+	name;
+	#subscriptions;
+	#mutationRecovery;
+	/**
+	* Client groups gets disabled when the server does not know about it.
+	* A disabled client group prevents the client from pushing and pulling.
+	*/
+	isClientGroupDisabled = false;
+	#kvStoreProvider;
+	lastMutationID = 0;
+	/**
+	* This is the name Replicache uses for the IndexedDB database where data is
+	* stored.
+	*/
+	get idbName() {
+		return makeIDBName(this.name, this.schemaVersion);
+	}
+	set auth(auth) {
+		if (this.#zero) this.#zero.auth = auth;
+		this.#auth = auth;
+	}
+	get auth() {
+		return this.#auth;
+	}
+	/** The schema version of the data understood by this application. */
+	schemaVersion;
+	get #idbDatabase() {
+		return {
+			name: this.idbName,
+			replicacheName: this.name,
+			replicacheFormatVersion: 7,
+			schemaVersion: this.schemaVersion
+		};
+	}
+	#closed = false;
+	#online = true;
+	#clientID = makeClientID();
+	#ready;
+	#profileIDPromise;
+	#clientGroupIDPromise;
+	#mutatorRegistry = {};
+	/**
+	* The mutators that was registered in the constructor.
+	*/
+	mutate;
+	#pushCounter = 0;
+	#pullCounter = 0;
+	#pullConnectionLoop;
+	#pushConnectionLoop;
+	/**
+	* The duration between each periodic {@link pull}. Setting this to `null`
+	* disables periodic pull completely. Pull will still happen if you call
+	* {@link pull} manually.
+	*/
+	pullInterval;
+	/**
+	* The delay between when a change is made to Replicache and when Replicache
+	* attempts to push that change.
+	*/
+	pushDelay;
+	#requestOptions;
+	/**
+	* The function to use to pull data from the server.
+	*/
+	puller;
+	/**
+	* The function to use to push data to the server.
+	*/
+	pusher;
+	memdag;
+	perdag;
+	#idbDatabases;
+	#lc;
+	#zero;
+	#closeAbortController = new AbortController();
+	#persistLock = new Lock();
+	#enableScheduledPersist;
+	#enableScheduledRefresh;
+	#enableRefresh;
+	#enablePullAndPushInOpen;
+	#persistScheduler = new ProcessScheduler(() => this.persist(), PERSIST_IDLE_TIMEOUT_MS, PERSIST_THROTTLE_MS, this.#closeAbortController.signal);
+	#onPersist;
+	#refreshScheduler = new ProcessScheduler(() => this.refresh(), REFRESH_IDLE_TIMEOUT_MS, REFRESH_THROTTLE_MS, this.#closeAbortController.signal);
+	/**
+	* The options used to control the {@link pull} and push request behavior. This
+	* object is live so changes to it will affect the next pull or push call.
+	*/
+	get requestOptions() {
+		return this.#requestOptions;
+	}
+	/**
+	* `onSync(true)` is called when Replicache transitions from no push or pull
+	* happening to at least one happening. `onSync(false)` is called in the
+	* opposite case: when Replicache transitions from at least one push or pull
+	* happening to none happening.
+	*
+	* This can be used in a React like app by doing something like the following:
+	*
+	* ```js
+	* const [syncing, setSyncing] = useState(false);
+	* useEffect(() => {
+	*   rep.onSync = setSyncing;
+	* }, [rep]);
+	* ```
+	*/
+	onSync = null;
+	/**
+	* `onClientStateNotFound` is called when the persistent client has been
+	* garbage collected. This can happen if the client has no pending mutations
+	* and has not been used for a while.
+	*
+	* The default behavior is to reload the page (using `location.reload()`). Set
+	* this to `null` or provide your own function to prevent the page from
+	* reloading automatically.
+	*/
+	onClientStateNotFound = reload;
+	/**
+	* `onUpdateNeeded` is called when a code update is needed.
+	*
+	* A code update can be needed because:
+	* - the server no longer supports the {@link pushVersion},
+	*   {@link pullVersion} or {@link schemaVersion} of the current code.
+	* - a new Replicache client has created a new client group, because its code
+	*   has different mutators, indexes, schema version and/or format version
+	*   from this Replicache client. This is likely due to the new client having
+	*   newer code. A code update is needed to be able to locally sync with this
+	*   new Replicache client (i.e. to sync while offline, the clients can still
+	*   sync with each other via the server).
+	*
+	* The default behavior is to reload the page (using `location.reload()`). Set
+	* this to `null` or provide your own function to prevent the page from
+	* reloading automatically. You may want to provide your own function to
+	* display a toast to inform the end user there is a new version of your app
+	* available and prompting them to refresh.
+	*/
+	onUpdateNeeded = reload;
+	/**
+	* This gets called when we get an HTTP unauthorized (401) response from the
+	* push or pull endpoint. Set this to a function that will ask your user to
+	* reauthenticate.
+	*/
+	getAuth = null;
+	onPushInvoked = () => void 0;
+	onBeginPull = () => void 0;
+	onRecoverMutations = (r) => r;
+	constructor(options, implOptions = {}) {
+		validateOptions(options);
+		const { name, logLevel = "info", logSinks = [consoleLogSink], pullURL = "", auth, pushDelay = 10, pushURL = "", schemaVersion = "", pullInterval = 6e4, mutators = {}, requestOptions = {}, puller, pusher, indexes = {}, clientMaxAgeMs = CLIENT_MAX_INACTIVE_TIME } = options;
+		const { enableMutationRecovery = true, enableScheduledPersist = true, enableScheduledRefresh = true, enableRefresh = () => true, enablePullAndPushInOpen = true, enableClientGroupForking = true, onClientsDeleted = () => promiseVoid } = implOptions;
+		this.#zero = implOptions.zero;
+		this.#auth = auth ?? "";
+		this.pullURL = pullURL;
+		this.pushURL = pushURL;
+		this.name = name;
+		this.schemaVersion = schemaVersion;
+		this.pullInterval = pullInterval;
+		this.pushDelay = pushDelay;
+		this.puller = puller ?? getDefaultPuller(this);
+		this.pusher = pusher ?? getDefaultPusher(this);
+		this.#enableScheduledPersist = enableScheduledPersist;
+		this.#enableScheduledRefresh = enableScheduledRefresh;
+		this.#enableRefresh = enableRefresh;
+		this.#enablePullAndPushInOpen = enablePullAndPushInOpen;
+		this.#lc = createLogContext(logLevel, logSinks, { name });
+		this.#lc.debug?.("Constructing Replicache", {
+			name,
+			"replicache version": version
+		});
+		this.#subscriptions = new SubscriptionsManagerImpl(this.#queryInternal, this.#lc, this.#closeAbortController.signal);
+		const kvStoreProvider = getKVStoreProvider(this.#lc, options.kvStore);
+		this.#kvStoreProvider = kvStoreProvider;
+		const perKVStore = kvStoreProvider.create(this.idbName);
+		this.#idbDatabases = new IDBDatabasesStore(kvStoreProvider.create);
+		this.perdag = new StoreImpl(perKVStore, newRandomHash, assertHash);
+		this.memdag = new LazyStore(this.perdag, LAZY_STORE_SOURCE_CHUNK_CACHE_SIZE_LIMIT, newRandomHash, assertHash);
+		const readyResolver = resolver();
+		this.#ready = readyResolver.promise;
+		const { minDelayMs = 30, maxDelayMs = MAX_DELAY_MS } = requestOptions;
+		this.#requestOptions = {
+			maxDelayMs,
+			minDelayMs
+		};
+		const visibilityWatcher = getDocumentVisibilityWatcher(getBrowserGlobal("document"), 0, this.#closeAbortController.signal);
+		this.#pullConnectionLoop = new ConnectionLoop(this.#lc.withContext("PULL"), new PullDelegate(this, () => this.#invokePull()), visibilityWatcher);
+		this.#pushConnectionLoop = new ConnectionLoop(this.#lc.withContext("PUSH"), new PushDelegate(this, () => this.#invokePush()));
+		this.mutate = this.#registerMutators(mutators);
+		const profileIDResolver = resolver();
+		this.#profileIDPromise = profileIDResolver.promise;
+		const clientGroupIDResolver = resolver();
+		this.#clientGroupIDPromise = clientGroupIDResolver.promise;
+		this.#onPersist = initOnPersistChannel(this.name, this.#closeAbortController.signal, (persistInfo) => {
+			this.#handlePersist(persistInfo);
+		});
+		this.#open(indexes, enableClientGroupForking, enableMutationRecovery, clientMaxAgeMs, profileIDResolver.resolve, clientGroupIDResolver.resolve, readyResolver.resolve, onClientsDeleted);
+	}
+	async #open(indexes, enableClientGroupForking, enableMutationRecovery, clientMaxAgeMs, profileIDResolver, resolveClientGroupID, resolveReady, onClientsDeleted) {
+		const { clientID } = this;
+		await closingInstances.get(this.name);
+		await this.#idbDatabases.getProfileID().then(profileIDResolver);
+		await this.#idbDatabases.putDatabase(this.#idbDatabase);
+		const [client, headHash, , isNewClientGroup] = await initClientV6(clientID, this.#lc, this.perdag, Object.keys(this.#mutatorRegistry), indexes, 7, enableClientGroupForking);
+		resolveClientGroupID(client.clientGroupID);
+		await withWrite(this.memdag, (write) => write.setHead(DEFAULT_HEAD_NAME, headHash));
+		await this.#zero?.init(headHash, this.memdag);
+		resolveReady();
+		if (this.#enablePullAndPushInOpen) {
+			this.pull().catch(noop);
+			this.push().catch(noop);
+		}
+		const { signal } = this.#closeAbortController;
+		startHeartbeats(clientID, this.perdag, () => {
+			this.#clientStateNotFoundOnClient(clientID);
+		}, HEARTBEAT_INTERVAL, this.#lc, signal);
+		initClientGC(clientID, this.perdag, clientMaxAgeMs, GC_INTERVAL, onClientsDeleted, this.#lc, signal);
+		initCollectIDBDatabases(this.#idbDatabases, this.#kvStoreProvider, COLLECT_IDB_INTERVAL, INITIAL_COLLECT_IDB_DELAY, 2 * clientMaxAgeMs, enableMutationRecovery, onClientsDeleted, this.#lc, signal);
+		initClientGroupGC(this.perdag, enableMutationRecovery, this.#lc, signal);
+		initNewClientChannel(this.name, this.idbName, signal, client.clientGroupID, isNewClientGroup, () => {
+			this.#fireOnUpdateNeeded(updateNeededReasonNewClientGroup);
+		}, this.perdag);
+		setIntervalWithSignal(() => this.recoverMutations(), RECOVER_MUTATIONS_INTERVAL_MS, signal);
+		this.recoverMutations();
+		getBrowserGlobal("document")?.addEventListener("visibilitychange", this.#onVisibilityChange);
+	}
+	#onVisibilityChange = async () => {
+		if (this.#closed) return;
+		if (getBrowserGlobal("document")?.visibilityState !== "visible") return;
+		await this.#checkForClientStateNotFoundAndCallHandler();
+	};
+	async #checkForClientStateNotFoundAndCallHandler() {
+		const { clientID } = this;
+		const hasClientState$1 = await withRead(this.perdag, (read) => hasClientState(clientID, read));
+		if (!hasClientState$1) this.#clientStateNotFoundOnClient(clientID);
+		return !hasClientState$1;
+	}
+	/**
+	* The browser profile ID for this browser profile. Every instance of Replicache
+	* browser-profile-wide shares the same profile ID.
+	*/
+	get profileID() {
+		return this.#profileIDPromise;
+	}
+	/**
+	* The client ID for this instance of Replicache. Each instance of Replicache
+	* gets a unique client ID.
+	*/
+	get clientID() {
+		return this.#clientID;
+	}
+	/**
+	* The client group ID for this instance of Replicache. Instances of
+	* Replicache will have the same client group ID if and only if they have
+	* the same name, mutators, indexes, schema version, format version, and
+	* browser profile.
+	*/
+	get clientGroupID() {
+		return this.#clientGroupIDPromise;
+	}
+	/**
+	* `onOnlineChange` is called when the {@link online} property changes. See
+	* {@link online} for more details.
+	*/
+	onOnlineChange = null;
+	/**
+	* A rough heuristic for whether the client is currently online. Note that
+	* there is no way to know for certain whether a client is online - the next
+	* request can always fail. This property returns true if the last sync attempt succeeded,
+	* and false otherwise.
+	*/
+	get online() {
+		return this.#online;
+	}
+	/**
+	* Whether the Replicache database has been closed. Once Replicache has been
+	* closed it no longer syncs and you can no longer read or write data out of
+	* it. After it has been closed it is pretty much useless and should not be
+	* used any more.
+	*/
+	get closed() {
+		return this.#closed;
+	}
+	/**
+	* Closes this Replicache instance.
+	*
+	* When closed all subscriptions end and no more read or writes are allowed.
+	*/
+	async close() {
+		this.#closed = true;
+		const { promise, resolve } = resolver();
+		closingInstances.set(this.name, promise);
+		this.#closeAbortController.abort();
+		getBrowserGlobal("document")?.removeEventListener("visibilitychange", this.#onVisibilityChange);
+		await this.#ready;
+		const closingPromises = [
+			this.memdag.close(),
+			this.perdag.close(),
+			this.#idbDatabases.close()
+		];
+		this.#pullConnectionLoop.close();
+		this.#pushConnectionLoop.close();
+		this.#subscriptions.clear();
+		await Promise.all(closingPromises);
+		closingInstances.delete(this.name);
+		resolve();
+	}
+	async maybeEndPull(syncHead, requestID) {
+		for (;;) {
+			if (this.#closed) return;
+			await this.#ready;
+			const { clientID } = this;
+			const lc = this.#lc.withContext("maybeEndPull").withContext("requestID", requestID);
+			const { replayMutations, diffs, oldMainHead, mainHead } = await maybeEndPull(this.memdag, lc, syncHead, clientID, this.#subscriptions, 7);
+			if (!replayMutations || replayMutations.length === 0) {
+				this.#zero?.advance(oldMainHead, mainHead, diffs.get("") ?? []);
+				await this.#subscriptions.fire(diffs);
+				this.#schedulePersist();
+				return;
+			}
+			const zeroData = await this.#zero?.getTxData?.(syncHead);
+			for (const mutation of replayMutations) {
+				if (this.#subscriptions.hasPendingSubscriptionRuns) await Promise.resolve();
+				const { meta } = mutation;
+				syncHead = await withWriteNoImplicitCommit(this.memdag, (dagWrite) => rebaseMutationAndCommit(mutation, dagWrite, syncHead, SYNC_HEAD_NAME, this.#mutatorRegistry, lc, isLocalMetaDD31(meta) ? meta.clientID : clientID, 7, zeroData));
+			}
+		}
+	}
+	#invokePull() {
+		if (this.#isPullDisabled()) return Promise.resolve(true);
+		return this.#wrapInOnlineCheck(async () => {
+			try {
+				this.#changeSyncCounters(0, 1);
+				const { syncHead, requestID, ok } = await this.beginPull();
+				if (!ok) return false;
+				if (syncHead !== emptyHash) await this.maybeEndPull(syncHead, requestID);
+			} catch (e) {
+				throw await this.#convertToClientStateNotFoundError(e);
+			} finally {
+				this.#changeSyncCounters(0, -1);
+			}
+			return true;
+		}, "Pull");
+	}
+	#isPullDisabled() {
+		return this.isClientGroupDisabled || this.pullURL === "" && isDefaultPuller(this.puller);
+	}
+	async #wrapInOnlineCheck(f, name) {
+		let online = true;
+		try {
+			return await f();
+		} catch (e) {
+			if (e instanceof PushError || e instanceof PullError) {
+				online = false;
+				this.#lc.debug?.(`${name} threw:\n`, e, "\nwith cause:\n", e.causedBy);
+			} else if (e instanceof ReportError) this.#lc.error?.(e);
+			else this.#lc.info?.(`${name} threw:\n`, e);
+			return false;
+		} finally {
+			if (this.#online !== online) {
+				this.#online = online;
+				this.onOnlineChange?.(online);
+				if (online) this.recoverMutations();
+			}
+		}
+	}
+	async #wrapInReauthRetries(f, verb, lc, preAuth = noop, postAuth = noop) {
+		const { clientID } = this;
+		let reauthAttempts = 0;
+		let lastResult;
+		lc = lc.withContext(verb);
+		do {
+			const requestID = newRequestID(clientID);
+			const requestLc = lc.withContext("requestID", requestID);
+			const { httpRequestInfo, result } = await f(requestID, requestLc);
+			lastResult = result;
+			if (!httpRequestInfo) return {
+				result,
+				authFailure: false
+			};
+			const { errorMessage, httpStatusCode } = httpRequestInfo;
+			if (errorMessage || httpStatusCode !== 200) requestLc.error?.(`Got a non 200 response doing ${verb}: ${httpStatusCode}` + (errorMessage ? `: ${errorMessage}` : ""));
+			if (httpStatusCode !== 401) return {
+				result,
+				authFailure: false
+			};
+			if (!this.getAuth) return {
+				result,
+				authFailure: true
+			};
+			let auth;
+			try {
+				await preAuth();
+				auth = await this.getAuth();
+			} finally {
+				await postAuth();
+			}
+			if (auth === null || auth === void 0) return {
+				result,
+				authFailure: true
+			};
+			this.auth = auth;
+			reauthAttempts++;
+		} while (reauthAttempts < MAX_REAUTH_TRIES);
+		lc.info?.("Tried to reauthenticate too many times");
+		return {
+			result: lastResult,
+			authFailure: true
+		};
+	}
+	#isPushDisabled() {
+		return this.isClientGroupDisabled || this.pushURL === "" && isDefaultPusher(this.pusher);
+	}
+	async #invokePush() {
+		if (this.#isPushDisabled()) return true;
+		await this.#ready;
+		const profileID = await this.#profileIDPromise;
+		const { clientID } = this;
+		const clientGroupID = await this.#clientGroupIDPromise;
+		return this.#wrapInOnlineCheck(async () => {
+			const { result: pusherResult } = await this.#wrapInReauthRetries(async (requestID, requestLc) => {
+				try {
+					this.#changeSyncCounters(1, 0);
+					const pusherResult = await push(requestID, this.memdag, requestLc, profileID, clientGroupID, clientID, this.pusher, this.schemaVersion, 1);
+					return {
+						result: pusherResult,
+						httpRequestInfo: pusherResult?.httpRequestInfo
+					};
+				} finally {
+					this.#changeSyncCounters(-1, 0);
+				}
+			}, "push", this.#lc);
+			if (pusherResult === void 0) return true;
+			const { response, httpRequestInfo } = pusherResult;
+			if (isVersionNotSupportedResponse(response)) this.#handleVersionNotSupportedResponse(response);
+			else if (isClientStateNotFoundResponse(response)) await this.#clientStateNotFoundOnServer();
+			return httpRequestInfo.httpStatusCode === 200;
+		}, "Push");
+	}
+	#handleVersionNotSupportedResponse(response) {
+		const reason = { type: response.error };
+		if (response.versionType) reason.versionType = response.versionType;
+		this.#fireOnUpdateNeeded(reason);
+	}
+	/**
+	* Push pushes pending changes to the {@link pushURL}.
+	*
+	* You do not usually need to manually call push. If {@link pushDelay} is
+	* non-zero (which it is by default) pushes happen automatically shortly after
+	* mutations.
+	*
+	* If the server endpoint fails push will be continuously retried with an
+	* exponential backoff.
+	*
+	* @param [now=false] If true, push will happen immediately and ignore
+	*   {@link pushDelay}, {@link RequestOptions.minDelayMs} as well as the
+	*   exponential backoff in case of errors.
+	* @returns A promise that resolves when the next push completes. In case of
+	* errors the first error will reject the returned promise. Subsequent errors
+	* will not be reflected in the promise.
+	*/
+	push({ now = false } = {}) {
+		return throwIfError(this.#pushConnectionLoop.send(now));
+	}
+	/**
+	* Pull pulls changes from the {@link pullURL}. If there are any changes local
+	* changes will get replayed on top of the new server state.
+	*
+	* If the server endpoint fails pull will be continuously retried with an
+	* exponential backoff.
+	*
+	* @param [now=false] If true, pull will happen immediately and ignore
+	*   {@link RequestOptions.minDelayMs} as well as the exponential backoff in
+	*   case of errors.
+	* @returns A promise that resolves when the next pull completes. In case of
+	* errors the first error will reject the returned promise. Subsequent errors
+	* will not be reflected in the promise.
+	*/
+	pull({ now = false } = {}) {
+		return throwIfError(this.#pullConnectionLoop.send(now));
+	}
+	/**
+	* Applies an update from the server to Replicache.
+	* Throws an error if cookie does not match. In that case the server thinks
+	* this client has a different cookie than it does; the caller should disconnect
+	* from the server and re-register, which transmits the cookie the client actually
+	* has.
+	*
+	* @experimental This method is under development and its semantics will change.
+	*/
+	async poke(poke) {
+		await this.#ready;
+		const { clientID } = this;
+		const requestID = newRequestID(clientID);
+		const lc = this.#lc.withContext("handlePullResponse").withContext("requestID", requestID);
+		const { pullResponse } = poke;
+		if (isVersionNotSupportedResponse(pullResponse)) {
+			this.#handleVersionNotSupportedResponse(pullResponse);
+			return;
+		}
+		if (isClientStateNotFoundResponse(pullResponse)) {
+			await this.#clientStateNotFoundOnServer();
+			return;
+		}
+		const result = await handlePullResponseV1(lc, this.memdag, deepFreeze(poke.baseCookie), pullResponse, clientID, 7);
+		switch (result.type) {
+			case 0:
+				await this.maybeEndPull(result.syncHead, requestID);
+				break;
+			case 2: throw new Error("unexpected base cookie for poke: " + JSON.stringify(poke));
+			case 1: break;
+		}
+	}
+	async beginPull() {
+		await this.#ready;
+		const profileID = await this.profileID;
+		const { clientID } = this;
+		const clientGroupID = await this.#clientGroupIDPromise;
+		const { result: { beginPullResponse, requestID } } = await this.#wrapInReauthRetries(async (requestID, requestLc) => {
+			const beginPullResponse = await beginPullV1(profileID, clientID, clientGroupID, this.schemaVersion, this.puller, requestID, this.memdag, 7, requestLc);
+			return {
+				result: {
+					beginPullResponse,
+					requestID
+				},
+				httpRequestInfo: beginPullResponse.httpRequestInfo
+			};
+		}, "pull", this.#lc, () => this.#changeSyncCounters(0, -1), () => this.#changeSyncCounters(0, 1));
+		const { pullResponse } = beginPullResponse;
+		if (isVersionNotSupportedResponse(pullResponse)) this.#handleVersionNotSupportedResponse(pullResponse);
+		else if (isClientStateNotFoundResponse(beginPullResponse.pullResponse)) await this.#clientStateNotFoundOnServer();
+		const { syncHead, httpRequestInfo } = beginPullResponse;
+		return {
+			requestID,
+			syncHead,
+			ok: httpRequestInfo.httpStatusCode === 200
+		};
+	}
+	persist() {
+		return this.#persistLock.withLock(async () => {
+			const { clientID } = this;
+			await this.#ready;
+			if (this.#closed) return;
+			try {
+				await persistDD31(this.#lc, clientID, this.memdag, this.perdag, this.#mutatorRegistry, () => this.#closed, 7, this.#zero?.getTxData);
+			} catch (e) {
+				if (e instanceof ClientStateNotFoundError) this.#clientStateNotFoundOnClient(clientID);
+				else if (this.#closed) this.#lc.debug?.("Exception persisting during close", e);
+				else throw e;
+			}
+			const clientGroupID = await this.#clientGroupIDPromise;
+			assert(clientGroupID, "Expected clientGroupID to be defined");
+			this.#onPersist({
+				clientID,
+				clientGroupID
+			});
+		});
+	}
+	async refresh() {
+		await this.#ready;
+		const { clientID } = this;
+		if (this.#closed || !this.#enableRefresh()) return;
+		let refreshResult;
+		try {
+			refreshResult = await refresh(this.#lc, this.memdag, this.perdag, clientID, this.#mutatorRegistry, this.#subscriptions, () => this.closed, 7, this.#zero);
+		} catch (e) {
+			if (e instanceof ClientStateNotFoundError) this.#clientStateNotFoundOnClient(clientID);
+			else if (this.#closed) this.#lc.debug?.("Exception refreshing during close", e);
+			else throw e;
+		}
+		if (refreshResult !== void 0) await this.#subscriptions.fire(refreshResult.diffs);
+	}
+	#fireOnClientStateNotFound() {
+		this.onClientStateNotFound?.();
+	}
+	#clientStateNotFoundOnClient(clientID) {
+		this.#lc.error?.(`Client state not found on client, clientID: ${clientID}`);
+		this.#fireOnClientStateNotFound();
+	}
+	async #clientStateNotFoundOnServer() {
+		const clientGroupID = await this.#clientGroupIDPromise;
+		this.#lc.error?.(`Client state not found on server, clientGroupID: ${clientGroupID}`);
+		await this.disableClientGroup();
+		this.#fireOnClientStateNotFound();
+	}
+	async disableClientGroup() {
+		const clientGroupID = await this.#clientGroupIDPromise;
+		assert(clientGroupID, "Expected clientGroupID to be defined");
+		this.isClientGroupDisabled = true;
+		await withWrite(this.perdag, (dagWrite) => disableClientGroup(clientGroupID, dagWrite));
+	}
+	#fireOnUpdateNeeded(reason) {
+		this.#lc.debug?.(`Update needed, reason: ${reason}`);
+		this.onUpdateNeeded?.(reason);
+	}
+	async #schedulePersist() {
+		if (!this.#enableScheduledPersist) return;
+		await this.#schedule("persist", this.#persistScheduler);
+	}
+	async #handlePersist(persistInfo) {
+		this.#lc.debug?.("Handling persist", persistInfo);
+		const clientGroupID = await this.#clientGroupIDPromise;
+		if (persistInfo.clientGroupID === clientGroupID) this.#scheduleRefresh();
+	}
+	async #scheduleRefresh() {
+		if (!this.#enableScheduledRefresh) return;
+		await this.#schedule("refresh from storage", this.#refreshScheduler);
+	}
+	async #schedule(name, scheduler) {
+		try {
+			await scheduler.schedule();
+		} catch (e) {
+			if (e instanceof AbortError) this.#lc.debug?.(`Scheduled ${name} did not complete before close.`);
+			else this.#lc.error?.(`Error during ${name}`, e);
+		}
+	}
+	/**
+	* Runs a refresh as soon as possible through the refresh scheduler.
+	*/
+	runRefresh() {
+		return this.#refreshScheduler.run();
+	}
+	#changeSyncCounters(pushDelta, pullDelta) {
+		this.#pushCounter += pushDelta;
+		this.#pullCounter += pullDelta;
+		const delta = pushDelta + pullDelta;
+		const counter = this.#pushCounter + this.#pullCounter;
+		if (delta === 1 && counter === 1 || counter === 0) {
+			const syncing = counter > 0;
+			Promise.resolve().then(() => this.onSync?.(syncing));
+		}
+	}
+	/**
+	* Subscribe to the result of a {@link query}. The `body` function is
+	* evaluated once and its results are returned via `onData`.
+	*
+	* Thereafter, each time the the result of `body` changes, `onData` is fired
+	* again with the new result.
+	*
+	* `subscribe()` goes to significant effort to avoid extraneous work
+	* re-evaluating subscriptions:
+	*
+	* 1. subscribe tracks the keys that `body` accesses each time it runs. `body`
+	*    is only re-evaluated when those keys change.
+	* 2. subscribe only re-fires `onData` in the case that a result changes by
+	*    way of the `isEqual` option which defaults to doing a deep JSON value
+	*    equality check.
+	*
+	* Because of (1), `body` must be a pure function of the data in Replicache.
+	* `body` must not access anything other than the `tx` parameter passed to it.
+	*
+	* Although subscribe is as efficient as it can be, it is somewhat constrained
+	* by the goal of returning an arbitrary computation of the cache. For even
+	* better performance (but worse dx), see {@link experimentalWatch}.
+	*
+	* If an error occurs in the `body` the `onError` function is called if
+	* present. Otherwise, the error is logged at log level 'error'.
+	*
+	* To cancel the subscription, call the returned function.
+	*
+	* @param body The function to evaluate to get the value to pass into
+	*    `onData`.
+	* @param options Options is either a function or an object. If it is a
+	*    function it is equivalent to passing it as the `onData` property of an
+	*    object.
+	*/
+	subscribe(body, options) {
+		if (typeof options === "function") options = { onData: options };
+		const { onData, onError, onDone, isEqual } = options;
+		return this.#subscriptions.add(new SubscriptionImpl(body, onData, onError, onDone, isEqual));
+	}
+	experimentalWatch(callback, options) {
+		return this.#subscriptions.add(new WatchSubscription(callback, options));
+	}
+	/**
+	* Query is used for read transactions. It is recommended to use transactions
+	* to ensure you get a consistent view across multiple calls to `get`, `has`
+	* and `scan`.
+	*/
+	query(body) {
+		return this.#queryInternal(body);
+	}
+	get cookie() {
+		return this.#ready.then(() => withRead(this.memdag, async (dagRead) => {
+			const mainHeadHash = await dagRead.getHead(DEFAULT_HEAD_NAME);
+			if (!mainHeadHash) throw new Error("Internal no main head found");
+			const cookie = (await baseSnapshotFromHash(mainHeadHash, dagRead)).meta.cookieJSON;
+			assertCookie(cookie);
+			return cookie;
+		}));
+	}
+	#queryInternal = async (body) => {
+		await this.#ready;
+		const { clientID } = this;
+		return withRead(this.memdag, async (dagRead) => {
+			try {
+				return await body(new ReadTransactionImpl(clientID, await readFromDefaultHead(dagRead, 7), this.#lc));
+			} catch (ex) {
+				throw await this.#convertToClientStateNotFoundError(ex);
+			}
+		});
+	};
+	#register(name, mutatorImpl) {
+		this.#mutatorRegistry[name] = mutatorImpl;
+		return (args) => {
+			const trackingData = name === "_zero_crud" ? void 0 : this.#zero?.trackMutation();
+			const result = this.#mutate(trackingData, name, mutatorImpl, args, performance.now());
+			if (trackingData) return {
+				client: result,
+				server: trackingData.serverPromise
+			};
+			return result;
+		};
+	}
+	#registerMutators(regs) {
+		const rv = Object.create(null);
+		for (const k in regs) rv[k] = this.#register(k, regs[k]);
+		return rv;
+	}
+	async #mutate(trackingData, name, mutatorImpl, args, timestamp) {
+		const frozenArgs = deepFreeze(args ?? null);
+		if (this.#subscriptions.hasPendingSubscriptionRuns) await Promise.resolve();
+		await this.#ready;
+		const { clientID } = this;
+		return withWriteNoImplicitCommit(this.memdag, async (dagWrite) => {
+			try {
+				let result;
+				let newHead;
+				let diffs;
+				let headHash;
+				try {
+					headHash = await mustGetHeadHash(DEFAULT_HEAD_NAME, dagWrite);
+					const dbWrite = await newWriteLocal(headHash, name, frozenArgs, null, dagWrite, timestamp, clientID, 7);
+					const mutationID = await dbWrite.getMutationID();
+					const tx = new WriteTransactionImpl(clientID, mutationID, "initial", await this.#zero?.getTxData(headHash, { openLazyRead: dagWrite }), dbWrite, this.#lc);
+					if (trackingData) this.#zero?.mutationIDAssigned(trackingData.ephemeralID, mutationID);
+					result = await mutatorImpl(tx, args);
+					throwIfClosed(dbWrite);
+					const lastMutationID = await dbWrite.getMutationID();
+					[newHead, diffs] = await dbWrite.commitWithDiffs(DEFAULT_HEAD_NAME, this.#subscriptions);
+					this.lastMutationID = lastMutationID;
+				} catch (e) {
+					if (trackingData) this.#zero?.rejectMutation(trackingData.ephemeralID, e);
+					throw e;
+				}
+				this.#zero?.advance(headHash, newHead, diffs.get("") ?? []);
+				this.#pushConnectionLoop.send(false).catch(() => void 0);
+				await this.#subscriptions.fire(diffs);
+				this.#schedulePersist();
+				return result;
+			} catch (ex) {
+				throw await this.#convertToClientStateNotFoundError(ex);
+			}
+		});
+	}
+	/**
+	* In the case we get a ChunkNotFoundError we check if the client got garbage
+	* collected and if so change the error to a ClientStateNotFoundError instead
+	*/
+	async #convertToClientStateNotFoundError(ex) {
+		if (ex instanceof ChunkNotFoundError && await this.#checkForClientStateNotFoundAndCallHandler()) return new ClientStateNotFoundError(this.clientID);
+		return ex;
+	}
+	recoverMutations() {}
+	/**
+	* List of pending mutations. The order of this is from oldest to newest.
+	*
+	* Gives a list of local mutations that have `mutationID` >
+	* `syncHead.mutationID` that exists on the main client group.
+	*
+	* @experimental This method is experimental and may change in the future.
+	*/
+	experimentalPendingMutations() {
+		return withRead(this.memdag, pendingMutationsForAPI);
+	}
+};
+var closingInstances = /* @__PURE__ */ new Map();
+async function throwIfError(p) {
+	const res = await p;
+	if (res) throw res.error;
+}
+function reload() {
+	if (typeof location !== "undefined") location.reload();
+}
+function validateOptions(options) {
+	const { name, clientMaxAgeMs } = options;
+	if (typeof name !== "string" || !name) throw new TypeError("name is required and must be non-empty");
+	if (clientMaxAgeMs !== void 0) {
+		const min = Math.max(GC_INTERVAL, HEARTBEAT_INTERVAL);
+		if (typeof clientMaxAgeMs !== "number" || clientMaxAgeMs <= min) throw new TypeError(`clientAgeMaxMs must be a number larger than ${min}ms`);
+	}
+}
+//#endregion
+export { ReplicacheImpl };
+
+//# sourceMappingURL=replicache-impl.js.map

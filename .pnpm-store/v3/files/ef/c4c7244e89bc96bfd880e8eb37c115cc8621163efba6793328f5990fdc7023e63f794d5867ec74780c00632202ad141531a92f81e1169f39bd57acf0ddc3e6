@@ -1,0 +1,35 @@
+import type { ReadonlyJSONValue } from '../../shared/src/json.ts';
+import type { Cookie, FrozenCookie } from './cookies.ts';
+declare const frozenJSONTag: unique symbol;
+/**
+ * Used to mark a type as having been frozen.
+ */
+export type FrozenTag<T> = T & {
+    readonly [frozenJSONTag]: true;
+};
+export type FrozenJSONValue = null | string | boolean | number | FrozenJSONArray | FrozenJSONObject;
+type FrozenJSONArray = FrozenTag<ReadonlyArray<FrozenJSONValue>>;
+export type FrozenJSONObject = FrozenTag<{
+    readonly [key: string]: FrozenJSONValue;
+}>;
+/**
+ * Recursively freezes the passed in value (mutates it) and returns it.
+ *
+ * This is controlled by `skipFreeze` which is true in release mode.
+ */
+export declare function deepFreeze(v: Cookie): FrozenCookie;
+export declare function deepFreeze(v: ReadonlyJSONValue): FrozenJSONValue;
+export declare function assertFrozenJSONValue(v: unknown): asserts v is FrozenJSONValue;
+export declare function assertDeepFrozen<V>(v: V): asserts v is Readonly<V>;
+/**
+ * Recursive deep frozen check.
+ *
+ * It adds frozen objects to the {@link deepFrozenObjects} WeakSet so that we do
+ * not have to check the same object more than once.
+ */
+export declare function isDeepFrozen(v: unknown, seen: object[]): boolean;
+export type P = Parameters<typeof deepFreeze>[0];
+export type R = ReturnType<typeof deepFreeze>;
+export declare function deepFreezeAllowUndefined(v: P | undefined): R | undefined;
+export {};
+//# sourceMappingURL=frozen-json.d.ts.map

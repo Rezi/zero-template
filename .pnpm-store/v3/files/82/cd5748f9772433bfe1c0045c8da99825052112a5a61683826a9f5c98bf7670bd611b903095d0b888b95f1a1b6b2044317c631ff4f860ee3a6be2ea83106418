@@ -1,0 +1,11 @@
+import type { FrozenJSONValue } from '../frozen-json.ts';
+import type { Read } from './store.ts';
+export declare class ReadImpl implements Read {
+    #private;
+    constructor(map: Map<string, FrozenJSONValue>, release: () => void);
+    release(): void;
+    get closed(): boolean;
+    has(key: string): Promise<boolean>;
+    get(key: string): Promise<FrozenJSONValue | undefined>;
+}
+//# sourceMappingURL=read-impl.d.ts.map

@@ -1,0 +1,26 @@
+type Primitive = undefined | null | boolean | string | number | symbol | bigint;
+/**
+ * A {@link Map} that uses a custom key transformation function to convert keys
+ * to a primitive type that can be used as a {@link Map} key.
+ *
+ * This allows for using objects as keys in a {@link Map} without worrying about
+ * reference equality.
+ */
+export declare class CustomKeyMap<K, V> {
+    #private;
+    readonly [Symbol.toStringTag] = "CustomKeyMap";
+    constructor(toKey: (key: K) => Primitive, iterable?: Iterable<readonly [K, V]> | null);
+    clear(): void;
+    delete(key: K): boolean;
+    forEach(callbackfn: (value: V, key: K, map: CustomKeyMap<K, V>) => void, thisArg?: any): void;
+    get(key: K): V | undefined;
+    has(key: K): boolean;
+    set(key: K, value: V): this;
+    get size(): number;
+    entries(): MapIterator<[K, V]>;
+    keys(): MapIterator<K>;
+    values(): MapIterator<V>;
+    [Symbol.iterator](): MapIterator<[K, V]>;
+}
+export {};
+//# sourceMappingURL=custom-key-map.d.ts.map

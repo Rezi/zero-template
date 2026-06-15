@@ -1,0 +1,7 @@
+export declare const TYPE = 0;
+export declare const ROW = 1;
+export declare const OLD_ROW = 2;
+export type TYPE = typeof TYPE;
+export type ROW = typeof ROW;
+export type OLD_ROW = typeof OLD_ROW;
+//# sourceMappingURL=source-change-index-enum.d.ts.map

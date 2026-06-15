@@ -1,0 +1,1 @@
+{"version":3,"file":"pull-error.d.ts","sourceRoot":"","sources":["../../../../../replicache/src/sync/pull-error.ts"],"names":[],"mappings":"AAAA;;GAEG;AAEH,qBAAa,SAAU,SAAQ,KAAK;IAClC,IAAI,SAAe;IAKnB,QAAQ,CAAC,EAAE,KAAK,GAAG,SAAS,CAAC;gBACjB,QAAQ,CAAC,EAAE,KAAK;CAI7B"}

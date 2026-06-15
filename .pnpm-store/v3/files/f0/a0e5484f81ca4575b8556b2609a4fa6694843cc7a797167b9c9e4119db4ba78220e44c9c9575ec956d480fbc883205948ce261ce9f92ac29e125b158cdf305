@@ -1,0 +1,48 @@
+import type { Row } from '../../../zero-protocol/src/data.ts';
+import { type Node } from './data.ts';
+import type { SourceSchema } from './schema.ts';
+import type { Entry, Format } from './view.ts';
+export declare const refCountSymbol: unique symbol;
+export declare const idSymbol: unique symbol;
+/**
+ * `applyChange` does not consume the `relationships` of `ChildChange#node`,
+ * `EditChange#node` and `EditChange#oldNode`.  The `ViewChange` type
+ * documents and enforces this via the type system.
+ */
+export type ViewChange = AddViewChange | RemoveViewChange | ChildViewChange | EditViewChange;
+export type RowOnlyNode = {
+    row: Row;
+};
+export type AddViewChange = {
+    type: 'add';
+    node: Node;
+};
+export type RemoveViewChange = {
+    type: 'remove';
+    node: Node;
+};
+type ChildViewChange = {
+    type: 'child';
+    node: RowOnlyNode;
+    child: {
+        relationshipName: string;
+        change: ViewChange;
+    };
+};
+type EditViewChange = {
+    type: 'edit';
+    node: RowOnlyNode;
+    oldNode: RowOnlyNode;
+};
+/**
+ * This is a subset of WeakMap but restricted to what we need.
+ * @deprecated Not used anymore. This will be removed in the future.
+ */
+export interface RefCountMap {
+    get(entry: Entry): number | undefined;
+    set(entry: Entry, refCount: number): void;
+    delete(entry: Entry): boolean;
+}
+export declare function applyChange(parentEntry: Entry, change: ViewChange, schema: SourceSchema, relationship: string, format: Format, withIDs?: boolean): void;
+export {};
+//# sourceMappingURL=view-apply-change.d.ts.map

@@ -1,0 +1,12 @@
+import type { ObservableResult } from '@opentelemetry/api';
+import type { LogContext } from '@rocicorp/logger';
+import type { ReplicationReport } from './report-schema.ts';
+export declare class ReplicationReportRecorder {
+    #private;
+    constructor(lc: LogContext, now?: () => number);
+    record(report: ReplicationReport): void;
+    readonly reportUpstreamLag: (o: ObservableResult) => void;
+    readonly reportReplicaLag: (o: ObservableResult) => void;
+    readonly reportTotalLag: (o: ObservableResult) => void;
+}
+//# sourceMappingURL=recorder.d.ts.map

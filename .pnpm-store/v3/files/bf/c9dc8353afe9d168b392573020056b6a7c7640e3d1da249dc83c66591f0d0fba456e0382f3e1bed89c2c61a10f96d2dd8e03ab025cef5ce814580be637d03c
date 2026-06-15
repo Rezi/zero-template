@@ -1,0 +1,398 @@
+import { assert } from "../../../../shared/src/asserts.js";
+import { getErrorMessage } from "../../../../shared/src/error.js";
+import { groupBy } from "../../../../shared/src/arrays.js";
+import { must } from "../../../../shared/src/must.js";
+import { PushFailed } from "../../../../zero-protocol/src/error-kind-enum.js";
+import { Server, ZeroCache } from "../../../../zero-protocol/src/error-origin-enum.js";
+import { HTTP, Internal, OutOfOrderMutation, UnsupportedPushVersion } from "../../../../zero-protocol/src/error-reason-enum.js";
+import { isProtocolError } from "../../../../zero-protocol/src/error.js";
+import { Custom } from "../../../../zero-protocol/src/mutation-type-enum.js";
+import { CLEANUP_RESULTS_MUTATION_NAME } from "../../../../zero-protocol/src/mutation.js";
+import "../../../../zero-protocol/src/push.js";
+import "../../config/zero-config.js";
+import { mutateResponseSchema } from "../../../../zero-protocol/src/mutate-server.js";
+import { getOrCreateCounter } from "../../observability/metrics.js";
+import { Queue } from "../../../../shared/src/queue.js";
+import { Subscription } from "../../types/subscription.js";
+import { recordMutation } from "../../server/anonymous-otel-start.js";
+import { ProtocolErrorWithLevel } from "../../types/error-with-level.js";
+import { fetchFromAPIServer } from "../../custom/fetch.js";
+import { authEquals, isAuthErrorBody } from "../../auth/auth.js";
+import { ROOT_CONTEXT, context, propagation } from "@opentelemetry/api";
+//#region ../zero-cache/src/services/mutagen/pusher.ts
+/**
+* Receives push messages from zero-client and forwards
+* them the the user's API server.
+*
+* If the user's API server is taking too long to process
+* the push, the PusherService will add the push to a queue
+* and send pushes in bulk the next time the user's API server
+* is available.
+*
+* - One PusherService exists per client group.
+* - Mutations for a given client are always sent in-order
+* - Mutations for different clients in the same group may be interleaved
+*/
+var PusherService = class {
+	id;
+	#connContextManager;
+	#pusher;
+	#queue;
+	#config;
+	#lc;
+	#stopped;
+	#refCount = 0;
+	#isStopped = false;
+	constructor(appConfig, lc, clientGroupID, connContextManager) {
+		this.#connContextManager = connContextManager;
+		this.#config = appConfig;
+		this.#lc = lc.withContext("component", "pusherService");
+		this.#queue = new Queue();
+		this.#pusher = new PushWorker(appConfig, lc, this.#connContextManager, this.#queue);
+		this.id = clientGroupID;
+	}
+	initConnection(selector) {
+		return this.#pusher.initConnection(selector);
+	}
+	enqueuePush(selector, push) {
+		this.#pusher.enqueuePush(this.#connContextManager.mustGetConnectionContext(selector), push);
+		return { type: "ok" };
+	}
+	async ackMutationResponses(requester, upToID) {
+		const connCtx = this.#connContextManager.getConnectionContext(requester);
+		if (!connCtx?.mutateContext?.url) return;
+		const cleanupBody = {
+			clientGroupID: this.id,
+			mutations: [{
+				type: Custom,
+				id: 0,
+				clientID: upToID.clientID,
+				name: CLEANUP_RESULTS_MUTATION_NAME,
+				args: [{
+					type: "single",
+					clientGroupID: this.id,
+					clientID: upToID.clientID,
+					upToMutationID: upToID.id
+				}],
+				timestamp: Date.now()
+			}],
+			pushVersion: 1,
+			timestamp: Date.now(),
+			requestID: `cleanup-${this.id}-${upToID.clientID}-${upToID.id}`
+		};
+		try {
+			await fetchFromAPIServer(mutateResponseSchema, "push", this.#lc, connCtx, {
+				appID: this.#config.app.id,
+				shardNum: this.#config.shard.num
+			}, cleanupBody);
+		} catch (e) {
+			this.#lc.warn?.("Failed to send cleanup mutation", { error: getErrorMessage(e) });
+		}
+	}
+	/**
+	* Bulk cleanup is routed through the requester's push context.
+	*
+	* This assumes the client group shares a compatible push endpoint/auth
+	* context.
+	*/
+	async deleteClientMutations(requester, clientIDs) {
+		if (clientIDs.length === 0) return;
+		const connCtx = this.#connContextManager.getConnectionContext(requester);
+		if (!connCtx?.mutateContext?.url) return;
+		const cleanupBody = {
+			clientGroupID: this.id,
+			mutations: [{
+				type: Custom,
+				id: 0,
+				clientID: clientIDs[0],
+				name: CLEANUP_RESULTS_MUTATION_NAME,
+				args: [{
+					type: "bulk",
+					clientGroupID: this.id,
+					clientIDs
+				}],
+				timestamp: Date.now()
+			}],
+			pushVersion: 1,
+			timestamp: Date.now(),
+			requestID: `cleanup-bulk-${this.id}-${Date.now()}`
+		};
+		try {
+			await fetchFromAPIServer(mutateResponseSchema, "push", this.#lc, connCtx, {
+				appID: this.#config.app.id,
+				shardNum: this.#config.shard.num
+			}, cleanupBody);
+		} catch (e) {
+			this.#lc.warn?.("Failed to send bulk cleanup mutation", { error: getErrorMessage(e) });
+		}
+	}
+	ref() {
+		assert(!this.#isStopped, "PusherService is already stopped");
+		++this.#refCount;
+	}
+	unref() {
+		assert(!this.#isStopped, "PusherService is already stopped");
+		--this.#refCount;
+		if (this.#refCount <= 0) this.stop();
+	}
+	hasRefs() {
+		return this.#refCount > 0;
+	}
+	run() {
+		this.#stopped = this.#pusher.run();
+		return this.#stopped;
+	}
+	stop() {
+		if (this.#isStopped) return must(this.#stopped, "Stop was called before `run`");
+		this.#isStopped = true;
+		this.#queue.enqueue("stop");
+		return must(this.#stopped, "Stop was called before `run`");
+	}
+};
+/**
+* Awaits items in the queue then drains and sends them all
+* to the user's API server.
+*/
+var PushWorker = class {
+	#connContextManager;
+	#queue;
+	#lc;
+	#config;
+	#clients;
+	#customMutations = getOrCreateCounter("mutation", "custom", "Number of custom mutations processed");
+	#pushes = getOrCreateCounter("mutation", "pushes", "Number of pushes processed by the pusher");
+	constructor(config, lc, connContextManager, queue) {
+		this.#lc = lc.withContext("component", "pusher");
+		this.#connContextManager = connContextManager;
+		this.#queue = queue;
+		this.#config = config;
+		this.#clients = /* @__PURE__ */ new Map();
+	}
+	/**
+	* Returns a new downstream stream if the clientID,wsID pair has not been seen before.
+	* If a clientID already exists with a different wsID, that client's downstream is cancelled.
+	*/
+	initConnection(selector) {
+		const existing = this.#clients.get(selector.clientID);
+		if (existing && existing.wsID === selector.wsID) throw new Error("Connection was already initialized");
+		if (existing) existing.downstream.cancel();
+		const downstream = Subscription.create({ cleanup: () => {
+			this.#clients.delete(selector.clientID);
+		} });
+		this.#clients.set(selector.clientID, {
+			wsID: selector.wsID,
+			downstream
+		});
+		return downstream;
+	}
+	enqueuePush(connCtx, push) {
+		this.#queue.enqueue({
+			push,
+			connCtx
+		});
+	}
+	async run() {
+		for (;;) {
+			const [pushes, terminate] = combinePushes([await this.#queue.dequeue(), ...this.#queue.drain()]);
+			for (const push of pushes) {
+				const parentContext = push.push.traceparent ? propagation.extract(ROOT_CONTEXT, { traceparent: push.push.traceparent }) : context.active();
+				const response = await context.with(parentContext, () => this.#processPush(push));
+				await this.#fanOutResponses(response);
+			}
+			if (terminate) break;
+		}
+	}
+	/**
+	* 1. If the entire `push` fails, we send the error to relevant clients.
+	* 2. If the push succeeds, we look for any mutation failure that should cause the connection to terminate
+	*  and terminate the connection for those clients.
+	*/
+	#fanOutResponses(response) {
+		const connectionTerminations = [];
+		if ("kind" in response && response.kind === "PushFailed" || "error" in response) {
+			this.#lc.warn?.("The server behind ZERO_MUTATE_URL returned a push error.", response);
+			const groupedMutationIDs = groupBy(response.mutationIDs ?? [], (m) => m.clientID);
+			for (const [clientID, mutationIDs] of groupedMutationIDs) {
+				const client = this.#clients.get(clientID);
+				if (!client) continue;
+				if ("error" in response) {
+					const pushFailedBody = response.error === "http" ? {
+						kind: PushFailed,
+						origin: ZeroCache,
+						reason: HTTP,
+						status: response.status,
+						bodyPreview: response.details,
+						mutationIDs,
+						message: `Fetch from API server returned non-OK status ${response.status}`
+					} : response.error === "unsupportedPushVersion" ? {
+						kind: PushFailed,
+						origin: Server,
+						reason: UnsupportedPushVersion,
+						mutationIDs,
+						message: `Unsupported push version`
+					} : {
+						kind: PushFailed,
+						origin: Server,
+						reason: Internal,
+						mutationIDs,
+						message: response.error === "zeroPusher" ? response.details : response.error === "unsupportedSchemaVersion" ? "Unsupported schema version" : "An unknown error occurred while pushing to the API server"
+					};
+					this.#failDownstream(client.downstream, pushFailedBody);
+				} else this.#failDownstream(client.downstream, response);
+			}
+		} else {
+			const groupedMutations = groupBy(response.mutations, (m) => m.id.clientID);
+			for (const [clientID, mutations] of groupedMutations) {
+				const client = this.#clients.get(clientID);
+				if (!client) continue;
+				let failure;
+				let i = 0;
+				for (; i < mutations.length; i++) {
+					const m = mutations[i];
+					if ("error" in m.result) this.#lc.warn?.("The server behind ZERO_MUTATE_URL returned a mutation error.", m.result);
+					if ("error" in m.result && m.result.error === "oooMutation") {
+						failure = {
+							kind: PushFailed,
+							origin: Server,
+							reason: OutOfOrderMutation,
+							message: "mutation was out of order",
+							details: m.result.details,
+							mutationIDs: mutations.map((m) => ({
+								clientID: m.id.clientID,
+								id: m.id.id
+							}))
+						};
+						break;
+					}
+				}
+				if (failure && i < mutations.length - 1) this.#lc.warn?.("push-response contains mutations after a mutation which should fatal the connection");
+				if (failure) connectionTerminations.push(() => this.#failDownstream(client.downstream, failure));
+			}
+		}
+		connectionTerminations.forEach((cb) => cb());
+	}
+	async #processPush(entry) {
+		this.#customMutations.add(entry.push.mutations.length, { clientGroupID: entry.push.clientGroupID });
+		this.#pushes.add(1, { clientGroupID: entry.push.clientGroupID });
+		recordMutation("custom", entry.push.mutations.length);
+		const url = must(entry.connCtx.mutateContext.url, "ZERO_MUTATE_URL is not set");
+		this.#lc.debug?.("pushing to", url, "with", entry.push.mutations.length, "mutations");
+		let mutationIDs = [];
+		try {
+			mutationIDs = entry.push.mutations.map((m) => ({
+				id: m.id,
+				clientID: m.clientID
+			}));
+			const response = await fetchFromAPIServer(mutateResponseSchema, "push", this.#lc, entry.connCtx, {
+				appID: this.#config.app.id,
+				shardNum: this.#config.shard.num
+			}, entry.push);
+			if ("kind" in response && response.kind === "PushFailed" || "error" in response) {
+				if (isAuthErrorBody(response)) {
+					this.#lc.warn?.("Push auth failed; invalidating connection", {
+						clientID: entry.connCtx.clientID,
+						response: "kind" in response ? response.message : void 0
+					});
+					this.#connContextManager.failConnection(entry.connCtx, entry.connCtx.revision);
+				}
+				return response;
+			}
+			this.#connContextManager.validateConnection(entry.connCtx, entry.connCtx.revision, "kind" in response && response.kind === "MutateResponse" && response?.userID !== void 0 ? {
+				kind: "server-validated",
+				validatedUserID: response.userID
+			} : { kind: "client-fallback" });
+			return response;
+		} catch (e) {
+			if (isProtocolError(e) && e.errorBody.kind === "PushFailed") {
+				const response = {
+					...e.errorBody,
+					mutationIDs
+				};
+				if (isAuthErrorBody(response)) {
+					this.#lc.warn?.("Push auth failed; invalidating connection", {
+						clientID: entry.connCtx.clientID,
+						response: "kind" in response ? response.message : void 0
+					});
+					this.#connContextManager.failConnection(entry.connCtx, entry.connCtx.revision);
+				}
+				return response;
+			}
+			if (isProtocolError(e) && isAuthErrorBody(e.errorBody)) {
+				this.#lc.warn?.("Push validation failed; invalidating connection", {
+					clientID: entry.connCtx.clientID,
+					response: e.message
+				});
+				this.#connContextManager.failConnection(entry.connCtx, entry.connCtx.revision);
+				return {
+					kind: PushFailed,
+					origin: ZeroCache,
+					reason: HTTP,
+					message: e.message,
+					status: 401,
+					mutationIDs
+				};
+			}
+			return {
+				kind: PushFailed,
+				origin: ZeroCache,
+				reason: Internal,
+				message: `Failed to push: ${getErrorMessage(e)}`,
+				mutationIDs
+			};
+		}
+	}
+	#failDownstream(downstream, errorBody) {
+		downstream.fail(new ProtocolErrorWithLevel(errorBody, "warn"));
+	}
+};
+/**
+* Pushes for different clients, sockets, or auth revisions could be interleaved.
+*
+* In order to batch safely, we only combine pushes from the same
+* clientID/wsID/revision snapshot.
+*/
+function combinePushes(entries) {
+	const pushesByConnection = /* @__PURE__ */ new Map();
+	function collect() {
+		const ret = [];
+		for (const entries of pushesByConnection.values()) {
+			const composite = {
+				...entries[0],
+				push: {
+					...entries[0].push,
+					mutations: []
+				}
+			};
+			ret.push(composite);
+			for (const entry of entries) {
+				assertAreCompatiblePushes(composite, entry);
+				composite.push.mutations.push(...entry.push.mutations);
+			}
+		}
+		return ret;
+	}
+	for (const entry of entries) {
+		if (entry === "stop" || entry === void 0) return [collect(), true];
+		const key = `${entry.connCtx.clientID}:${entry.connCtx.wsID}:${entry.connCtx.revision}`;
+		const existing = pushesByConnection.get(key);
+		if (existing) existing.push(entry);
+		else pushesByConnection.set(key, [entry]);
+	}
+	return [collect(), false];
+}
+function assertAreCompatiblePushes(left, right) {
+	assert(left.connCtx.clientID === right.connCtx.clientID, "clientID must be the same for all pushes");
+	assert(left.connCtx.wsID === right.connCtx.wsID, "wsID must be the same for all pushes");
+	assert(left.connCtx.revision === right.connCtx.revision, "revision must be the same for all pushes");
+	assert(authEquals(left.connCtx.auth, right.connCtx.auth), "auth must be the same for all pushes with the same clientID");
+	assert(left.push.schemaVersion === right.push.schemaVersion, "schemaVersion must be the same for all pushes with the same clientID");
+	assert(left.push.pushVersion === right.push.pushVersion, "pushVersion must be the same for all pushes with the same clientID");
+	assert(left.connCtx.mutateContext.headerOptions.cookie === right.connCtx.mutateContext.headerOptions.cookie, "httpCookie must be the same for all pushes with the same clientID");
+	assert(left.connCtx.mutateContext.headerOptions.origin === right.connCtx.mutateContext.headerOptions.origin, "origin must be the same for all pushes with the same clientID");
+	assert(left.connCtx.user.id === right.connCtx.user.id, "userID must be the same for all pushes with the same clientID");
+	assert(left.connCtx.mutateContext.url === right.connCtx.mutateContext.url, "userPushURL must be the same for all pushes with the same clientID");
+}
+//#endregion
+export { PusherService };
+
+//# sourceMappingURL=pusher.js.map

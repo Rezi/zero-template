@@ -1,0 +1,60 @@
+import { valita_exports } from "../../shared/src/valita.js";
+import { mutationIDSchema } from "./mutation-id.js";
+import { pushFailedBodySchema } from "./error.js";
+import { mutationResponseSchema, mutationSchema } from "./mutation.js";
+//#region ../zero-protocol/src/push.ts
+var pushBodySchema = valita_exports.object({
+	clientGroupID: valita_exports.string(),
+	mutations: valita_exports.array(mutationSchema),
+	pushVersion: valita_exports.number(),
+	schemaVersion: valita_exports.number().optional(),
+	timestamp: valita_exports.number(),
+	requestID: valita_exports.string(),
+	auth: valita_exports.string().optional(),
+	traceparent: valita_exports.string().optional()
+});
+var pushMessageSchema = valita_exports.tuple([valita_exports.literal("push"), pushBodySchema]);
+var pushOkSchema = valita_exports.object({ mutations: valita_exports.array(mutationResponseSchema) });
+/**
+* @deprecated push errors are now represented as ['error', { ... }] messages
+*/
+var unsupportedPushVersionSchema = valita_exports.object({
+	error: valita_exports.literal("unsupportedPushVersion"),
+	mutationIDs: valita_exports.array(mutationIDSchema).optional()
+});
+/**
+* @deprecated push errors are now represented as ['error', { ... }] messages
+*/
+var unsupportedSchemaVersionSchema = valita_exports.object({
+	error: valita_exports.literal("unsupportedSchemaVersion"),
+	mutationIDs: valita_exports.array(mutationIDSchema).optional()
+});
+/**
+* @deprecated push http errors are now represented as ['error', { ... }] messages
+*/
+var httpErrorSchema = valita_exports.object({
+	error: valita_exports.literal("http"),
+	status: valita_exports.number(),
+	details: valita_exports.string(),
+	mutationIDs: valita_exports.array(mutationIDSchema).optional()
+});
+/**
+* @deprecated push zero errors are now represented as ['error', { ... }] messages
+*/
+var zeroPusherErrorSchema = valita_exports.object({
+	error: valita_exports.literal("zeroPusher"),
+	details: valita_exports.string(),
+	mutationIDs: valita_exports.array(mutationIDSchema).optional()
+});
+/**
+* @deprecated push errors are now represented as ['error', { ... }] messages
+*/
+var pushErrorSchema = valita_exports.union(unsupportedPushVersionSchema, unsupportedSchemaVersionSchema, httpErrorSchema, zeroPusherErrorSchema);
+var pushResponseBodySchema = valita_exports.union(pushOkSchema, pushErrorSchema);
+valita_exports.union(pushResponseBodySchema, pushFailedBodySchema);
+var pushResponseMessageSchema = valita_exports.tuple([valita_exports.literal("pushResponse"), pushResponseBodySchema]);
+var ackMutationResponsesMessageSchema = valita_exports.tuple([valita_exports.literal("ackMutationResponses"), mutationIDSchema]);
+//#endregion
+export { ackMutationResponsesMessageSchema, pushBodySchema, pushErrorSchema, pushMessageSchema, pushResponseMessageSchema };
+
+//# sourceMappingURL=push.js.map

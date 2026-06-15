@@ -1,0 +1,22 @@
+import type { CompoundKey } from '../../../zero-protocol/src/ast.ts';
+import { type Change } from './change.ts';
+import { type Node } from './data.ts';
+import { type FilterInput, type FilterOperator, type FilterOutput } from './filter-operators.ts';
+import type { SourceSchema } from './schema.ts';
+import { type Stream } from './stream.ts';
+/**
+ * The Exists operator filters data based on whether or not a relationship is
+ * non-empty.
+ */
+export declare class Exists implements FilterOperator {
+    #private;
+    constructor(input: FilterInput, relationshipName: string, parentJoinKey: CompoundKey, type: 'EXISTS' | 'NOT EXISTS', cacheHitCountsForTesting?: Map<string, number>);
+    setFilterOutput(output: FilterOutput): void;
+    beginFilter(): void;
+    endFilter(): void;
+    filter(node: Node): Generator<'yield', boolean>;
+    destroy(): void;
+    getSchema(): SourceSchema;
+    push(change: Change): Stream<'yield'>;
+}
+//# sourceMappingURL=exists.d.ts.map

@@ -1,0 +1,38 @@
+import { type ClientSchema } from '../../../zero-protocol/src/client-schema.ts';
+import type { Schema, TableSchema } from '../../../zero-types/src/schema.ts';
+import type { Relationships } from './relationship-builder.ts';
+import { type TableBuilderWithColumns } from './table-builder.ts';
+/**
+ * Note: the keys of the `tables` and `relationships` parameters do not matter.
+ * You can assign them to any value you like. E.g.,
+ *
+ * ```ts
+ * createSchema({rsdfgafg: table('users')...}, {sdfd: relationships(users, ...)})
+ * ```
+ */
+export declare function createSchema<const TTables extends readonly TableBuilderWithColumns<TableSchema>[], const TRelationships extends readonly Relationships[], const TEnableLegacyQueries extends boolean | undefined, const TEnableLegacyMutators extends boolean | undefined>(options: {
+    readonly tables: TTables;
+    readonly relationships?: TRelationships | undefined;
+    /** @see Schema.enableLegacyQueries */
+    readonly enableLegacyQueries?: TEnableLegacyQueries | undefined;
+    /** @see Schema.enableLegacyMutators */
+    readonly enableLegacyMutators?: TEnableLegacyMutators | undefined;
+}): {
+    tables: {
+        readonly [K in TTables[number]['schema']['name']]: Extract<TTables[number]['schema'], {
+            name: K;
+        }>;
+    };
+    relationships: {
+        readonly [K in TRelationships[number]['name']]: Extract<TRelationships[number], {
+            name: K;
+        }>['relationships'];
+    };
+    enableLegacyQueries: TEnableLegacyQueries;
+    enableLegacyMutators: TEnableLegacyMutators;
+};
+export declare function clientSchemaFrom(schema: Schema): {
+    clientSchema: ClientSchema;
+    hash: string;
+};
+//# sourceMappingURL=schema-builder.d.ts.map

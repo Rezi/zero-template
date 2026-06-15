@@ -1,0 +1,8 @@
+import type { IncomingMessage } from 'http';
+/**
+ * Contains the subset of {@link IncomingMessage} fields suitable for
+ * passing across processes.
+ */
+export type IncomingMessageSubset = Pick<IncomingMessage, 'headers' | 'headersDistinct' | 'httpVersion' | 'method' | 'rawHeaders' | 'rawTrailers' | 'trailers' | 'trailersDistinct' | 'url'>;
+export declare function serializableSubset(msg: IncomingMessageSubset): IncomingMessageSubset;
+//# sourceMappingURL=http.d.ts.map

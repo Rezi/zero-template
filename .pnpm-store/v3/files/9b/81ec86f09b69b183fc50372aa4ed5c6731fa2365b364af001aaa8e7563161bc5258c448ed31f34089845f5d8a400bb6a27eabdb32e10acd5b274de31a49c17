@@ -1,0 +1,6 @@
+import type { LogContext } from '@rocicorp/logger';
+import { type LogConfig } from '../../../shared/src/logging.ts';
+export declare function createLogContext({ log }: {
+    log: LogConfig;
+}, worker: string, workerIndex?: number, includeOtel?: boolean): LogContext;
+//# sourceMappingURL=logging.d.ts.map

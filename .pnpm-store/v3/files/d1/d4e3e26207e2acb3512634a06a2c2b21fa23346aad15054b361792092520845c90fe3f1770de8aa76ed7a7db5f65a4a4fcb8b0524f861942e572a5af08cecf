@@ -1,0 +1,21 @@
+import { readonlyObject, readonlyRecord, valita_exports } from "../../shared/src/valita.js";
+var indexDefinitionsSchema = readonlyRecord(readonlyObject({
+	prefix: valita_exports.string().optional(),
+	jsonPointer: valita_exports.string(),
+	allowEmpty: valita_exports.boolean().optional()
+}));
+function indexDefinitionEqual(a, b) {
+	return a.jsonPointer === b.jsonPointer && (a.allowEmpty ?? false) === (b.allowEmpty ?? false) && (a.prefix ?? "") === (b.prefix ?? "");
+}
+function indexDefinitionsEqual(a, b) {
+	if (Object.keys(a).length !== Object.keys(b).length) return false;
+	for (const [aKey, aValue] of Object.entries(a)) {
+		const bValue = b[aKey];
+		if (!bValue || !indexDefinitionEqual(aValue, bValue)) return false;
+	}
+	return true;
+}
+//#endregion
+export { indexDefinitionsEqual, indexDefinitionsSchema };
+
+//# sourceMappingURL=index-defs.js.map

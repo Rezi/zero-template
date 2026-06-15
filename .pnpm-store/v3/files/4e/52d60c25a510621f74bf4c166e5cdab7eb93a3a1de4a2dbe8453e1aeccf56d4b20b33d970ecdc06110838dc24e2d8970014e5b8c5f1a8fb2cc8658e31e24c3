@@ -1,0 +1,132 @@
+import { deepFreeze } from "./frozen-json.js";
+import { decodeIndexKey } from "./db/index.js";
+import { rejectIfClosed, throwIfClosed } from "./transaction-closed-error.js";
+import { isScanIndexOptions, toDbScanOptions } from "./scan-options.js";
+import { ScanResultImpl, fromKeyForIndexScanInternal } from "./scan-iterator.js";
+import { greaterThan } from "compare-utf8";
+//#region ../replicache/src/transactions.ts
+var transactionIDCounter = 0;
+var ReadTransactionImpl = class {
+	clientID;
+	dbtx;
+	_lc;
+	/**
+	* The location in which this transaction is being used. This is either `client` or `server`.
+	*/
+	location;
+	/** @deprecated Use {@link ReadTransaction.location} instead. */
+	environment;
+	constructor(clientID, dbRead, lc, rpcName = "openReadTransaction") {
+		this.clientID = clientID;
+		this.dbtx = dbRead;
+		this._lc = lc.withContext(rpcName).withContext("txid", transactionIDCounter++);
+		this.environment = "client";
+		this.location = "client";
+	}
+	get(key) {
+		return rejectIfClosed(this.dbtx) || this.dbtx.get(key);
+	}
+	async has(key) {
+		throwIfClosed(this.dbtx);
+		return this.dbtx.has(key);
+	}
+	async isEmpty() {
+		throwIfClosed(this.dbtx);
+		return this.dbtx.isEmpty();
+	}
+	scan(options) {
+		return scan(options, this.dbtx, noop);
+	}
+};
+function noop(_) {}
+function scan(options, dbRead, onLimitKey) {
+	return makeScanResultFromScanIteratorInternal(getScanIterator(dbRead, options), options ?? {}, dbRead, onLimitKey);
+}
+var SubscriptionTransactionWrapper = class {
+	#keys = /* @__PURE__ */ new Set();
+	#scans = [];
+	#tx;
+	constructor(tx) {
+		this.#tx = tx;
+	}
+	get environment() {
+		return this.#tx.location;
+	}
+	get location() {
+		return this.#tx.location;
+	}
+	get clientID() {
+		return this.#tx.clientID;
+	}
+	isEmpty() {
+		this.#scans.push({ options: {} });
+		return this.#tx.isEmpty();
+	}
+	get(key) {
+		this.#keys.add(key);
+		return this.#tx.get(key);
+	}
+	has(key) {
+		this.#keys.add(key);
+		return this.#tx.has(key);
+	}
+	scan(options) {
+		const scanInfo = {
+			options: toDbScanOptions(options),
+			inclusiveLimitKey: void 0
+		};
+		this.#scans.push(scanInfo);
+		return scan(options, this.#tx.dbtx, (inclusiveLimitKey) => {
+			scanInfo.inclusiveLimitKey = inclusiveLimitKey;
+		});
+	}
+	get keys() {
+		return this.#keys;
+	}
+	get scans() {
+		return this.#scans;
+	}
+};
+var zeroData = Symbol();
+var WriteTransactionImpl = class extends ReadTransactionImpl {
+	reason;
+	mutationID;
+	[zeroData];
+	constructor(clientID, mutationID, reason, zData, dbWrite, lc, rpcName = "openWriteTransaction") {
+		super(clientID, dbWrite, lc, rpcName);
+		this.mutationID = mutationID;
+		this.reason = reason;
+		this[zeroData] = zData;
+	}
+	put(key, value) {
+		return this.set(key, value);
+	}
+	async set(key, value) {
+		throwIfClosed(this.dbtx);
+		await this.dbtx.put(this._lc, key, deepFreeze(value));
+	}
+	del(key) {
+		return rejectIfClosed(this.dbtx) ?? this.dbtx.del(this._lc, key);
+	}
+};
+function getScanIterator(dbRead, options) {
+	if (options && isScanIndexOptions(options)) return getScanIteratorForIndexMap(dbRead, options);
+	return dbRead.map.scan(fromKeyForNonIndexScan(options));
+}
+function fromKeyForNonIndexScan(options) {
+	if (!options) return "";
+	const { prefix = "", start } = options;
+	if (start && greaterThan(start.key, prefix)) return start.key;
+	return prefix;
+}
+function makeScanResultFromScanIteratorInternal(iter, options, dbRead, onLimitKey) {
+	return new ScanResultImpl(iter, options, dbRead, onLimitKey);
+}
+async function* getScanIteratorForIndexMap(dbRead, options) {
+	const map = dbRead.getMapForIndex(options.indexName);
+	for await (const entry of map.scan(fromKeyForIndexScanInternal(options))) yield [decodeIndexKey(entry[0]), entry[1]];
+}
+//#endregion
+export { ReadTransactionImpl, SubscriptionTransactionWrapper, WriteTransactionImpl, zeroData };
+
+//# sourceMappingURL=transactions.js.map

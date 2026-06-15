@@ -1,0 +1,133 @@
+import { assert } from "../../../shared/src/asserts.js";
+import { initBgIntervalProcess } from "../bg-interval.js";
+import { assertHash, newRandomHash } from "../hash.js";
+import { StoreImpl } from "../dag/store-impl.js";
+import { withRead, withWrite } from "../with-transactions.js";
+import { clientGroupHasPendingMutations, getClientGroups } from "./client-groups.js";
+import { getClients } from "./clients.js";
+import { addDeletedClients, getDeletedClients, mergeDeletedClients, normalizeDeletedClients } from "../deleted-clients.js";
+import { getKVStoreProvider } from "../get-kv-store-provider.js";
+import { createLogContext } from "../log-options.js";
+import { IDBDatabasesStore } from "./idb-databases-store.js";
+//#region ../replicache/src/persist/collect-idb-databases.ts
+/**
+* How frequently to try to collect
+*/
+var COLLECT_IDB_INTERVAL = 720 * 60 * 1e3;
+/**
+* We delay the initial collection to prevent doing it at startup.
+*/
+var INITIAL_COLLECT_IDB_DELAY = 300 * 1e3;
+function initCollectIDBDatabases(idbDatabasesStore, kvStoreProvider, collectInterval, initialCollectDelay, maxAge, enableMutationRecovery, onClientsDeleted, lc, signal) {
+	let initial = true;
+	initBgIntervalProcess("CollectIDBDatabases", async () => {
+		await collectIDBDatabases(idbDatabasesStore, Date.now(), maxAge, kvStoreProvider, enableMutationRecovery, onClientsDeleted);
+	}, () => {
+		if (initial) {
+			initial = false;
+			return initialCollectDelay;
+		}
+		return collectInterval;
+	}, lc, signal);
+}
+/**
+* Collects IDB databases that are no longer needed.
+*/
+async function collectIDBDatabases(idbDatabasesStore, now, maxAge, kvStoreProvider, enableMutationRecovery, onClientsDeleted, newDagStore = defaultNewDagStore) {
+	const databases = await idbDatabasesStore.getDatabases();
+	const dbs = Object.values(databases);
+	const collectResults = await Promise.all(dbs.map(async (db) => [db.name, await gatherDatabaseInfoForCollect(db, now, maxAge, enableMutationRecovery, kvStoreProvider.create, newDagStore)]));
+	const dbNamesToRemove = [];
+	const dbNamesToKeep = [];
+	const deletedClientsToRemove = [];
+	for (const [dbName, [canCollect, deletedClients]] of collectResults) if (canCollect) {
+		dbNamesToRemove.push(dbName);
+		deletedClientsToRemove.push(...deletedClients);
+	} else dbNamesToKeep.push(dbName);
+	const { errors } = await dropDatabases(idbDatabasesStore, dbNamesToRemove, kvStoreProvider.drop);
+	if (errors.length) throw errors[0];
+	if (deletedClientsToRemove.length > 0) {
+		let allDeletedClients = deletedClientsToRemove;
+		for (const name of dbNamesToKeep) await withWrite(newDagStore(name, kvStoreProvider.create), async (dagWrite) => {
+			const newDeletedClients = await addDeletedClients(dagWrite, deletedClientsToRemove);
+			allDeletedClients = mergeDeletedClients(allDeletedClients, newDeletedClients);
+		});
+		await onClientsDeleted(normalizeDeletedClients(allDeletedClients));
+	}
+}
+async function dropDatabaseInternal(name, idbDatabasesStore, kvDropStore) {
+	await kvDropStore(name);
+	await idbDatabasesStore.deleteDatabases([name]);
+}
+async function dropDatabases(idbDatabasesStore, namesToRemove, kvDropStore) {
+	const dropStoreResults = await Promise.allSettled(namesToRemove.map(async (name) => {
+		await dropDatabaseInternal(name, idbDatabasesStore, kvDropStore);
+		return name;
+	}));
+	const dropped = [];
+	const errors = [];
+	for (const result of dropStoreResults) if (result.status === "fulfilled") dropped.push(result.value);
+	else errors.push(result.reason);
+	return {
+		dropped,
+		errors
+	};
+}
+function defaultNewDagStore(name, kvCreateStore) {
+	return new StoreImpl(kvCreateStore(name), newRandomHash, assertHash);
+}
+/**
+* If any client has a recent heartbeat or there are pending mutations we
+* return `[false]`. Otherwise we return `[true, deletedClients]`.
+*/
+function gatherDatabaseInfoForCollect(db, now, maxAge, enableMutationRecovery, kvCreateStore, newDagStore) {
+	if (db.replicacheFormatVersion > 7) return [false];
+	assert(db.replicacheFormatVersion === 5 || db.replicacheFormatVersion === 6 || db.replicacheFormatVersion === 7, () => `Expected replicacheFormatVersion to be DD31, V6, or V7, got ${db.replicacheFormatVersion}`);
+	return canDatabaseBeCollectedAndGetDeletedClientIDs(enableMutationRecovery, newDagStore(db.name, kvCreateStore), now, maxAge);
+}
+/**
+* Drops the specified database.
+* @param dbName The name of the database to drop.
+* @param opts Options for dropping the database.
+*/
+async function dropDatabase(dbName, opts) {
+	const kvStoreProvider = getKVStoreProvider(createLogContext(opts?.logLevel, opts?.logSinks, { dropDatabase: void 0 }), opts?.kvStore);
+	await dropDatabaseInternal(dbName, new IDBDatabasesStore(kvStoreProvider.create), kvStoreProvider.drop);
+}
+/**
+* Deletes all IndexedDB data associated with Replicache.
+*
+* Returns an object with the names of the successfully dropped databases
+* and any errors encountered while dropping.
+*/
+async function dropAllDatabases(opts) {
+	const kvStoreProvider = getKVStoreProvider(createLogContext(opts?.logLevel, opts?.logSinks, { dropAllDatabases: void 0 }), opts?.kvStore);
+	const store = new IDBDatabasesStore(kvStoreProvider.create);
+	const databases = await store.getDatabases();
+	return dropDatabases(store, Object.values(databases).map((db) => db.name), kvStoreProvider.drop);
+}
+/**
+* If there are pending mutations in any of the clients in this db we return
+* `[false]`. If any client has a recent heartbeat we also return `[false]`.
+* Otherwise we return `[true, deletedClients]`.
+*/
+function canDatabaseBeCollectedAndGetDeletedClientIDs(enableMutationRecovery, perdag, now, maxAge) {
+	return withRead(perdag, async (read) => {
+		if (enableMutationRecovery) {
+			const clientGroups = await getClientGroups(read);
+			for (const clientGroup of clientGroups.values()) if (clientGroupHasPendingMutations(clientGroup)) return [false];
+		}
+		const clients = await getClients(read);
+		for (const [, client] of clients) if (now - client.heartbeatTimestampMs < maxAge) return [false];
+		const deletedClients = [...await getDeletedClients(read)];
+		for (const [clientID, client] of clients) deletedClients.push({
+			clientID,
+			clientGroupID: client.clientGroupID
+		});
+		return [true, deletedClients];
+	});
+}
+//#endregion
+export { COLLECT_IDB_INTERVAL, INITIAL_COLLECT_IDB_DELAY, dropAllDatabases, dropDatabase, initCollectIDBDatabases };
+
+//# sourceMappingURL=collect-idb-databases.js.map

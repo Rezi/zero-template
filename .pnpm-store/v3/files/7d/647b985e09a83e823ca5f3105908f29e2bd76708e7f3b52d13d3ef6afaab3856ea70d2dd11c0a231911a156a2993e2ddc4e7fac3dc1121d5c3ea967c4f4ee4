@@ -1,0 +1,1 @@
+{"version":3,"file":"client-state.d.ts","sourceRoot":"","sources":["../../../../../zero-client/src/types/client-state.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAC,QAAQ,EAAC,MAAM,wCAAwC,CAAC;AAErE,MAAM,MAAM,QAAQ,GAAG,MAAM,CAAC;AAE9B,MAAM,MAAM,WAAW,GAAG;IACxB,MAAM,EAAE,SAAS,CAAC;IAMlB,OAAO,EAAE,QAAQ,EAAE,CAAC;IAOpB,eAAe,EAAE,MAAM,GAAG,SAAS,CAAC;CACrC,CAAC"}

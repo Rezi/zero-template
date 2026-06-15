@@ -1,0 +1,559 @@
+import { assert } from "../../../../../shared/src/asserts.js";
+import { must } from "../../../../../shared/src/must.js";
+import { equals } from "../../../../../shared/src/set-utils.js";
+import { ALLOWED_APP_ID_CHARACTERS } from "../../../types/shards.js";
+import { Database } from "../../../../../zqlite/src/db.js";
+import { liteValue } from "../../../types/lite.js";
+import { liteTableName } from "../../../types/names.js";
+import { mapPostgresToLite, mapPostgresToLiteIndex } from "../../../db/pg-to-lite.js";
+import { ColumnMetadataStore } from "../../replicator/schema/column-metadata.js";
+import { listIndexes, listTables } from "../../../db/lite-tables.js";
+import { initReplicationState } from "../../replicator/schema/replication-state.js";
+import { id } from "../../../types/sql.js";
+import { connectPgClient, pgClient } from "../../../types/pg.js";
+import { toStateVersionString } from "./lsn.js";
+import { READONLY } from "../../../db/mode-enum.js";
+import { runTx } from "../../../db/run-transaction.js";
+import { getPublicationInfo } from "./schema/published.js";
+import { dropShard, getInternalShardConfig, initReplica, validatePublications } from "./schema/shard.js";
+import { createLiteIndexStatement, createLiteTableStatement } from "../../../db/create.js";
+import { ReplicationStatusPublisher } from "../../replicator/replication-status.js";
+import "../../../types/pg-versions.js";
+import { BinaryCopyParser, hasBinaryDecoder, makeBinaryDecoder, textCastDecoder } from "../../../db/pg-copy-binary.js";
+import { TsvParser } from "../../../db/pg-copy.js";
+import { getTypeParsers } from "../../../db/pg-type-parser.js";
+import { TransactionPool, importSnapshot } from "../../../db/transaction-pool.js";
+import { CpuProfiler } from "../../../types/profiler.js";
+import { createReplicaAndSlot } from "./replication-slots.js";
+import { ensureShardSchema } from "./schema/init.js";
+import { resolver } from "@rocicorp/resolver";
+import { platform, tmpdir } from "node:os";
+import { join } from "node:path";
+import { mkdtemp, rm } from "node:fs/promises";
+import { Writable } from "node:stream";
+import { pipeline as pipeline$1 } from "node:stream/promises";
+//#region ../zero-cache/src/services/change-source/pg/initial-sync.ts
+async function initialSync(lc, shard, tx, upstreamURI, syncOptions, context) {
+	if (!ALLOWED_APP_ID_CHARACTERS.test(shard.appID)) throw new Error("The App ID may only consist of lower-case letters, numbers, and the underscore character");
+	const { tableCopyWorkers, profileCopy, textCopy = false, replicationSlotFailover = false, shadow } = syncOptions;
+	const copyProfiler = profileCopy ? await CpuProfiler.connect() : null;
+	const sql = await connectPgClient(lc, upstreamURI, "initial-sync");
+	const replicationSession = shadow ? void 0 : pgClient(lc, upstreamURI, "initial-sync-replication-session", {
+		["fetch_types"]: false,
+		connection: { replication: "database" }
+	});
+	const replicaID = Date.now().toString();
+	let slotName;
+	const statusPublisher = ReplicationStatusPublisher.forRunningTransaction(tx, shadow ? async () => {} : void 0).publish(lc, "Initializing");
+	let releaseShadowSnapshot;
+	try {
+		const pgVersion = await checkUpstreamConfig(sql);
+		const { publications } = shadow ? await getInternalShardConfig(sql, shard) : await ensurePublishedTables(lc, sql, shard);
+		lc.info?.(`Upstream is setup with publications [${publications}]`);
+		const { database, host } = sql.options;
+		lc.info?.(shadow ? `acquiring exported snapshot on ${database}@${host} (shadow mode)` : `opening replication session to ${database}@${host}`);
+		let snapshot;
+		let lsn;
+		if (shadow) {
+			const acquired = await acquireExportedSnapshotForShadowSync(lc, upstreamURI);
+			snapshot = acquired.snapshot;
+			lsn = acquired.lsn;
+			releaseShadowSnapshot = acquired.release;
+		} else {
+			const slot = await createReplicaAndSlot(lc, sql, must(replicationSession), shard, replicaID, replicationSlotFailover && pgVersion >= 17e4);
+			snapshot = slot.snapshot_name;
+			lsn = slot.consistent_point;
+			slotName = slot.slot_name;
+		}
+		const initialVersion = toStateVersionString(lsn);
+		initReplicationState(tx, publications, initialVersion, context);
+		const start = performance.now();
+		const published = await runTx(sql, async (tx) => {
+			await tx.unsafe(`SET TRANSACTION SNAPSHOT '${snapshot}'`);
+			return getPublicationInfo(tx, publications);
+		}, { mode: READONLY });
+		validatePublications(lc, published);
+		const { tables, indexes } = published;
+		const numTables = tables.length;
+		if (platform() === "win32" && tableCopyWorkers < numTables) lc.warn?.(`Increasing the number of copy workers from ${tableCopyWorkers} to ${numTables} to work around a Node/Postgres connection bug`);
+		const numWorkers = platform() === "win32" ? numTables : Math.min(tableCopyWorkers, numTables);
+		const copyPool = await connectPgClient(lc, upstreamURI, "initial-sync-copy-worker", {
+			max: numWorkers,
+			["max_lifetime"]: 7200
+		});
+		const copiers = startTableCopyWorkers(lc, copyPool, snapshot, numWorkers, numTables);
+		try {
+			createLiteTables(tx, tables, initialVersion);
+			const sampleRate = shadow?.sampleRate;
+			const maxRowsPerTable = shadow?.maxRowsPerTable;
+			const downloads = await Promise.all(tables.map((spec) => copiers.processReadTask((db, lc) => getInitialDownloadState(lc, db, spec, shadow !== void 0))));
+			statusPublisher.publish(lc, "Initializing", `Copying ${numTables} upstream tables at version ${initialVersion}`, 5e3, () => ({ downloadStatus: downloads.map(({ status }) => status) }));
+			copyProfiler?.start();
+			const rowCounts = await Promise.all(downloads.map((table) => copiers.processReadTask((db, lc) => copy(lc, table, copyPool, db, tx, textCopy, sampleRate, maxRowsPerTable))));
+			copyProfiler?.stopAndDispose(lc, "initial-copy");
+			copiers.setDone();
+			const total = rowCounts.reduce((acc, curr) => ({
+				rows: acc.rows + curr.rows,
+				flushTime: acc.flushTime + curr.flushTime
+			}), {
+				rows: 0,
+				flushTime: 0
+			});
+			statusPublisher.publish(lc, "Indexing", `Creating ${indexes.length} indexes`, 5e3);
+			const indexStart = performance.now();
+			createLiteIndices(lc, tx, indexes);
+			const index = performance.now() - indexStart;
+			lc.info?.(`Created indexes (${index.toFixed(3)} ms)`);
+			if (slotName && replicaID) await initReplica(sql, shard, replicaID, published, context);
+			else {
+				assert(shadow, "expected to be in shadow sync if there is no slotName");
+				const rowsByTable = /* @__PURE__ */ new Map();
+				for (let i = 0; i < downloads.length; i++) rowsByTable.set(downloads[i].status.table, rowCounts[i].rows);
+				verifyShadowReplica(lc, tx, published, rowsByTable);
+			}
+			const elapsed = performance.now() - start;
+			lc.info?.(`Synced ${total.rows.toLocaleString()} rows of ${numTables} tables in ${publications} up to ${lsn} (flush: ${total.flushTime.toFixed(3)}, index: ${index.toFixed(3)}, total: ${elapsed.toFixed(3)} ms)`);
+		} finally {
+			copyPool.end().catch((e) => lc.warn?.(`Error closing copyPool`, e));
+		}
+	} catch (e) {
+		if (slotName) {
+			lc.warn?.(`dropping replication slot ${slotName}`, e);
+			await sql`
+        SELECT pg_drop_replication_slot(slot_name) FROM pg_replication_slots
+          WHERE slot_name = ${slotName};
+      `.catch((e) => lc.warn?.(`Unable to drop replication slot ${slotName}`, e));
+		}
+		await statusPublisher.publishAndThrowError(lc, "Initializing", e);
+	} finally {
+		statusPublisher.stop();
+		if (releaseShadowSnapshot) await releaseShadowSnapshot().catch((e) => lc.warn?.(`Error releasing shadow snapshot`, e));
+		if (replicationSession) await replicationSession.end();
+		await sql.end();
+	}
+}
+/**
+* Exercises the initial-sync code path against a sample of rows from every
+* published table, writing into a throwaway SQLite database that is deleted
+* when the run ends. Produces zero upstream mutations: no replication slot,
+* no `addReplica`, no `dropShard`, no status events.
+*
+* Intended to be invoked periodically so that if a customer ever needs a
+* full reset, we have recent confidence that `initialSync` still works.
+* The shard must already be initialized upstream.
+*/
+async function shadowInitialSync(lc, shard, upstreamURI, shadow, context, syncOptions) {
+	const dir = await mkdtemp(join(shadow.parentDir ?? tmpdir(), "zero-shadow-sync-"));
+	const db = new Database(lc, join(dir, "shadow-replica.db"));
+	try {
+		await initialSync(lc, shard, db, upstreamURI, {
+			tableCopyWorkers: 1,
+			textCopy: syncOptions?.textCopy,
+			shadow
+		}, context);
+	} finally {
+		try {
+			db.close();
+		} catch (e) {
+			lc.warn?.(`Error closing shadow replica db`, e);
+		}
+		await rm(dir, {
+			recursive: true,
+			force: true
+		}).catch((e) => lc.warn?.(`Error cleaning up shadow replica dir ${dir}`, e));
+	}
+}
+async function checkUpstreamConfig(sql) {
+	const { walLevel, version } = (await sql`
+      SELECT current_setting('wal_level') as "walLevel", 
+             current_setting('server_version_num') as "version";
+  `)[0];
+	if (walLevel !== "logical") throw new Error(`Postgres must be configured with "wal_level = logical" (currently: "${walLevel})`);
+	if (version < 15e4) throw new Error(`Must be running Postgres 15 or higher (currently: "${version}")`);
+	return version;
+}
+async function ensurePublishedTables(lc, sql, shard, validate = true) {
+	const { database, host } = sql.options;
+	lc.info?.(`Ensuring upstream PUBLICATION on ${database}@${host}`);
+	await ensureShardSchema(lc, sql, shard);
+	const { publications } = await getInternalShardConfig(sql, shard);
+	if (validate) {
+		let valid = false;
+		const nonInternalPublications = publications.filter((p) => !p.startsWith("_"));
+		const exists = await sql`
+      SELECT pubname FROM pg_publication WHERE pubname IN ${sql(publications)}
+      `.values();
+		if (exists.length !== publications.length) lc.warn?.(`some configured publications [${publications}] are missing: [${exists.flat()}]. resyncing`);
+		else if (!equals(new Set(shard.publications), new Set(nonInternalPublications))) lc.warn?.(`requested publications [${shard.publications}] differ from previouspublications [${nonInternalPublications}]. resyncing`);
+		else valid = true;
+		if (!valid) {
+			await sql.unsafe(dropShard(shard.appID, shard.shardNum));
+			return ensurePublishedTables(lc, sql, shard, false);
+		}
+	}
+	return { publications };
+}
+function startTableCopyWorkers(lc, db, snapshot, numWorkers, numTables) {
+	const { init } = importSnapshot(snapshot);
+	const tableCopiers = new TransactionPool(lc, {
+		mode: READONLY,
+		init,
+		initialWorkers: numWorkers
+	});
+	tableCopiers.run(db);
+	lc.info?.(`Started ${numWorkers} workers to copy ${numTables} tables`);
+	if (parseInt(process.versions.node) < 22) lc.warn?.("\n\n\nOlder versions of Node have a bug that results in an unresponsive\nPostgres connection after running certain combinations of COPY commands.\nIf initial sync hangs, run zero-cache with Node v22+. This has the additional\nbenefit of being consistent with the Node version run in the production container image.\n\n\n");
+	return tableCopiers;
+}
+/**
+* Shadow-mode alternative to `createReplicationSlot`: opens a dedicated
+* READ ONLY REPEATABLE READ transaction on a normal connection, exports the
+* snapshot and captures the current WAL LSN, then holds the transaction
+* open until `release()` is called. The held transaction keeps the snapshot
+* importable by the table-copy workers for the duration of the COPY phase.
+*
+* Idle-in-transaction timeout is disabled locally so the exporter doesn't
+* get killed while workers are still importing.
+*/
+async function acquireExportedSnapshotForShadowSync(lc, upstreamURI) {
+	const holder = await connectPgClient(lc, upstreamURI, "shadow-initial-sync-snapshot", { max: 1 });
+	const ready = resolver();
+	const release = resolver();
+	const held = holder.begin(READONLY, async (tx) => {
+		await tx`SET LOCAL idle_in_transaction_session_timeout = 0`.execute();
+		const [row] = await tx`
+        SELECT pg_export_snapshot() AS snapshot,
+               pg_current_wal_lsn()::text AS lsn`;
+		ready.resolve(row);
+		await release.promise;
+	}).catch((e) => ready.reject(e));
+	let snapshot;
+	let lsn;
+	try {
+		({snapshot, lsn} = await ready.promise);
+	} catch (e) {
+		await holder.end().catch((err) => lc.warn?.(`Error ending shadow snapshot holder after failure`, err));
+		throw e;
+	}
+	lc.info?.(`Exported snapshot ${snapshot} at LSN ${lsn} (shadow initial sync)`);
+	return {
+		snapshot,
+		lsn,
+		release: async () => {
+			release.resolve();
+			try {
+				await held;
+			} catch (e) {
+				lc.warn?.(`snapshot holder transaction ended with error`, e);
+			}
+			await holder.end();
+		}
+	};
+}
+function createLiteTables(tx, tables, initialVersion) {
+	const columnMetadata = must(ColumnMetadataStore.getInstance(tx));
+	for (const t of tables) {
+		tx.exec(createLiteTableStatement(mapPostgresToLite(t, initialVersion)));
+		const tableName = liteTableName(t);
+		for (const [colName, colSpec] of Object.entries(t.columns)) columnMetadata.insert(tableName, colName, colSpec);
+	}
+}
+function createLiteIndices(lc, tx, indices) {
+	for (const [i, index] of indices.entries()) {
+		const stmt = createLiteIndexStatement(mapPostgresToLiteIndex(index));
+		lc.info?.(`Creating index ${i + 1}/${indices.length}: ${stmt}`);
+		const start = performance.now();
+		tx.exec(stmt);
+		lc.info?.(`Created index ${i + 1}/${indices.length} (${(performance.now() - start).toFixed(3)} ms): ${stmt}`);
+	}
+}
+/**
+* Runs structural assertions over a just-synced replica and throws if any
+* fail. Only called in shadow mode — a successful return means the replica
+* is schema-complete, row-count consistent, and its column metadata is in
+* sync with its lite schema.
+*
+* Note: this intentionally does NOT verify ZQL-queryability. Tables that
+* `computeZqlSpecs` drops (no PK / no all-NOT-NULL unique index, unsupported
+* column types, etc.) are silently skipped in production too — there's
+* nothing shadow-specific about them, so failing here would diverge from
+* prod over an upstream-schema condition prod accepts.
+*
+* Exported for testing.
+*/
+function verifyShadowReplica(lc, db, published, rowsByTable) {
+	const issues = [];
+	let columnsChecked = 0;
+	let rowsChecked = 0;
+	const liteTables = listTables(db);
+	const liteTableByName = new Map(liteTables.map((t) => [t.name, t]));
+	for (const pt of published.tables) {
+		const name = liteTableName(pt);
+		const lite = liteTableByName.get(name);
+		if (!lite) {
+			issues.push(`missing table in replica: ${name}`);
+			continue;
+		}
+		for (const col of Object.keys(pt.columns)) {
+			columnsChecked++;
+			if (!(col in lite.columns)) issues.push(`column missing in replica table ${name}: ${col}`);
+		}
+	}
+	const liteIndexNames = new Set(listIndexes(db).map((i) => i.name));
+	for (const ix of published.indexes) {
+		const mapped = mapPostgresToLiteIndex(ix);
+		if (!liteIndexNames.has(mapped.name)) issues.push(`missing index in replica: ${mapped.name} on ${mapped.tableName}`);
+	}
+	for (const [table, expected] of rowsByTable) try {
+		const [row] = db.prepare(`SELECT COUNT(*) as count FROM "${table}"`).all();
+		if (row.count !== expected) issues.push(`row count mismatch for table ${table}: copy counter reported ${expected}, replica has ${row.count}`);
+		else rowsChecked += row.count;
+	} catch (e) {
+		issues.push(`could not count rows in table ${table}: ${String(e)}`);
+	}
+	const meta = must(ColumnMetadataStore.getInstance(db));
+	for (const pt of published.tables) {
+		const name = liteTableName(pt);
+		const rows = meta.getTable(name);
+		for (const col of Object.keys(pt.columns)) if (!rows.has(col)) issues.push(`missing column_metadata row for ${name}.${col}`);
+	}
+	if (issues.length) throw new Error(`Shadow replica verification failed (${issues.length} issue(s)):\n` + issues.map((i) => `  - ${i}`).join("\n"));
+	lc.info?.(`Shadow replica verification passed: ${published.tables.length} tables, ${published.indexes.length} indexes, ${columnsChecked} columns, ${rowsChecked.toLocaleString()} rows`);
+}
+var MB = 1024 * 1024;
+var MAX_BUFFERED_ROWS = 1e4;
+var BUFFERED_SIZE_THRESHOLD = 8 * MB;
+/**
+* Produces ` TABLESAMPLE BERNOULLI(n)` when `sampleRate` is < 1, else `''`.
+* Row-level Bernoulli sampling is used (rather than SYSTEM) because it
+* produces a more uniform sample and, unlike SYSTEM, still returns rows
+* for small tables at low rates.
+*/
+function tableSampleClause(sampleRate) {
+	if (sampleRate === void 0 || sampleRate >= 1) return "";
+	return ` TABLESAMPLE BERNOULLI(${parseFloat((sampleRate * 100).toFixed(6))})`;
+}
+function limitClause(maxRowsPerTable) {
+	return maxRowsPerTable !== void 0 ? ` LIMIT ${maxRowsPerTable}` : "";
+}
+/**
+* Returns the SELECT column expressions for binary COPY, casting columns
+* without a known binary decoder to `::text`.
+*/
+function makeBinarySelectExprs(table, cols) {
+	return cols.map((col) => {
+		const spec = table.columns[col];
+		return hasBinaryDecoder(spec) ? id(col) : `${id(col)}::text`;
+	});
+}
+function makeDownloadStatements(table, cols, sampleRate, maxRowsPerTable, selectExprs) {
+	const filterConditions = Object.values(table.publications).map(({ rowFilter }) => rowFilter).filter((f) => !!f);
+	const where = filterConditions.length === 0 ? "" : `WHERE ${filterConditions.join(" OR ")}`;
+	const sample = tableSampleClause(sampleRate);
+	const limit = limitClause(maxRowsPerTable);
+	const fromTable = `FROM ${id(table.schema)}.${id(table.name)}${sample} ${where}`;
+	const select = `SELECT ${(selectExprs ?? cols.map(id)).join(",")} ${fromTable}${limit}`;
+	if (limit) {
+		const bytesExpr = cols.map((col) => `COALESCE(pg_column_size(${id(col)}), 0)`).join(" + ");
+		return {
+			select,
+			getTotalRows: `SELECT COUNT(*)::bigint AS "totalRows" FROM (SELECT 1 AS _ ${fromTable}${limit}) s`,
+			getTotalBytes: `SELECT COALESCE(SUM(b), 0)::bigint AS "totalBytes" FROM (SELECT (${bytesExpr}) AS b ${fromTable}${limit}) s`
+		};
+	}
+	const totalBytes = `(${cols.map((col) => `SUM(COALESCE(pg_column_size(${id(col)}), 0))`).join(" + ")})`;
+	return {
+		select,
+		getTotalRows: `SELECT COUNT(*) AS "totalRows" ${fromTable}`,
+		getTotalBytes: `SELECT ${totalBytes} AS "totalBytes" ${fromTable}`
+	};
+}
+async function getInitialDownloadState(lc, sql, spec, skipTotals) {
+	const start = performance.now();
+	const table = liteTableName(spec);
+	const columns = Object.keys(spec.columns);
+	if (skipTotals) return {
+		spec,
+		status: {
+			table,
+			columns,
+			rows: 0,
+			totalRows: 0,
+			totalBytes: 0
+		}
+	};
+	const { totalRows, totalBytes } = (await sql`SELECT GREATEST(reltuples, 0)::float8 AS "totalRows",
+         pg_table_size(oid)::float8 AS "totalBytes"
+    FROM pg_class
+    WHERE oid = ${`${id(spec.schema)}.${id(spec.name)}`}::regclass`)[0] ?? {
+		totalRows: 0,
+		totalBytes: 0
+	};
+	const state = {
+		spec,
+		status: {
+			table,
+			columns,
+			rows: 0,
+			totalRows,
+			totalBytes
+		}
+	};
+	const elapsed = (performance.now() - start).toFixed(3);
+	lc.info?.(`Computed initial download state for ${table} (${elapsed} ms)`, { state: state.status });
+	return state;
+}
+function copy(lc, { spec: table, status }, dbClient, from, to, textCopy, sampleRate, maxRowsPerTable) {
+	if (textCopy) return copyText(lc, table, status, dbClient, from, to, sampleRate, maxRowsPerTable);
+	return copyBinary(lc, table, status, from, to, sampleRate, maxRowsPerTable);
+}
+async function copyBinary(lc, table, status, from, to, sampleRate, maxRowsPerTable) {
+	const start = performance.now();
+	let flushTime = 0;
+	const tableName = liteTableName(table);
+	const orderedColumns = Object.entries(table.columns);
+	const columnNames = orderedColumns.map(([c]) => c);
+	const columnSpecs = orderedColumns.map(([_name, spec]) => spec);
+	const insertColumnList = columnNames.map((c) => id(c)).join(",");
+	const valuesSql = columnNames.length > 0 ? `(${"?,".repeat(columnNames.length - 1)}?)` : "()";
+	const insertSql = `
+    INSERT INTO "${tableName}" (${insertColumnList}) VALUES ${valuesSql}`;
+	const insertStmt = to.prepare(insertSql);
+	const insertBatchStmt = to.prepare(insertSql + `,${valuesSql}`.repeat(49));
+	const select = makeDownloadStatements(table, columnNames, sampleRate, maxRowsPerTable, makeBinarySelectExprs(table, columnNames)).select;
+	const decoders = orderedColumns.map(([, spec]) => hasBinaryDecoder(spec) ? makeBinaryDecoder(spec) : textCastDecoder);
+	const valuesPerRow = columnSpecs.length;
+	const valuesPerBatch = valuesPerRow * 50;
+	const pendingValues = Array.from({ length: MAX_BUFFERED_ROWS * valuesPerRow });
+	let pendingRows = 0;
+	let pendingSize = 0;
+	function flush() {
+		const start = performance.now();
+		const flushedRows = pendingRows;
+		const flushedSize = pendingSize;
+		let l = 0;
+		for (; pendingRows > 50; pendingRows -= 50) insertBatchStmt.run(pendingValues.slice(l, l += valuesPerBatch));
+		for (; pendingRows > 0; pendingRows--) insertStmt.run(pendingValues.slice(l, l += valuesPerRow));
+		const flushedValues = flushedRows * valuesPerRow;
+		for (let i = 0; i < flushedValues; i++) pendingValues[i] = void 0;
+		pendingSize = 0;
+		status.rows += flushedRows;
+		const elapsed = performance.now() - start;
+		flushTime += elapsed;
+		lc.debug?.(`flushed ${flushedRows} ${tableName} rows (${flushedSize} bytes) in ${elapsed.toFixed(3)} ms`);
+	}
+	const binaryParser = new BinaryCopyParser();
+	let col = 0;
+	lc.info?.(`Starting binary copy stream of ${tableName}:`, select);
+	await pipeline$1(await from.unsafe(`COPY (${select}) TO STDOUT WITH (FORMAT binary)`).readable(), new Writable({
+		highWaterMark: BUFFERED_SIZE_THRESHOLD,
+		write(chunk, _encoding, callback) {
+			try {
+				for (const fieldBuf of binaryParser.parse(chunk)) {
+					pendingSize += fieldBuf === null ? 4 : fieldBuf.length;
+					pendingValues[pendingRows * valuesPerRow + col] = fieldBuf === null ? null : decoders[col](fieldBuf);
+					if (++col === decoders.length) {
+						col = 0;
+						if (++pendingRows >= MAX_BUFFERED_ROWS - valuesPerRow || pendingSize >= BUFFERED_SIZE_THRESHOLD) flush();
+					}
+				}
+				callback();
+			} catch (e) {
+				callback(e instanceof Error ? e : new Error(String(e)));
+			}
+		},
+		final: (callback) => {
+			try {
+				flush();
+				callback();
+			} catch (e) {
+				callback(e instanceof Error ? e : new Error(String(e)));
+			}
+		}
+	}));
+	const elapsed = performance.now() - start;
+	lc.info?.(`Finished copying ${status.rows} rows into ${tableName} (flush: ${flushTime.toFixed(3)} ms) (total: ${elapsed.toFixed(3)} ms) `);
+	return {
+		rows: status.rows,
+		flushTime
+	};
+}
+async function copyText(lc, table, status, dbClient, from, to, sampleRate, maxRowsPerTable) {
+	const start = performance.now();
+	let flushTime = 0;
+	const tableName = liteTableName(table);
+	const orderedColumns = Object.entries(table.columns);
+	const columnNames = orderedColumns.map(([c]) => c);
+	const columnSpecs = orderedColumns.map(([_name, spec]) => spec);
+	const insertColumnList = columnNames.map((c) => id(c)).join(",");
+	const valuesSql = columnNames.length > 0 ? `(${"?,".repeat(columnNames.length - 1)}?)` : "()";
+	const insertSql = `
+    INSERT INTO "${tableName}" (${insertColumnList}) VALUES ${valuesSql}`;
+	const insertStmt = to.prepare(insertSql);
+	const insertBatchStmt = to.prepare(insertSql + `,${valuesSql}`.repeat(49));
+	const { select } = makeDownloadStatements(table, columnNames, sampleRate, maxRowsPerTable);
+	const valuesPerRow = columnSpecs.length;
+	const valuesPerBatch = valuesPerRow * 50;
+	const pendingValues = Array.from({ length: MAX_BUFFERED_ROWS * valuesPerRow });
+	let pendingRows = 0;
+	let pendingSize = 0;
+	function flush() {
+		const start = performance.now();
+		const flushedRows = pendingRows;
+		const flushedSize = pendingSize;
+		let l = 0;
+		for (; pendingRows > 50; pendingRows -= 50) insertBatchStmt.run(pendingValues.slice(l, l += valuesPerBatch));
+		for (; pendingRows > 0; pendingRows--) insertStmt.run(pendingValues.slice(l, l += valuesPerRow));
+		const flushedValues = flushedRows * valuesPerRow;
+		for (let i = 0; i < flushedValues; i++) pendingValues[i] = void 0;
+		pendingSize = 0;
+		status.rows += flushedRows;
+		const elapsed = performance.now() - start;
+		flushTime += elapsed;
+		lc.debug?.(`flushed ${flushedRows} ${tableName} rows (${flushedSize} bytes) in ${elapsed.toFixed(3)} ms`);
+	}
+	lc.info?.(`Starting text copy stream of ${tableName}:`, select);
+	const pgParsers = await getTypeParsers(dbClient, { returnJsonAsString: true });
+	const parsers = columnSpecs.map((c) => {
+		const pgParse = pgParsers.getTypeParser(c.typeOID);
+		return (val) => liteValue(pgParse(val), c.dataType, "s");
+	});
+	const tsvParser = new TsvParser();
+	let col = 0;
+	await pipeline$1(await from.unsafe(`COPY (${select}) TO STDOUT`).readable(), new Writable({
+		highWaterMark: BUFFERED_SIZE_THRESHOLD,
+		write(chunk, _encoding, callback) {
+			try {
+				for (const text of tsvParser.parse(chunk)) {
+					pendingSize += text === null ? 4 : text.length;
+					pendingValues[pendingRows * valuesPerRow + col] = text === null ? null : parsers[col](text);
+					if (++col === parsers.length) {
+						col = 0;
+						if (++pendingRows >= MAX_BUFFERED_ROWS - valuesPerRow || pendingSize >= BUFFERED_SIZE_THRESHOLD) flush();
+					}
+				}
+				callback();
+			} catch (e) {
+				callback(e instanceof Error ? e : new Error(String(e)));
+			}
+		},
+		final: (callback) => {
+			try {
+				flush();
+				callback();
+			} catch (e) {
+				callback(e instanceof Error ? e : new Error(String(e)));
+			}
+		}
+	}));
+	const elapsed = performance.now() - start;
+	lc.info?.(`Finished copying ${status.rows} rows into ${tableName} (flush: ${flushTime.toFixed(3)} ms) (total: ${elapsed.toFixed(3)} ms) `);
+	return {
+		rows: status.rows,
+		flushTime
+	};
+}
+//#endregion
+export { initialSync, makeBinarySelectExprs, makeDownloadStatements, shadowInitialSync };
+
+//# sourceMappingURL=initial-sync.js.map

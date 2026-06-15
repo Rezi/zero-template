@@ -1,0 +1,145 @@
+import { emptyArray } from "../../shared/src/sentinels.js";
+import { skipYields } from "../../zql/src/ivm/skip-yields.js";
+import { applyChange, idSymbol } from "../../zql/src/ivm/view-apply-change.js";
+import "./zero.js";
+import "./bindings.js";
+import { produce, reconcile } from "solid-js/store";
+//#region ../zero-solid/src/solid-view.ts
+var COMPLETE = Object.freeze({ type: "complete" });
+var UNKNOWN = Object.freeze({ type: "unknown" });
+var SolidView = class {
+	#input;
+	#format;
+	#onDestroy;
+	#retry;
+	#setState;
+	#builderRoot;
+	#pendingChanges = [];
+	#updateTTL;
+	constructor(input, onTransactionCommit, format, onDestroy, queryComplete, updateTTL, setState, retry) {
+		this.#input = input;
+		onTransactionCommit(this.#onTransactionCommit);
+		this.#format = format;
+		this.#onDestroy = onDestroy;
+		this.#updateTTL = updateTTL;
+		this.#retry = retry;
+		input.setOutput(this);
+		const initialRoot = this.#createEmptyRoot();
+		this.#applyChangesToRoot(skipYields(input.fetch({})), (node) => ({
+			type: "add",
+			node
+		}), initialRoot);
+		this.#setState = setState;
+		this.#setState(reconcile([initialRoot, queryComplete === true ? COMPLETE : "error" in queryComplete ? this.#makeError(queryComplete) : UNKNOWN], { key: idSymbol }));
+		if (isEmptyRoot(initialRoot)) this.#builderRoot = this.#createEmptyRoot();
+		if (queryComplete !== true && !("error" in queryComplete)) queryComplete.then(() => {
+			this.#setState((prev) => [prev[0], COMPLETE]);
+		}).catch((error) => {
+			this.#setState((prev) => [prev[0], this.#makeError(error)]);
+		});
+	}
+	#makeError(error) {
+		const message = error.message ?? "An unknown error occurred";
+		return {
+			type: "error",
+			retry: this.#retry,
+			refetch: this.#retry,
+			error: {
+				type: error.error,
+				message,
+				...error.details ? { details: error.details } : {}
+			}
+		};
+	}
+	destroy() {
+		this.#onDestroy();
+	}
+	#onTransactionCommit = () => {
+		const builderRoot = this.#builderRoot;
+		if (builderRoot) {
+			if (!isEmptyRoot(builderRoot)) {
+				this.#setState(0, reconcile(builderRoot, { key: idSymbol }));
+				this.#setState((prev) => [builderRoot, prev[1]]);
+				this.#builderRoot = void 0;
+			}
+		} else try {
+			this.#applyChanges(this.#pendingChanges, (c) => c);
+		} finally {
+			this.#pendingChanges = [];
+		}
+	};
+	push(change) {
+		if (this.#builderRoot) this.#applyChangeToRoot(materializeRelationships(change), this.#builderRoot);
+		else this.#pendingChanges.push(materializeRelationships(change));
+		return emptyArray;
+	}
+	#applyChanges(changes, mapper) {
+		this.#setState(produce((draftState) => {
+			this.#applyChangesToRoot(changes, mapper, draftState[0]);
+			if (isEmptyRoot(draftState[0])) this.#builderRoot = this.#createEmptyRoot();
+		}));
+	}
+	#applyChangesToRoot(changes, mapper, root) {
+		for (const change of changes) this.#applyChangeToRoot(mapper(change), root);
+	}
+	#applyChangeToRoot(change, root) {
+		applyChange(root, change, this.#input.getSchema(), "", this.#format, true);
+	}
+	#createEmptyRoot() {
+		return { "": this.#format.singular ? void 0 : [] };
+	}
+	updateTTL(ttl) {
+		this.#updateTTL(ttl);
+	}
+};
+function materializeRelationships(change) {
+	switch (change[0]) {
+		case 0: return {
+			type: "add",
+			node: materializeNodeRelationships(change[1])
+		};
+		case 1: return {
+			type: "remove",
+			node: materializeNodeRelationships(change[1])
+		};
+		case 3: return {
+			type: "child",
+			node: { row: change[1].row },
+			child: {
+				relationshipName: change[2].relationshipName,
+				change: materializeRelationships(change[2].change)
+			}
+		};
+		case 2: return {
+			type: "edit",
+			node: { row: change[1].row },
+			oldNode: { row: change[2].row }
+		};
+	}
+}
+function materializeNodeRelationships(node) {
+	const relationships = {};
+	for (const relationship in node.relationships) {
+		const materialized = [];
+		for (const n of skipYields(node.relationships[relationship]())) materialized.push(materializeNodeRelationships(n));
+		relationships[relationship] = () => materialized;
+	}
+	return {
+		row: node.row,
+		relationships
+	};
+}
+function isEmptyRoot(entry) {
+	const data = entry[""];
+	return data === void 0 || Array.isArray(data) && data.length === 0;
+}
+function createSolidViewFactory(setState, retry) {
+	function solidViewFactory(_query, input, format, onDestroy, onTransactionCommit, queryComplete, updateTTL) {
+		return new SolidView(input, onTransactionCommit, format, onDestroy, queryComplete, updateTTL, setState, retry || (() => {}));
+	}
+	return solidViewFactory;
+}
+//#endregion
+export { UNKNOWN, createSolidViewFactory };
+
+//# sourceMappingURL=solid-view.js.map

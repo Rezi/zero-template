@@ -1,0 +1,24 @@
+{
+  "name": "zero-app-components",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "libs/zero-app-components/src",
+  "tags": ["type:ui", "scope:app-components"],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc -p libs/zero-app-components/tsconfig.json --noEmit"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint",
+      "options": {
+        "lintFilePatterns": [
+          "libs/zero-app-components/src/**/*.ts",
+          "libs/zero-app-components/src/**/*.tsx"
+        ]
+      }
+    }
+  }
+}

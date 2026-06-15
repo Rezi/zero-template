@@ -1,0 +1,36 @@
+import { type Attributes } from '@opentelemetry/api';
+import type { LogContext } from '@rocicorp/logger';
+import SQLite3Database, { type RunResult, type Statement as SQLite3Statement } from '@rocicorp/zero-sqlite3';
+export declare class Database implements Disposable {
+    #private;
+    constructor(lc: LogContext, path: string, options?: SQLite3Database.Options, slowQueryThreshold?: number);
+    prepare(sql: string): Statement;
+    exec(sql: string): void;
+    pragma<T = unknown>(sql: string): T[];
+    compact(freeableBytesThreshold: number): void;
+    unsafeMode(unsafe: boolean): void;
+    close(): void;
+    transaction<T>(fn: () => T): T;
+    get name(): string;
+    get inTransaction(): boolean;
+    [Symbol.dispose](): void;
+}
+export declare class Statement {
+    #private;
+    readonly scanStatus: SQLite3Statement['scanStatusV2'];
+    readonly scanStatusReset: SQLite3Statement['scanStatusReset'];
+    constructor(lc: LogContext, attrs: Attributes, stmt: SQLite3Statement, threshold: number);
+    safeIntegers(useBigInt: boolean): this;
+    run(...params: unknown[]): RunResult;
+    get<T>(...params: unknown[]): T;
+    all<T>(...params: unknown[]): T[];
+    iterate<T>(...params: unknown[]): IterableIterator<T>;
+}
+/**
+ * An error indicating that the Database failed to open. This essentially
+ * wraps the TypeError thrown by the better-sqlite3 package with something
+ * more specific.
+ */
+export declare class DatabaseInitError extends Error {
+}
+//# sourceMappingURL=db.d.ts.map

@@ -1,0 +1,22 @@
+import type { LogContext } from '@rocicorp/logger';
+import * as v from '../../../shared/src/valita.ts';
+import type { ErrorKind } from '../../../zero-protocol/src/error-kind.ts';
+import type { UpdateNeededReasonType } from './update-needed-reason-type.ts';
+export declare const RELOAD_REASON_STORAGE_KEY = "_zeroReloadReason";
+export declare const RELOAD_BACKOFF_STATE_KEY = "_zeroReloadBackoffState";
+declare const backoffStateSchema: v.ObjectType<{
+    lastReloadTime: v.Type<number>;
+    nextIntervalMs: v.Type<number>;
+}, undefined>;
+export type BackoffState = v.Infer<typeof backoffStateSchema>;
+export declare const MIN_RELOAD_INTERVAL_MS = 500;
+export declare const MAX_RELOAD_INTERVAL_MS = 60000;
+export declare const FALLBACK_RELOAD_INTERVAL_MS = 10000;
+export declare function reloadWithReason(lc: LogContext, reload: () => void, reason: UpdateNeededReasonType | ErrorKind, message: string): void;
+export declare function reportReloadReason(lc: LogContext): void;
+/** If a reload is scheduled, do not attempt to reconnect. */
+export declare function reloadScheduled(): boolean;
+/** Call upon a successful connection, indicating that backoff should be reset. */
+export declare function resetBackoff(): void;
+export {};
+//# sourceMappingURL=reload-error-handler.d.ts.map

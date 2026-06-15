@@ -1,0 +1,9 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { PublishedTableWithReplicaIdentity } from './published.ts';
+export declare const ALLOWED_APP_ID_CHARACTERS: RegExp;
+export declare function validate(lc: LogContext, table: PublishedTableWithReplicaIdentity): void;
+export declare class UnsupportedTableSchemaError extends Error {
+    readonly name = "UnsupportedTableSchemaError";
+    constructor(msg: string);
+}
+//# sourceMappingURL=validation.d.ts.map

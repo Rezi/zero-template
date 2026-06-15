@@ -1,0 +1,213 @@
+import type { LogContext } from '@rocicorp/logger';
+import type postgres from 'postgres';
+import type { Enum } from '../../../shared/src/enum.ts';
+import { type PostgresDB, type PostgresTransaction } from '../types/pg.ts';
+import type * as Mode from './mode-enum.ts';
+type Mode = Enum<typeof Mode>;
+type MaybePromise<T> = Promise<T> | T;
+export type Statement = postgres.PendingQuery<(postgres.Row & Iterable<postgres.Row>)[]> | postgres.PendingQuery<postgres.Row[]>;
+/**
+ * A {@link Task} is logic run from within a transaction in a {@link TransactionPool}.
+ * It returns a list of `Statements` that the transaction executes asynchronously and
+ * awaits when it receives the 'done' signal.
+ *
+ */
+export type Task = (tx: PostgresTransaction, lc: LogContext) => MaybePromise<Statement[]>;
+/**
+ * A {@link ReadTask} is run from within a transaction, but unlike a {@link Task},
+ * the results of a ReadTask are opaque to the TransactionPool and returned to the
+ * caller of {@link TransactionPool.processReadTask}.
+ */
+export type ReadTask<T> = (tx: PostgresTransaction, lc: LogContext) => MaybePromise<T>;
+export type Options = {
+    mode: Mode;
+    /**
+     * A {@link Task} that is run in each Transaction before it begins
+     * processing general tasks. This can be used to to set the transaction
+     * mode, export/set snapshots, etc. This will be run even if
+     * {@link fail} has been called on the pool.
+     */
+    init?: Task | undefined;
+    /**
+     * A {@link Task} that is run in each Transaction before it closes.
+     * This will be run even if {@link fail} has been called, or if a
+     * preceding Task threw an Error.
+     */
+    cleanup?: Task | undefined;
+    /**
+     * The initial number of transaction workers to process tasks.
+     * This is the steady state number of workers that will be kept
+     * alive if the TransactionPool is long lived.
+     * This must be greater than 0. Defaults to 1.
+     */
+    initialWorkers?: number;
+    /**
+     * When specified, allows the pool to grow to `maxWorkers`. This
+     * must be greater than or equal to `initialWorkers`. On-demand
+     * workers will be shut down after an idle timeout of 5 seconds.
+     */
+    maxWorkers?: number;
+    /**
+     * Aborts the transaction if the response for a statement is not received
+     * within the specified timeout. Note that this is different from a Postgres
+     * `statement_timeout` or `lock_timeout` in that it is specifically intended
+     * to detect situations in which Postgres either never received the
+     * statement, or the application never got the response for the executed
+     * statement.
+     */
+    statementResponseTimeout?: number;
+};
+/**
+ * A TransactionPool is a pool of one or more {@link postgres.TransactionSql}
+ * objects that participate in processing a dynamic queue of tasks.
+ *
+ * This can be used for serializing a set of tasks that arrive asynchronously
+ * to a single transaction (for writing) or performing parallel reads across
+ * multiple connections at the same snapshot (e.g. read only snapshot transactions).
+ */
+export declare class TransactionPool {
+    #private;
+    constructor(lc: LogContext, opts: Options, timeoutTasks?: TimeoutTasks);
+    /**
+     * Starts the pool of workers to process Tasks with transactions opened from the
+     * specified {@link db}.
+     */
+    run(db: PostgresDB): this;
+    /**
+     * Adds context parameters to internal LogContext. This is useful for context values that
+     * are not known when the TransactionPool is constructed (e.g. determined after a database
+     * call when the pool is running).
+     *
+     * Returns an object that can be used to add more parameters.
+     */
+    addLoggingContext(key: string, value: string): {
+        addLoggingContext: (key: string, value: string) => /*elided*/ any;
+    };
+    /**
+     * Returns a promise that:
+     *
+     * * resolves after {@link setDone} has been called (or the the pool as been {@link unref}ed
+     *   to a 0 ref count), once all added tasks have been processed and all transactions have been
+     *   committed or closed.
+     *
+     * * rejects if processing was aborted with {@link fail} or if processing any of
+     *   the tasks resulted in an error. All uncommitted transactions will have been
+     *   rolled back.
+     *
+     * Note that partial failures are possible if processing writes with multiple workers
+     * (e.g. `setDone` is called, allowing some workers to commit, after which other
+     *  workers encounter errors). Using a TransactionPool in this manner does not make
+     * sense in terms of transactional semantics, and is thus not recommended.
+     *
+     * For reads, however, multiple workers is useful for performing parallel reads
+     * at the same snapshot. See {@link synchronizedSnapshots} for an example.
+     * Resolves or rejects when all workers are done or failed.
+     */
+    done(): Promise<void>;
+    /**
+     * Processes the statements produced by the specified {@link Task},
+     * returning a Promise that resolves when the statements are either processed
+     * by the database or rejected.
+     *
+     * Note that statement failures will result in failing the entire
+     * TransactionPool (per transaction semantics). However, the returned Promise
+     * itself will resolve rather than reject. As such, it is fine to ignore
+     * returned Promises in order to pipeline requests to the database. It is
+     * recommended to occasionally await them (e.g. after some threshold) in
+     * order to avoid memory blowup in the case of database slowness.
+     */
+    process(task: Task): Promise<void>;
+    /**
+     * Processes and returns the result of executing the {@link ReadTask} from
+     * within the transaction. An error thrown by the task will result in
+     * rejecting the returned Promise, but will not affect the transaction pool
+     * itself.
+     */
+    processReadTask<T>(readTask: ReadTask<T>): Promise<T>;
+    /**
+     * Ends all workers with a ROLLBACK. Throws if the pool is already done
+     * or aborted.
+     */
+    abort(): void;
+    /**
+     * Signals to all workers to end their transaction once all pending tasks have
+     * been completed. Throws if the pool is already done or aborted.
+     */
+    setDone(): void;
+    isRunning(): boolean;
+    /**
+     * Signals all workers to fail their transactions with the given {@link err}.
+     */
+    fail(err: unknown): void;
+}
+type SynchronizeSnapshotTasks = {
+    /**
+     * The `init` Task for the TransactionPool from which the snapshot originates.
+     * The pool must have Mode.SERIALIZABLE, and will be set to READ ONLY by the
+     * `exportSnapshot` init task. If the TransactionPool has multiple workers, the
+     * first worker will export a snapshot that the others set.
+     */
+    exportSnapshot: Task;
+    /**
+     * The `cleanup` Task for the TransactionPool from which the snapshot
+     * originates. This Task will wait for the follower pool to `setSnapshot`
+     * to ensure that the snapshot is successfully shared before the originating
+     * transaction is closed.
+     */
+    cleanupExport: Task;
+    /**
+     * The `init` Task for the TransactionPool in which workers will
+     * consequently see the same snapshot as that of the first pool. The pool
+     * must have Mode.SERIALIZABLE, and will have the ability to perform writes.
+     */
+    setSnapshot: Task;
+    /** The ID of the shared snapshot. */
+    snapshotID: Promise<string>;
+};
+/**
+ * Init Tasks for Postgres snapshot synchronization across transactions.
+ *
+ * https://www.postgresql.org/docs/9.3/functions-admin.html#:~:text=Snapshot%20Synchronization%20Functions,identical%20content%20in%20the%20database.
+ */
+export declare function synchronizedSnapshots(): SynchronizeSnapshotTasks;
+/**
+ * Returns `init` and `cleanup` {@link Task}s for a TransactionPool that ensure its workers
+ * share a single view of the database. This is used for View Notifier and View Syncer logic
+ * that allows multiple entities to perform parallel reads on the same snapshot of the database.
+ */
+export declare function sharedSnapshot(): {
+    init: Task;
+    cleanup: Task;
+    snapshotID: Promise<string>;
+};
+/**
+ * @returns An `init` Task for importing a snapshot from another transaction.
+ */
+export declare function importSnapshot(snapshotID: string): {
+    init: Task;
+    imported: Promise<void>;
+};
+/**
+ * A superclass of Errors used for control flow that is needed to handle
+ * another Error but does not constitute an error condition itself (e.g.
+ * aborting transactions after a previous one fails). Subclassing this Error
+ * will result in lowering the log level from `error` to `debug`.
+ */
+export declare class ControlFlowError extends Error {
+    constructor(cause?: unknown);
+}
+type TimeoutTask = {
+    timeoutMs: number;
+    task: Task | 'done';
+};
+type TimeoutTasks = {
+    forInitialWorkers: TimeoutTask;
+    forExtraWorkers: TimeoutTask;
+};
+export declare const TIMEOUT_TASKS: TimeoutTasks;
+export declare class ResponseTimeoutError extends Error {
+    static readonly name = "ResponseTimeoutError";
+    constructor(msg: string);
+}
+export {};
+//# sourceMappingURL=transaction-pool.d.ts.map

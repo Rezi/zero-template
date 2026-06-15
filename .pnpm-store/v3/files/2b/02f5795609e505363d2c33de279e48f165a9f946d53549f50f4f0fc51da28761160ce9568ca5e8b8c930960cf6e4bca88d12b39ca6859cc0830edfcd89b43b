@@ -1,0 +1,16 @@
+import type { NormalizedZeroConfig } from './normalize.ts';
+export type ServerContext = {
+    appID: string;
+    taskID: string;
+    hostIP: string;
+    hostname: string;
+    timestamp: string;
+    [platformVar: string]: string | undefined;
+};
+/**
+ * Runtime and environment information useful for recording and identifying
+ * the origin of certain actions such as initial sync and logical replication
+ * takeovers.
+ */
+export declare function getServerContext(config: NormalizedZeroConfig): ServerContext;
+//# sourceMappingURL=server-context.d.ts.map

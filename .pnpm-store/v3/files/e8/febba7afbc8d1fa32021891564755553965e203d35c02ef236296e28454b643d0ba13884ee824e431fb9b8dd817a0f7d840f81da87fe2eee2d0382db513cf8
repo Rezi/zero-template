@@ -1,0 +1,4 @@
+import type { InternalDiff } from './node.ts';
+import type { BTreeRead } from './read.ts';
+export declare function diff(oldMap: BTreeRead, newMap: BTreeRead): Promise<InternalDiff>;
+//# sourceMappingURL=diff.d.ts.map

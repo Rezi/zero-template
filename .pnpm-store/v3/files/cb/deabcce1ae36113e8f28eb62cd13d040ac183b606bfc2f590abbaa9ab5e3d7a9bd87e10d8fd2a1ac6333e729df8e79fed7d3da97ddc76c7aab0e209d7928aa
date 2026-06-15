@@ -1,0 +1,37 @@
+import { literalUnion, readonly, readonlyObject, valita_exports } from "../../shared/src/valita.js";
+import { compoundKeySchema } from "../../zero-protocol/src/ast.js";
+import { valueTypeSchema } from "../../zero-protocol/src/client-schema.js";
+import { primaryKeySchema } from "../../zero-protocol/src/primary-key.js";
+import "./compiled-permissions.js";
+//#region ../zero-schema/src/schema-config.ts
+var relationshipPart = readonlyObject({
+	sourceField: compoundKeySchema,
+	destField: compoundKeySchema,
+	destSchema: valita_exports.string(),
+	cardinality: literalUnion("one", "many")
+});
+var relationshipSchema = valita_exports.union(readonly(valita_exports.tuple([relationshipPart])), readonly(valita_exports.tuple([relationshipPart, relationshipPart])));
+var schemaValueSchema = readonlyObject({
+	type: valueTypeSchema,
+	serverName: valita_exports.string().optional(),
+	optional: valita_exports.boolean().optional()
+});
+var tableSchemaSchema = readonlyObject({
+	name: valita_exports.string(),
+	serverName: valita_exports.string().optional(),
+	columns: valita_exports.record(schemaValueSchema),
+	primaryKey: primaryKeySchema
+});
+readonlyObject({
+	tables: valita_exports.record(tableSchemaSchema),
+	relationships: valita_exports.record(valita_exports.record(relationshipSchema)),
+	enableLegacyQueries: valita_exports.boolean().optional(),
+	enableLegacyMutators: valita_exports.boolean().optional()
+});
+function isSchemaConfig(value) {
+	return value != null && "schema" in value;
+}
+//#endregion
+export { isSchemaConfig };
+
+//# sourceMappingURL=schema-config.js.map

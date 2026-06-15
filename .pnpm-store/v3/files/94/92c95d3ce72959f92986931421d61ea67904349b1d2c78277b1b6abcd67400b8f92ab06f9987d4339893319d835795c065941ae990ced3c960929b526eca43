@@ -1,0 +1,101 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { ChangeDesiredQueriesMessage } from '../../../../zero-protocol/src/change-desired-queries.ts';
+import type { InitConnectionMessage } from '../../../../zero-protocol/src/connect.ts';
+import type { DeleteClientsMessage } from '../../../../zero-protocol/src/delete-clients.ts';
+import type { Downstream } from '../../../../zero-protocol/src/down.ts';
+import type { InspectUpMessage } from '../../../../zero-protocol/src/inspect-up.ts';
+import type { UpdateAuthMessage } from '../../../../zero-protocol/src/update-auth.ts';
+import { type Auth } from '../../auth/auth.ts';
+import type { NormalizedZeroConfig } from '../../config/normalize.ts';
+import type { CustomQueryTransformer } from '../../custom-queries/transform-query.ts';
+import type { InspectorDelegate } from '../../server/inspector-delegate.ts';
+import type { PostgresDB } from '../../types/pg.ts';
+import type { ShardID } from '../../types/shards.ts';
+import type { Source } from '../../types/streams.ts';
+import { Subscription } from '../../types/subscription.ts';
+import type { ReplicaState } from '../replicator/replicator.ts';
+import type { ActivityBasedService } from '../service.ts';
+import type { ConnectionContextManager, ConnectionSelector } from './connection-context-manager.ts';
+import type { DrainCoordinator } from './drain-coordinator.ts';
+import type { PipelineDriver } from './pipeline-driver.ts';
+export interface ViewSyncer {
+    initConnection(selector: ConnectionSelector, initConnectionMessage: InitConnectionMessage): Source<Downstream>;
+    changeDesiredQueries(selector: ConnectionSelector, msg: ChangeDesiredQueriesMessage): Promise<void>;
+    deleteClients(selector: ConnectionSelector, msg: DeleteClientsMessage): Promise<string[]>;
+    inspect(selector: ConnectionSelector, msg: InspectUpMessage): Promise<void>;
+    updateAuth(selector: ConnectionSelector, msg: UpdateAuthMessage, authRevisionChanged: boolean): Promise<void>;
+    connContextManager: ConnectionContextManager;
+    readonly queryCount: number;
+    readonly rowCount: number;
+}
+export type SyncContext = ConnectionSelector & {
+    readonly profileID: string | null;
+    readonly baseCookie: string | null;
+    readonly protocolVersion: number;
+    readonly httpCookie: string | undefined;
+    readonly origin: string | undefined;
+    readonly userID: string | undefined;
+    readonly auth: Auth | undefined;
+};
+type SetTimeout = (fn: (...args: unknown[]) => void, delay?: number) => ReturnType<typeof setTimeout>;
+/**
+ * We update the ttlClock in flush that writes to the CVR but
+ * some flushes do not write to the CVR and in those cases we
+ * use a timer to update the ttlClock every minute.
+ */
+export declare const TTL_CLOCK_INTERVAL = 60000;
+/**
+ * This is some extra time we delay the TTL timer to allow for some
+ * slack in the timing of the timer. This is to allow multiple evictions
+ * to happen in a short period of time without having to wait for the
+ * next tick of the timer.
+ */
+export declare const TTL_TIMER_HYSTERESIS = 50;
+export declare class ViewSyncerService implements ViewSyncer, ActivityBasedService {
+    #private;
+    readonly id: string;
+    readonly connContextManager: ConnectionContextManager;
+    constructor(config: NormalizedZeroConfig, lc: LogContext, shard: ShardID, taskID: string, clientGroupID: string, cvrDb: PostgresDB, pipelineDriver: PipelineDriver, versionChanges: Subscription<ReplicaState>, drainCoordinator: DrainCoordinator, slowHydrateThreshold: number, inspectorDelegate: InspectorDelegate, connContextManager: ConnectionContextManager, customQueryTransformer: CustomQueryTransformer | undefined, runPriorityOp: <T>(lc: LogContext, description: string, op: () => Promise<T>) => Promise<T>, keepaliveMs?: number, setTimeoutFn?: SetTimeout);
+    readyState(): Promise<'initialized' | 'draining'>;
+    run(): Promise<void>;
+    get queryCount(): number;
+    get rowCount(): number;
+    /**
+     * Guarantees that the ViewSyncer will remain running for at least
+     * its configured `keepaliveMs`. This is called when establishing a
+     * new connection to ensure that its associated ViewSyncer isn't
+     * shutdown before it receives the connection.
+     *
+     * @return `true` if the ViewSyncer will stay alive, `false` if the
+     *         ViewSyncer is shutting down.
+     */
+    keepalive(): boolean;
+    initConnection(selector: ConnectionSelector, initConnectionMessage: InitConnectionMessage): Source<Downstream>;
+    changeDesiredQueries(selector: ConnectionSelector, msg: ChangeDesiredQueriesMessage): Promise<void>;
+    updateAuth(selector: ConnectionSelector, msg: UpdateAuthMessage, authRevisionChanged: boolean): Promise<void>;
+    deleteClients(selector: ConnectionSelector, msg: DeleteClientsMessage): Promise<string[]>;
+    inspect(selector: ConnectionSelector, msg: InspectUpMessage): Promise<void>;
+    stop(): Promise<void>;
+    /**
+     * Test helper: Manually mark initialization as complete.
+     * This should only be used in tests that don't call initConnection().
+     */
+    markInitialized(): void;
+}
+export declare class TimeSliceTimer {
+    #private;
+    constructor(lc: LogContext);
+    start(): Promise<this>;
+    startWithoutYielding(): this;
+    yieldProcess(_msgForTesting?: string): Promise<void>;
+    elapsedLap(): number;
+    /** @returns the total elapsed time */
+    stop(): number;
+    /**
+     * @returns the elapsed time. This can be called while the Timer is running
+     *          or after it has been stopped.
+     */
+    totalElapsed(): number;
+}
+export {};
+//# sourceMappingURL=view-syncer.d.ts.map

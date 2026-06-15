@@ -1,0 +1,27 @@
+import type { Condition, SimpleCondition } from '../../../zero-protocol/src/ast.ts';
+import type { Row, Value } from '../../../zero-protocol/src/data.ts';
+export type NonNullValue = Exclude<Value, null | undefined>;
+export type SimplePredicate = (rhs: Value) => boolean;
+export type SimplePredicateNoNull = (rhs: NonNullValue) => boolean;
+export type NoSubqueryCondition = SimpleCondition | {
+    type: 'and';
+    conditions: readonly NoSubqueryCondition[];
+} | {
+    type: 'or';
+    conditions: readonly NoSubqueryCondition[];
+};
+export declare function createPredicate(condition: NoSubqueryCondition): (row: Row) => boolean;
+/**
+ * If the condition contains any CorrelatedSubqueryConditions, returns a
+ * transformed condition which contains no CorrelatedSubqueryCondition(s) but
+ * which will filter a subset of the rows that would be filtered by the original
+ * condition, or undefined if no such transformation exists.
+ *
+ * If the condition does not contain any CorrelatedSubqueryConditions
+ * returns the condition unmodified and `conditionsRemoved: false`.
+ */
+export declare function transformFilters(filters: Condition | undefined): {
+    filters: NoSubqueryCondition | undefined;
+    conditionsRemoved: boolean;
+};
+//# sourceMappingURL=filter.d.ts.map

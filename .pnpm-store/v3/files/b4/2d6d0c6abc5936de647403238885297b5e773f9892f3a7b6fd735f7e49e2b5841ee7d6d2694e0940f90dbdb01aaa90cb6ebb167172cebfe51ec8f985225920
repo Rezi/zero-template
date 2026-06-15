@@ -1,0 +1,48 @@
+import { QueryDelegateBase } from "../../zql/src/query/query-delegate-base.js";
+import { TableSource } from "./table-source.js";
+//#region ../zqlite/src/query-delegate.ts
+var QueryDelegateImpl = class extends QueryDelegateBase {
+	#lc;
+	#db;
+	#schema;
+	#sources = /* @__PURE__ */ new Map();
+	#logConfig;
+	defaultQueryComplete = true;
+	#commitObservers = /* @__PURE__ */ new Set();
+	constructor(lc, db, schema, logConfig) {
+		super();
+		this.#lc = lc.withContext("class", "QueryDelegateImpl");
+		this.#db = db;
+		this.#schema = schema;
+		this.#logConfig = logConfig ?? {
+			format: "text",
+			ivmSampling: 0,
+			level: "info",
+			slowHydrateThreshold: 0,
+			slowRowThreshold: 0
+		};
+	}
+	getSource(tableName) {
+		let source = this.#sources.get(tableName);
+		if (source) return source;
+		const tableSchema = this.#schema.tables[tableName];
+		source = new TableSource(this.#lc, this.#logConfig, this.#db, tableName, tableSchema.columns, tableSchema.primaryKey);
+		this.#sources.set(tableName, source);
+		return source;
+	}
+	onTransactionCommit(cb) {
+		this.#commitObservers.add(cb);
+		return () => {
+			this.#commitObservers.delete(cb);
+		};
+	}
+	batchViewUpdates(applyViewUpdates) {
+		const ret = applyViewUpdates();
+		for (const observer of this.#commitObservers) observer();
+		return ret;
+	}
+};
+//#endregion
+export { QueryDelegateImpl };
+
+//# sourceMappingURL=query-delegate.js.map

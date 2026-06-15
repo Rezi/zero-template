@@ -1,0 +1,165 @@
+import { deepEqual } from "../../../shared/src/json.js";
+import { emptyHash } from "../hash.js";
+import { binarySearch, binarySearchFound, emptyDataNodeImpl, findLeaf, isDataNodeImpl, newNodeImpl, parseBTreeNode } from "./node.js";
+import { getSizeOfEntry } from "../../../shared/src/size-of-value.js";
+import { computeSplices } from "./splice.js";
+var BTreeRead = class {
+	_cache = /* @__PURE__ */ new Map();
+	_dagRead;
+	_formatVersion;
+	rootHash;
+	getEntrySize;
+	chunkHeaderSize;
+	constructor(dagRead, formatVersion, root = emptyHash, getEntrySize = getSizeOfEntry, chunkHeaderSize = 11) {
+		this._dagRead = dagRead;
+		this._formatVersion = formatVersion;
+		this.rootHash = root;
+		this.getEntrySize = getEntrySize;
+		this.chunkHeaderSize = chunkHeaderSize;
+	}
+	async getNode(hash) {
+		if (hash === emptyHash) return emptyDataNodeImpl;
+		const cached = this._cache.get(hash);
+		if (cached) return cached;
+		const data = parseBTreeNode((await this._dagRead.mustGetChunk(hash)).data, this._formatVersion, this.getEntrySize);
+		const impl = newNodeImpl(data[1], hash, data[0], false);
+		this._cache.set(hash, impl);
+		return impl;
+	}
+	async get(key) {
+		const leaf = await findLeaf(key, this.rootHash, this, this.rootHash);
+		const index = binarySearch(key, leaf.entries);
+		if (!binarySearchFound(index, leaf.entries, key)) return;
+		return leaf.entries[index][1];
+	}
+	async has(key) {
+		const leaf = await findLeaf(key, this.rootHash, this, this.rootHash);
+		return binarySearchFound(binarySearch(key, leaf.entries), leaf.entries, key);
+	}
+	async isEmpty() {
+		const { rootHash } = this;
+		const node = await this.getNode(this.rootHash);
+		if (this.rootHash !== rootHash) return this.isEmpty();
+		return node.entries.length === 0;
+	}
+	scan(fromKey) {
+		return scanForHash(this.rootHash, () => this.rootHash, this.rootHash, fromKey, async (hash) => {
+			const cached = await this.getNode(hash);
+			if (cached) return [cached.level, cached.isMutable ? cached.entries.slice() : cached.entries];
+			return parseBTreeNode((await this._dagRead.mustGetChunk(hash)).data, this._formatVersion, this.getEntrySize);
+		});
+	}
+	async *keys() {
+		yield* (await this.getNode(this.rootHash)).keys(this);
+	}
+	async *entries() {
+		yield* (await this.getNode(this.rootHash)).entriesIter(this);
+	}
+	[Symbol.asyncIterator]() {
+		return this.entries();
+	}
+	async *diff(last) {
+		const [currentNode, lastNode] = await Promise.all([this.getNode(this.rootHash), last.getNode(last.rootHash)]);
+		yield* diffNodes(lastNode, currentNode, last, this);
+	}
+};
+async function* diffNodes(last, current, lastTree, currentTree) {
+	if (last.level > current.level) {
+		yield* diffNodes(await last.getCompositeChildren(0, last.entries.length, lastTree), current, lastTree, currentTree);
+		return;
+	}
+	if (current.level > last.level) {
+		yield* diffNodes(last, await current.getCompositeChildren(0, current.entries.length, currentTree), lastTree, currentTree);
+		return;
+	}
+	if (isDataNodeImpl(last) && isDataNodeImpl(current)) {
+		yield* diffEntries(last.entries, current.entries);
+		return;
+	}
+	const initialSplices = computeSplices(last.entries, current.entries);
+	for (const splice of initialSplices) {
+		const [lastChild, currentChild] = await Promise.all([last.getCompositeChildren(splice[0], splice[1], lastTree), current.getCompositeChildren(splice[3], splice[2], currentTree)]);
+		yield* diffNodes(lastChild, currentChild, lastTree, currentTree);
+	}
+}
+function* diffEntries(lastEntries, currentEntries) {
+	const lastLength = lastEntries.length;
+	const currentLength = currentEntries.length;
+	let i = 0;
+	let j = 0;
+	while (i < lastLength && j < currentLength) {
+		const lastKey = lastEntries[i][0];
+		const currentKey = currentEntries[j][0];
+		if (lastKey === currentKey) {
+			if (!deepEqual(lastEntries[i][1], currentEntries[j][1])) yield {
+				op: "change",
+				key: lastKey,
+				oldValue: lastEntries[i][1],
+				newValue: currentEntries[j][1]
+			};
+			i++;
+			j++;
+		} else if (lastKey < currentKey) {
+			yield {
+				op: "del",
+				key: lastKey,
+				oldValue: lastEntries[i][1]
+			};
+			i++;
+		} else {
+			yield {
+				op: "add",
+				key: currentKey,
+				newValue: currentEntries[j][1]
+			};
+			j++;
+		}
+	}
+	for (; i < lastLength; i++) yield {
+		op: "del",
+		key: lastEntries[i][0],
+		oldValue: lastEntries[i][1]
+	};
+	for (; j < currentLength; j++) yield {
+		op: "add",
+		key: currentEntries[j][0],
+		newValue: currentEntries[j][1]
+	};
+}
+async function* scanForHash(expectedRootHash, getRootHash, hash, fromKey, readNode) {
+	if (hash === emptyHash) return;
+	const data = await readNode(hash);
+	const entries = data[1];
+	let i = 0;
+	if (fromKey) i = binarySearch(fromKey, entries);
+	if (data[0] > 0) for (; i < entries.length; i++) {
+		yield* scanForHash(expectedRootHash, getRootHash, entries[i][1], fromKey, readNode);
+		fromKey = "";
+	}
+	else for (; i < entries.length; i++) {
+		const rootHash = getRootHash();
+		if (expectedRootHash !== rootHash) {
+			yield* scanForHash(rootHash, getRootHash, rootHash, entries[i][0], readNode);
+			return;
+		}
+		yield entries[i];
+	}
+}
+async function allEntriesAsDiff(map, op) {
+	const diff = [];
+	const make = op === "add" ? (entry) => ({
+		op: "add",
+		key: entry[0],
+		newValue: entry[1]
+	}) : (entry) => ({
+		op: "del",
+		key: entry[0],
+		oldValue: entry[1]
+	});
+	for await (const entry of map.entries()) diff.push(make(entry));
+	return diff;
+}
+//#endregion
+export { BTreeRead, allEntriesAsDiff };
+
+//# sourceMappingURL=read.js.map

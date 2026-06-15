@@ -1,0 +1,14 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { Enum } from '../../../shared/src/enum.ts';
+import type { Write as DagWrite } from '../dag/store.ts';
+import * as FormatVersion from '../format-version-enum.ts';
+import type { Hash } from '../hash.ts';
+import type { ZeroTxData } from '../replicache-options.ts';
+import type { ClientID } from '../sync/ids.ts';
+import type { MutatorDefs } from '../types.ts';
+import { type Commit, type LocalMeta, type Meta } from './commit.ts';
+type FormatVersion = Enum<typeof FormatVersion>;
+export declare function rebaseMutationAndPutCommit(mutation: Commit<LocalMeta>, dagWrite: DagWrite, basis: Hash, mutators: MutatorDefs, lc: LogContext, mutationClientID: ClientID, formatVersion: FormatVersion, zeroData: ZeroTxData | undefined): Promise<Commit<Meta>>;
+export declare function rebaseMutationAndCommit(mutation: Commit<LocalMeta>, dagWrite: DagWrite, basis: Hash, headName: string, mutators: MutatorDefs, lc: LogContext, mutationClientID: ClientID, formatVersion: FormatVersion, zeroData: ZeroTxData | undefined): Promise<Hash>;
+export {};
+//# sourceMappingURL=rebase.d.ts.map

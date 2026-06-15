@@ -1,0 +1,28 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { DocumentVisibilityWatcher } from '../../shared/src/document-visible.ts';
+export declare const DEBOUNCE_DELAY_MS = 10;
+export declare const MIN_DELAY_MS = 30;
+export declare const MAX_DELAY_MS = 60000;
+export interface ConnectionLoopDelegate {
+    invokeSend(): Promise<boolean>;
+    debounceDelay: number;
+    watchdogTimer: number | null;
+    maxConnections: number;
+    maxDelayMs: number;
+    minDelayMs: number;
+}
+export declare class ConnectionLoop {
+    #private;
+    constructor(lc: LogContext, delegate: ConnectionLoopDelegate, visibilityWatcher?: DocumentVisibilityWatcher);
+    close(): void;
+    /**
+     *
+     * @returns Returns undefined if ok, otherwise it return the error that caused
+     * the send to fail.
+     */
+    send(now: boolean): Promise<undefined | {
+        error: unknown;
+    }>;
+    run(): Promise<void>;
+}
+//# sourceMappingURL=connection-loop.d.ts.map

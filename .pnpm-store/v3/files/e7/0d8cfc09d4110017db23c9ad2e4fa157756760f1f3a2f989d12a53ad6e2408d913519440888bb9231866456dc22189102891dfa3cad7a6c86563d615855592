@@ -1,0 +1,2 @@
+export declare function randomUint64(): bigint;
+//# sourceMappingURL=random-uint64.d.ts.map

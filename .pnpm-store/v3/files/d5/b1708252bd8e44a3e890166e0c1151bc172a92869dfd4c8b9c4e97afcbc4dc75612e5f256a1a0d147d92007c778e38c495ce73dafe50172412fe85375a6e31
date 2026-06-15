@@ -1,0 +1,34 @@
+import { valita_exports } from "../../../../shared/src/valita.js";
+import { changeSourceTimingsSchema } from "../replicator/reporter/report-schema.js";
+import { changeStreamDataSchema } from "../change-source/protocol/current/downstream.js";
+//#region ../zero-cache/src/services/change-streamer/change-streamer.ts
+/**
+* The StatusMessage payload for now is empty, but can be extended to
+* include meta-level information in the future.
+*/
+var statusSchema = valita_exports.object({
+	tag: valita_exports.literal("status"),
+	lagReport: valita_exports.object({
+		lastTimings: changeSourceTimingsSchema.optional(),
+		nextSendTimeMs: valita_exports.number()
+	}).optional()
+});
+var statusMessageSchema = valita_exports.tuple([valita_exports.literal("status"), statusSchema]);
+var subscriptionErrorSchema = valita_exports.object({
+	type: valita_exports.number(),
+	message: valita_exports.string().optional()
+});
+var errorSchema = valita_exports.tuple([valita_exports.literal("error"), subscriptionErrorSchema]);
+var downstreamSchema = valita_exports.union(statusMessageSchema, changeStreamDataSchema, errorSchema);
+function errorTypeToReadableName(val) {
+	switch (val) {
+		case 1: return "WrongReplicaVersion";
+		case 2: return "WatermarkTooOld";
+		case 0: return "Unknown";
+		default: return "Unknown";
+	}
+}
+//#endregion
+export { downstreamSchema, errorTypeToReadableName };
+
+//# sourceMappingURL=change-streamer.js.map

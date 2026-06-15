@@ -1,0 +1,295 @@
+import { Closed, Connected, Connecting, Disconnected, Error, NeedsAuth } from "./connection-status-enum.js";
+import { Subscribable } from "../../../shared/src/subscribable.js";
+import { ClientClosed, Offline } from "./client-error-kind-enum.js";
+import { ClientError, isClientError } from "./error.js";
+import { resolver } from "@rocicorp/resolver";
+//#region ../zero-client/src/client/connection-manager.ts
+var DEFAULT_TIMEOUT_CHECK_INTERVAL_MS = 1e3;
+var TERMINAL_STATES = [NeedsAuth, Error];
+var ConnectionManager = class ConnectionManager extends Subscribable {
+	#state;
+	#connectRequestResolver = resolver();
+	/**
+	* The timestamp when we first started trying to connect.
+	* This is used to track the retry window.
+	* Reset to undefined when we successfully connect or when we transition to disconnected.
+	*/
+	#connectingStartedAt;
+	/**
+	* The amount of milliseconds we allow for continuous connecting attempts before
+	* transitioning to disconnected state.
+	*/
+	#disconnectTimeout;
+	/**
+	* Handle for the timeout interval that periodically checks whether we've
+	* exceeded the allowed connecting window.
+	*/
+	#timeoutInterval;
+	/**
+	* Interval duration for checking whether the connecting timeout has elapsed.
+	*/
+	#timeoutCheckIntervalMs;
+	/**
+	* Resolver used to signal waiting callers when the state changes.
+	*/
+	#stateChangeResolver = resolver();
+	constructor(options) {
+		super();
+		const now = Date.now();
+		this.#disconnectTimeout = options.disconnectTimeout;
+		this.#timeoutCheckIntervalMs = options.timeoutCheckIntervalMs ?? DEFAULT_TIMEOUT_CHECK_INTERVAL_MS;
+		this.#state = {
+			name: Connecting,
+			attempt: 0,
+			disconnectAt: now + this.#disconnectTimeout
+		};
+		this.#connectingStartedAt = now;
+		this.#maybeStartTimeoutInterval();
+	}
+	get state() {
+		return this.#state;
+	}
+	/**
+	* Returns true if the current state is equal to the given status.
+	*/
+	is(status) {
+		return this.#state.name === status;
+	}
+	/**
+	* Returns true if the current state is a terminal state
+	* that can be recovered from by calling connect().
+	*/
+	isInTerminalState() {
+		return ConnectionManager.isTerminalState(this.#state);
+	}
+	/**
+	* Returns true if the given status is a terminal state
+	* that can be recovered from by calling connect().
+	*/
+	static isTerminalState(state) {
+		return TERMINAL_STATES.includes(state.name);
+	}
+	/**
+	* Returns true if the run loop should continue.
+	* The run loop continues in all states except closed.
+	* In needs-auth and error states, the run loop pauses and waits for connect() to be called.
+	*/
+	shouldContinueRunLoop() {
+		return this.#state.name !== Closed;
+	}
+	/**
+	* Waits for the next state change.
+	* @returns A promise that resolves when the next state change occurs.
+	*/
+	waitForStateChange() {
+		return this.#nextStatePromise();
+	}
+	requestConnect() {
+		if (this.#connectRequestResolver === void 0) return;
+		this.#connectRequestResolver.resolve();
+		this.#connectRequestResolver = void 0;
+	}
+	waitForConnectRequest() {
+		return this.#connectRequestResolver === void 0 ? Promise.resolve() : this.#connectRequestResolver.promise;
+	}
+	#consumeConnectRequest() {
+		if (this.#connectRequestResolver !== void 0) return false;
+		this.#connectRequestResolver = resolver();
+		return true;
+	}
+	/**
+	* Consume a pending connect request and resume connecting.
+	*
+	* @returns true if a pending request was handled.
+	*/
+	resumeFromConnectRequest() {
+		if (!this.isInTerminalState()) return false;
+		if (!this.#consumeConnectRequest()) return false;
+		this.connecting();
+		return true;
+	}
+	/**
+	* Transition to connecting state.
+	*
+	* This starts the timeout timer, but if we've entered disconnected state,
+	* we stay there and continue retrying.
+	*
+	* If we're disconnected due to a hidden tab, allow a transition back to
+	* connecting when visibility returns.
+	*
+	* @returns An object containing a promise that resolves on the next state change.
+	*/
+	connecting(reason) {
+		if (this.#state.name === "closed") return { nextStatePromise: this.#nextStatePromise() };
+		const isHiddenDisconnect = this.#state.name === "disconnected" && this.#state.reason.kind === "Hidden";
+		if (this.#state.name === "disconnected" && !isHiddenDisconnect) return { nextStatePromise: this.#nextStatePromise() };
+		const now = Date.now();
+		if (isHiddenDisconnect) this.#connectingStartedAt = void 0;
+		if (this.#state.name === "connecting") {
+			this.#state = {
+				...this.#state,
+				attempt: this.#state.attempt + 1,
+				reason
+			};
+			const nextStatePromise = this.#publishStateAndGetPromise();
+			this.#maybeStartTimeoutInterval();
+			return { nextStatePromise };
+		}
+		if (this.#connectingStartedAt === void 0) this.#connectingStartedAt = now;
+		this.#state = {
+			name: Connecting,
+			attempt: 1,
+			disconnectAt: this.#connectingStartedAt + this.#disconnectTimeout,
+			reason
+		};
+		const nextStatePromise = this.#publishStateAndGetPromise();
+		this.#maybeStartTimeoutInterval();
+		return { nextStatePromise };
+	}
+	/**
+	* Transition to connected state.
+	* This resets the connecting timeout timer.
+	*
+	* @returns An object containing a promise that resolves on the next state change.
+	*/
+	connected() {
+		if (this.#state.name === "closed") return { nextStatePromise: this.#nextStatePromise() };
+		if (this.#state.name === "connected") return { nextStatePromise: this.#nextStatePromise() };
+		this.#connectingStartedAt = void 0;
+		this.#maybeStopTimeoutInterval();
+		this.#state = { name: Connected };
+		return { nextStatePromise: this.#publishStateAndGetPromise() };
+	}
+	/**
+	* Transition to disconnected state.
+	* This is called when the timeout expires.
+	* The run loop will continue trying to reconnect.
+	*
+	* @returns An object containing a promise that resolves on the next state change.
+	*/
+	disconnected(reason) {
+		if (this.#state.name === "closed") return { nextStatePromise: this.#nextStatePromise() };
+		if (this.#state.name === "disconnected") return { nextStatePromise: this.#nextStatePromise() };
+		if (this.#state.name === "connected") this.#connectingStartedAt = void 0;
+		this.#maybeStopTimeoutInterval();
+		this.#state = {
+			name: Disconnected,
+			reason
+		};
+		return { nextStatePromise: this.#publishStateAndGetPromise() };
+	}
+	/**
+	* Transition to needs-auth state.
+	* This pauses the run loop until connect() is called with new credentials.
+	* Resets the retry window and attempt counter.
+	*
+	* @returns An object containing a promise that resolves on the next state change.
+	*/
+	needsAuth(reason) {
+		if (this.#state.name === "closed") return { nextStatePromise: this.#nextStatePromise() };
+		if (this.#state.name === "needs-auth") return { nextStatePromise: this.#nextStatePromise() };
+		this.#connectingStartedAt = void 0;
+		this.#maybeStopTimeoutInterval();
+		this.#state = {
+			name: NeedsAuth,
+			reason
+		};
+		return { nextStatePromise: this.#publishStateAndGetPromise() };
+	}
+	/**
+	* Transition to error state.
+	* This pauses the run loop until connect() is called.
+	* Resets the retry window and attempt counter.
+	*
+	* @returns An object containing a promise that resolves on the next state change.
+	*/
+	error(reason) {
+		if (this.#state.name === "closed") return { nextStatePromise: this.#nextStatePromise() };
+		if (this.#state.name === "error") return { nextStatePromise: this.#nextStatePromise() };
+		this.#connectingStartedAt = void 0;
+		this.#maybeStopTimeoutInterval();
+		this.#state = {
+			name: Error,
+			reason
+		};
+		return { nextStatePromise: this.#publishStateAndGetPromise() };
+	}
+	/**
+	* Transition to closed state.
+	* This is terminal - no further transitions are allowed.
+	*/
+	closed() {
+		if (this.#state.name === "closed") return;
+		this.#connectingStartedAt = void 0;
+		this.#maybeStopTimeoutInterval();
+		this.#state = {
+			name: Closed,
+			reason: new ClientError({
+				kind: ClientClosed,
+				message: "Zero was explicitly closed by calling zero.close()"
+			})
+		};
+		this.#publishState();
+		this.cleanup();
+	}
+	cleanup = () => {
+		this._listeners.clear();
+		this.#resolveNextStateWaiters();
+	};
+	#resolveNextStateWaiters() {
+		this.#stateChangeResolver.resolve(this.#state);
+		this.#stateChangeResolver = resolver();
+	}
+	#publishState() {
+		this.notify(this.#state);
+		this.#resolveNextStateWaiters();
+	}
+	#nextStatePromise() {
+		return this.#stateChangeResolver.promise;
+	}
+	#publishStateAndGetPromise() {
+		this.#publishState();
+		return this.#nextStatePromise();
+	}
+	/**
+	* Check if we should transition from connecting to disconnected due to timeout.
+	* Returns true if the transition happened.
+	*/
+	#checkTimeout() {
+		if (this.#state.name !== "connecting") return false;
+		if (Date.now() >= this.#state.disconnectAt) {
+			this.disconnected(new ClientError({
+				kind: Offline,
+				message: `Zero was unable to connect for ${Math.floor(this.#disconnectTimeout / 1e3)} seconds and was disconnected`
+			}));
+			return true;
+		}
+		return false;
+	}
+	#maybeStartTimeoutInterval() {
+		if (this.#timeoutInterval !== void 0) return;
+		this.#timeoutInterval = setInterval(() => {
+			this.#checkTimeout();
+		}, this.#timeoutCheckIntervalMs);
+	}
+	#maybeStopTimeoutInterval() {
+		if (this.#timeoutInterval === void 0) return;
+		clearInterval(this.#timeoutInterval);
+		this.#timeoutInterval = void 0;
+	}
+};
+/**
+* Used to trigger the catch block when a terminal state is reached.
+*
+* @param state - The current connection state.
+*/
+var throwIfConnectionError = (state) => {
+	if (ConnectionManager.isTerminalState(state) || state.name === "closed" || (state.name === "connecting" || state.name === "disconnected") && state.reason) {
+		if (isClientError(state.reason) && (state.reason.kind === "ConnectTimeout" || state.reason.kind === "AbruptClose" || state.reason.kind === "CleanClose" || state.reason.kind === "Hidden")) return;
+		throw state.reason;
+	}
+};
+//#endregion
+export { ConnectionManager, throwIfConnectionError };
+
+//# sourceMappingURL=connection-manager.js.map

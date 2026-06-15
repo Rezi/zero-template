@@ -1,0 +1,378 @@
+import { unreachable } from "../../../../shared/src/asserts.js";
+import { promiseVoid } from "../../../../shared/src/resolved-promises.js";
+import "../change-source/protocol/current/downstream.js";
+import { getOrCreateCounter } from "../../observability/metrics.js";
+import { DEFAULT_MAX_RETRY_DELAY_MS, RunningState, UnrecoverableError } from "../running-state.js";
+import { min } from "../../types/lexi-version.js";
+import { publishCriticalEvent } from "../../observability/events.js";
+import { AutoResetSignal, ensureReplicationConfig, markResetRequired } from "./schema/tables.js";
+import { Subscription } from "../../types/subscription.js";
+import { publishReplicationError, replicationStatusError } from "../replicator/replication-status.js";
+import "./change-streamer.js";
+import { Forwarder } from "./forwarder.js";
+import { initChangeStreamerSchema } from "./schema/init.js";
+import { Storer } from "./storer.js";
+import { Subscriber } from "./subscriber.js";
+import { resolver } from "@rocicorp/resolver";
+import { getDefaultHighWaterMark } from "node:stream";
+//#region ../zero-cache/src/services/change-streamer/change-streamer-service.ts
+/**
+* Performs initialization and schema migrations to initialize a ChangeStreamerImpl.
+*/
+async function initializeStreamer(lc, shard, taskID, discoveryAddress, discoveryProtocol, changeDB, changeSource, replicationStatusPublisher, subscriptionState, purgeLock, autoReset, opts, setTimeoutFn = setTimeout) {
+	await initChangeStreamerSchema(lc, changeDB, shard);
+	await ensureReplicationConfig(lc, changeDB, subscriptionState, shard, autoReset, setTimeoutFn);
+	const { replicaVersion } = subscriptionState;
+	return new ChangeStreamerImpl(lc, shard, taskID, discoveryAddress, discoveryProtocol, changeDB, replicaVersion, changeSource, replicationStatusPublisher, purgeLock, autoReset, opts, setTimeoutFn);
+}
+var REPLICATION_STATUS_ERROR_DELAY_THRESHOLD_MS = 5e3;
+/**
+* Upstream-agnostic dispatch of messages in a {@link ChangeStreamMessage} to a
+* {@link Forwarder} and {@link Storer} to execute the forward-store-ack
+* procedure described in {@link ChangeStreamer}.
+*
+* ### Subscriber Catchup
+*
+* Connecting clients first need to be "caught up" to the current watermark
+* (from stored change log entries) before new entries are forwarded to
+* them. This is non-trivial because the replication stream may be in the
+* middle of a pending streamed Transaction for which some entries have
+* already been forwarded but are not yet committed to the store.
+*
+*
+* ```
+* ------------------------------- - - - - - - - - - - - - - - - - - - -
+* | Historic changes in storage |  Pending (streamed) tx  |   Next tx
+* ------------------------------- - - - - - - - - - - - - - - - - - - -
+*                                           Replication stream
+*                                           >  >  >  >  >  >  >  >  >
+*           ^  ---> required catchup --->   ^
+* Subscriber watermark               Subscription begins
+* ```
+*
+* Preemptively buffering the changes of every pending transaction
+* would be wasteful and consume too much memory for large transactions.
+*
+* Instead, the streamer synchronously dispatches changes and subscriptions
+* to the {@link Forwarder} and the {@link Storer} such that the two
+* components are aligned as to where in the stream the subscription started.
+* The two components then coordinate catchup and handoff via the
+* {@link Subscriber} object with the following algorithm:
+*
+* * If the streamer is in the middle of a pending Transaction, the
+*   Subscriber is "queued" on both the Forwarder and the Storer. In this
+*   state, new changes are *not* forwarded to the Subscriber, and catchup
+*   is not yet executed.
+* * Once the commit message for the pending Transaction is processed
+*   by the Storer, it begins catchup on the Subscriber (with a READONLY
+*   snapshot so that it does not block subsequent storage operations).
+*   This catchup is thus guaranteed to load the change log entries of
+*   that last Transaction.
+* * When the Forwarder processes that same commit message, it moves the
+*   Subscriber from the "queued" to the "active" set of clients such that
+*   the Subscriber begins receiving new changes, starting from the next
+*   Transaction.
+* * The Subscriber does not forward those changes, however, if its catchup
+*   is not complete. Until then, it buffers the changes in memory.
+* * Once catchup is complete, the buffered changes are immediately sent
+*   and the Subscriber henceforth forwards changes as they are received.
+*
+* In the (common) case where the streamer is not in the middle of a pending
+* transaction when a subscription begins, the Storer begins catchup
+* immediately and the Forwarder directly adds the Subscriber to its active
+* set. However, the Subscriber still buffers any forwarded messages until
+* its catchup is complete.
+*
+* ### Watermarks and ordering
+*
+* The ChangeStreamerService depends on its {@link ChangeSource} to send
+* changes in contiguous [`begin`, `data` ..., `data`, `commit`] sequences
+* in commit order. This follows Postgres's Logical Replication Protocol
+* Message Flow:
+*
+* https://www.postgresql.org/docs/16/protocol-logical-replication.html#PROTOCOL-LOGICAL-MESSAGES-FLOW
+*
+* > The logical replication protocol sends individual transactions one by one.
+* > This means that all messages between a pair of Begin and Commit messages belong to the same transaction.
+*
+* In order to correctly replay (new) and filter (old) messages to subscribers
+* at different points in the replication stream, these changes must be assigned
+* watermarks such that they preserve the order in which they were received
+* from the ChangeSource.
+*
+* A previous implementation incorrectly derived these watermarks from the Postgres
+* Log Sequence Numbers (LSN) of each message. However, LSNs from concurrent,
+* non-conflicting transactions can overlap, which can result in a `begin` message
+* with an earlier LSN arriving after a `commit` message. For example, the
+* changes for these transactions:
+*
+* ```
+* LSN:   1     2     3  4    5   6   7     8   9      10
+* tx1: begin  data     data     data     commit
+* tx2:             begin    data    data      data  commit
+* ```
+*
+* will arrive as:
+*
+* ```
+* begin1, data2, data4, data6, commit8, begin3, data5, data7, data9, commit10
+* ```
+*
+* Thus, LSN of non-commit messages are not suitable for tracking the sorting
+* order of the replication stream.
+*
+* Instead, the ChangeStreamer uses the following algorithm for deterministic
+* catchup and filtering of changes:
+*
+* * A `commit` message is assigned to a watermark corresponding to its LSN.
+*   These are guaranteed to be in commit order by definition.
+*
+* * `begin` and `data` messages are assigned to the watermark of the
+*   preceding `commit` (the previous transaction, or the replication
+*   slot's starting LSN) plus 1. This guarantees that they will be sorted
+*   after the previously commit transaction even if their LSNs came before it.
+*   This is referred to as the `preCommitWatermark`.
+*
+* * In the ChangeLog DB, messages have a secondary sort column `pos`, which is
+*   the position of the message within its transaction, with the `begin` message
+*   starting at `0`. This guarantees that `begin` and `data` messages will be
+*   fetched in the original ChangeSource order during catchup.
+*
+* `begin` and `data` messages share the same watermark, but this is sufficient for
+* Subscriber filtering because subscribers only know about the `commit` watermarks
+* exposed in the `Downstream` `Commit` message. The Subscriber object thus compares
+* the internal watermarks of the incoming messages against the commit watermark of
+* the caller, updating the watermark at every `Commit` message that is forwarded.
+*
+* ### Cleanup
+*
+* As mentioned in the {@link ChangeStreamer} documentation: "the ChangeStreamer
+* uses a combination of [the "initial", i.e. backup-derived watermark and] ACK
+* responses from connected subscribers to determine the watermark up
+* to which it is safe to purge old change log entries."
+*
+* More concretely:
+*
+* * The `initial`, backup-derived watermark is the earliest to which cleanup
+*   should ever happen.
+*
+* * However, it is possible for the replica backup to be *ahead* of a connected
+*   subscriber; and if a network error causes that subscriber to retry from its
+*   last watermark, the change streamer must support it.
+*
+* Thus, before cleaning up to an `initial` backup-derived watermark, the change
+* streamer first confirms that all connected subscribers have also passed
+* that watermark.
+*/
+var ChangeStreamerImpl = class {
+	id;
+	#lc;
+	#shard;
+	#changeDB;
+	#replicaVersion;
+	#source;
+	#storer;
+	#forwarder;
+	#replicationStatusPublisher;
+	#autoReset;
+	#state;
+	#initialWatermarks = /* @__PURE__ */ new Set();
+	#serving = resolver();
+	#txCounter = getOrCreateCounter("replication", "transactions", "Count of replicated transactions");
+	#changeCounter = getOrCreateCounter("replication", "changes", "Count of replicated changes (DML or DDL statements)");
+	#latestStatus;
+	#purgeLock;
+	#stream;
+	constructor(lc, shard, taskID, discoveryAddress, discoveryProtocol, changeDB, replicaVersion, source, replicationStatusPublisher, initialPurgeLock, autoReset, opts, setTimeoutFn = setTimeout) {
+		this.id = `change-streamer`;
+		this.#lc = lc.withContext("component", "change-streamer");
+		this.#shard = shard;
+		this.#changeDB = changeDB;
+		this.#replicaVersion = replicaVersion;
+		this.#source = source;
+		this.#storer = new Storer(lc, shard, taskID, discoveryAddress, discoveryProtocol, changeDB, replicaVersion, (consumed) => this.#stream?.acks.push([
+			"status",
+			consumed[1],
+			consumed[2]
+		]), (err) => this.stop(err), opts);
+		this.#forwarder = new Forwarder(lc, { flowControlConsensusPaddingSeconds: opts.flowControlConsensusPaddingSeconds });
+		this.#replicationStatusPublisher = replicationStatusPublisher;
+		this.#purgeLock = initialPurgeLock;
+		this.#autoReset = autoReset;
+		this.#state = new RunningState(this.id, void 0, setTimeoutFn);
+		this.#latestStatus = { tag: "status" };
+	}
+	async run() {
+		this.#lc.info?.("starting change stream");
+		this.#forwarder.startProgressMonitor();
+		const lagReport = await this.#source.startLagReporter();
+		if (lagReport) this.#latestStatus.lagReport = lagReport;
+		await this.#storer.assumeOwnership(this.#purgeLock);
+		this.#purgeLock = null;
+		const flushBytesThreshold = getDefaultHighWaterMark(false);
+		while (this.#state.shouldRun()) {
+			let err;
+			let watermark = null;
+			let unflushedBytes = 0;
+			try {
+				const { lastWatermark, backfillRequests } = await this.#storer.getStartStreamInitializationParameters();
+				const stream = await this.#source.startStream(lastWatermark, backfillRequests);
+				this.#storer.run().catch((e) => stream.changes.cancel(e));
+				this.#stream = stream;
+				if (this.#state.resetBackoff() > REPLICATION_STATUS_ERROR_DELAY_THRESHOLD_MS) this.#replicationStatusPublisher.publish(this.#lc, "Replicating", `Replicating from ${lastWatermark}`);
+				watermark = null;
+				for await (const change of stream.changes) {
+					const [type, msg] = change;
+					switch (type) {
+						case "status":
+							if (msg.ack) this.#storer.status(change);
+							if (msg.lagReport) {
+								this.#latestStatus.lagReport = msg.lagReport;
+								this.#forwarder.sendStatus(this.#latestStatus);
+							}
+							continue;
+						case "control":
+							await this.#handleControlMessage(msg);
+							continue;
+						case "begin":
+							watermark = change[2].commitWatermark;
+							break;
+						case "commit":
+							if (watermark !== change[2].watermark) throw new UnrecoverableError(`commit watermark ${change[2].watermark} does not match 'begin' watermark ${watermark}`);
+							this.#txCounter.add(1);
+							break;
+						default:
+							if (type === "data") this.#changeCounter.add(1);
+							if (watermark === null) throw new UnrecoverableError(`${type} change (${msg.tag}) received before 'begin' message`);
+							break;
+					}
+					const json = this.#storer.store(watermark, change);
+					const entry = [
+						watermark,
+						change[1].tag,
+						json
+					];
+					unflushedBytes += json.length;
+					if (unflushedBytes < flushBytesThreshold) this.#forwarder.forward(entry);
+					else {
+						await this.#forwarder.forwardWithFlowControl(entry);
+						unflushedBytes = 0;
+					}
+					if (type === "commit" || type === "rollback") watermark = null;
+					const readyForMore = this.#storer.readyForMore();
+					if (readyForMore) await readyForMore;
+				}
+			} catch (e) {
+				err = e;
+			} finally {
+				this.#stream?.changes.cancel();
+				this.#stream = void 0;
+			}
+			if (watermark) {
+				this.#lc.warn?.(`aborting interrupted transaction ${watermark}`);
+				this.#storer.abort();
+				this.#forwarder.forward([
+					watermark,
+					"rollback",
+					ROLLBACK_JSON
+				]);
+			}
+			await Promise.all([
+				this.#storer.stop(),
+				this.#state.backoff(this.#lc, err),
+				this.#state.retryDelay > REPLICATION_STATUS_ERROR_DELAY_THRESHOLD_MS ? publishCriticalEvent(this.#lc, replicationStatusError(this.#lc, "Replicating", err)) : promiseVoid
+			]);
+		}
+		this.#forwarder.stopProgressMonitor();
+		this.#lc.info?.("ChangeStreamer stopped");
+	}
+	async #handleControlMessage(msg) {
+		this.#lc.info?.("received control message", msg);
+		const { tag } = msg;
+		switch (tag) {
+			case "reset-required":
+				await markResetRequired(this.#changeDB, this.#shard);
+				await publishReplicationError(this.#lc, "Replicating", msg.message ?? "Resync required", msg.errorDetails);
+				if (this.#autoReset) {
+					this.#lc.warn?.("shutting down for auto-reset");
+					await this.stop(new AutoResetSignal());
+				}
+				break;
+			default: unreachable(tag);
+		}
+	}
+	subscribe(ctx) {
+		const { protocolVersion, id, mode, replicaVersion, watermark } = ctx;
+		if (mode === "serving") this.#serving.resolve();
+		const downstream = Subscription.create({ cleanup: () => this.#forwarder.remove(subscriber) });
+		const subscriber = new Subscriber(protocolVersion, id, watermark, downstream, () => this.#latestStatus);
+		if (replicaVersion !== this.#replicaVersion) {
+			this.#lc.warn?.(`rejecting subscriber at replica version ${replicaVersion}`);
+			subscriber.close(1, `current replica version is ${this.#replicaVersion} (requested ${replicaVersion})`);
+		} else {
+			this.#lc.debug?.(`adding subscriber ${subscriber.id}`);
+			this.#forwarder.add(subscriber);
+			this.#storer.catchup(subscriber, mode);
+		}
+		return Promise.resolve(downstream);
+	}
+	scheduleCleanup(watermark) {
+		const origSize = this.#initialWatermarks.size;
+		this.#initialWatermarks.add(watermark);
+		if (origSize === 0) this.#state.setTimeout(() => this.#purgeOldChanges(), CLEANUP_DELAY_MS);
+	}
+	async getChangeLogState() {
+		const minWatermark = await this.#storer.getMinWatermarkForCatchup();
+		if (!minWatermark) this.#lc.warn?.(`Unexpected empty changeLog. Resync if "Local replica watermark" errors arise`);
+		return {
+			replicaVersion: this.#replicaVersion,
+			minWatermark: minWatermark ?? this.#replicaVersion
+		};
+	}
+	/**
+	* Makes a best effort to purge the change log. In the event of a database
+	* error, exceptions will be logged and swallowed, so this method is safe
+	* to run in a timeout.
+	*/
+	async #purgeOldChanges() {
+		const initial = [...this.#initialWatermarks];
+		if (initial.length === 0) {
+			this.#lc.warn?.("No initial watermarks to check for cleanup");
+			return;
+		}
+		const current = [...this.#forwarder.getAcks()];
+		if (current.length === 0) {
+			this.#lc.warn?.("No subscribers to confirm cleanup");
+			return;
+		}
+		try {
+			const earliestInitial = min(...initial);
+			const earliestCurrent = min(...current);
+			if (earliestCurrent < earliestInitial) this.#lc.info?.(`At least one client is behind backup (${earliestCurrent} < ${earliestInitial})`);
+			else {
+				this.#lc.info?.(`Purging changes before ${earliestInitial} ...`);
+				const start = performance.now();
+				const deleted = await this.#storer.purgeRecordsBefore(earliestInitial);
+				const elapsed = (performance.now() - start).toFixed(2);
+				this.#lc.info?.(`Purged ${deleted} changes before ${earliestInitial} (${elapsed} ms)`);
+				this.#initialWatermarks.delete(earliestInitial);
+			}
+		} catch (e) {
+			this.#lc.warn?.(`error purging change log`, e);
+		} finally {
+			if (this.#initialWatermarks.size) this.#state.setTimeout(() => this.#purgeOldChanges(), CLEANUP_DELAY_MS);
+		}
+	}
+	async stop(err) {
+		this.#state.stop(this.#lc, err);
+		this.#stream?.changes.cancel();
+		await this.#storer.stop();
+		await this.#source.stop();
+	}
+};
+var CLEANUP_DELAY_MS = DEFAULT_MAX_RETRY_DELAY_MS * 3;
+var ROLLBACK_JSON = JSON.stringify(["rollback", { tag: "rollback" }]);
+//#endregion
+export { initializeStreamer };
+
+//# sourceMappingURL=change-streamer-service.js.map

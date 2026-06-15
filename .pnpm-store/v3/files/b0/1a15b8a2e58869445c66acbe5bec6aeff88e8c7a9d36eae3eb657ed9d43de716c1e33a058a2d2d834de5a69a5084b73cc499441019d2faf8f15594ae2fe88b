@@ -1,0 +1,165 @@
+import { assert } from "../../../shared/src/asserts.js";
+import { throwOutput } from "./operator.js";
+import { first } from "./stream.js";
+import { makeAddEmptyRelationships, mergeRelationships, pushAccumulatedChanges } from "./push-accumulated.js";
+//#region ../zql/src/ivm/union-fan-in.ts
+var UnionFanIn = class {
+	#inputs;
+	#schema;
+	#fanOutPushStarted = false;
+	#output = throwOutput;
+	#accumulatedPushes = [];
+	constructor(fanOut, inputs) {
+		this.#inputs = inputs;
+		const fanOutSchema = fanOut.getSchema();
+		fanOut.setFanIn(this);
+		assert(fanOutSchema.sort !== void 0, "UnionFanIn requires sorted input");
+		const schema = {
+			tableName: fanOutSchema.tableName,
+			columns: fanOutSchema.columns,
+			primaryKey: fanOutSchema.primaryKey,
+			relationships: { ...fanOutSchema.relationships },
+			isHidden: fanOutSchema.isHidden,
+			system: fanOutSchema.system,
+			compareRows: fanOutSchema.compareRows,
+			sort: fanOutSchema.sort
+		};
+		const relationshipsFromBranches = /* @__PURE__ */ new Set();
+		for (const input of inputs) {
+			const inputSchema = input.getSchema();
+			assert(schema.tableName === inputSchema.tableName, `Table name mismatch in union fan-in: ${schema.tableName} !== ${inputSchema.tableName}`);
+			assert(schema.primaryKey === inputSchema.primaryKey, `Primary key mismatch in union fan-in`);
+			assert(schema.system === inputSchema.system, `System mismatch in union fan-in: ${schema.system} !== ${inputSchema.system}`);
+			assert(schema.compareRows === inputSchema.compareRows, `compareRows mismatch in union fan-in`);
+			assert(schema.sort === inputSchema.sort, `Sort mismatch in union fan-in`);
+			for (const [relName, relSchema] of Object.entries(inputSchema.relationships)) {
+				if (relName in fanOutSchema.relationships) continue;
+				assert(!relationshipsFromBranches.has(relName), `Relationship ${relName} exists in multiple upstream inputs to union fan-in`);
+				schema.relationships[relName] = relSchema;
+				relationshipsFromBranches.add(relName);
+			}
+			input.setOutput(this);
+		}
+		this.#schema = schema;
+		this.#inputs = inputs;
+	}
+	destroy() {
+		for (const input of this.#inputs) input.destroy();
+	}
+	fetch(req) {
+		const iterables = this.#inputs.map((input) => input.fetch(req));
+		const compareRows = this.#schema.compareRows;
+		return mergeFetches(iterables, req.reverse ? (l, r) => compareRows(r.row, l.row) : (l, r) => compareRows(l.row, r.row));
+	}
+	getSchema() {
+		return this.#schema;
+	}
+	*push(change, pusher) {
+		if (!this.#fanOutPushStarted) yield* this.#pushInternalChange(change, pusher);
+		else this.#accumulatedPushes.push(change);
+	}
+	/**
+	* An internal change means that a change was received inside the fan-out/fan-in sub-graph.
+	*
+	* These changes always come from children of a flip-join as no other push generating operators
+	* currently exist between union-fan-in and union-fan-out. All other pushes
+	* enter into union-fan-out before reaching union-fan-in.
+	*
+	* - normal joins for `exists` come before `union-fan-out`
+	* - joins for `related` come after `union-fan-out`
+	* - take comes after `union-fan-out`
+	*
+	* The algorithm for deciding whether or not to forward a push that came from inside the ufo/ufi sub-graph:
+	* 1. If the change is a `child` change we can forward it. This is because all child branches in the ufo/ufi sub-graph are unique.
+	* 2. If the change is `add` we can forward it iff no `fetches` for the row return any results.
+	*    If another branch has it, the add was already emitted in the past.
+	* 3. If the change is `remove` we can forward it iff no `fetches` for the row return any results.
+	*    If no other branches have the change, the remove can be sent as the value is no longer present.
+	*    If other branches have it, the last branch the processes the remove will send the remove.
+	* 4. Edits will always come through as child changes as flip join will flip them into children.
+	*    An edit that would result in a remove or add will have been split into an add/remove pair rather than being an edit.
+	*/
+	*#pushInternalChange(change, pusher) {
+		if (change[0] === 3) {
+			yield* this.#output.push(change, this);
+			return;
+		}
+		assert(change[0] === 0 || change[0] === 1, () => `UnionFanIn: expected add or remove change type, got ${change[0]}`);
+		let hadMatch = false;
+		for (const input of this.#inputs) {
+			if (input === pusher) {
+				hadMatch = true;
+				continue;
+			}
+			const constraint = {};
+			for (const key of this.#schema.primaryKey) constraint[key] = change[1].row[key];
+			if (first(input.fetch({ constraint })) !== void 0) return;
+		}
+		assert(hadMatch, "Pusher was not one of the inputs to union-fan-in!");
+		yield* this.#output.push(change, this);
+	}
+	fanOutStartedPushing() {
+		assert(this.#fanOutPushStarted === false, "UnionFanIn: fanOutStartedPushing called while already pushing");
+		this.#fanOutPushStarted = true;
+	}
+	*fanOutDonePushing(fanOutChangeType) {
+		assert(this.#fanOutPushStarted, "UnionFanIn: fanOutDonePushing called without fanOutStartedPushing");
+		this.#fanOutPushStarted = false;
+		if (this.#inputs.length === 0) return;
+		if (this.#accumulatedPushes.length === 0) return;
+		yield* pushAccumulatedChanges(this.#accumulatedPushes, this.#output, this, fanOutChangeType, mergeRelationships, makeAddEmptyRelationships(this.#schema));
+	}
+	setOutput(output) {
+		this.#output = output;
+	}
+};
+function* mergeFetches(fetches, comparator) {
+	const iterators = fetches.map((i) => i[Symbol.iterator]());
+	let threw = false;
+	try {
+		const current = [];
+		let lastNodeYielded;
+		for (let i = 0; i < iterators.length; i++) {
+			const iter = iterators[i];
+			let result = iter.next();
+			while (!result.done && result.value === "yield") {
+				yield result.value;
+				result = iter.next();
+			}
+			current[i] = result.done ? null : result.value;
+		}
+		while (current.some((c) => c !== null)) {
+			const min = current.reduce((acc, c, i) => {
+				if (c === null) return acc;
+				if (acc === void 0 || comparator(c, acc[0]) < 0) return [c, i];
+				return acc;
+			}, void 0);
+			assert(min !== void 0, "min is undefined");
+			const [minNode, minIndex] = min;
+			const iter = iterators[minIndex];
+			let result = iter.next();
+			while (!result.done && result.value === "yield") {
+				yield result.value;
+				result = iter.next();
+			}
+			current[minIndex] = result.done ? null : result.value;
+			if (lastNodeYielded !== void 0 && comparator(lastNodeYielded, minNode) === 0) continue;
+			lastNodeYielded = minNode;
+			yield minNode;
+		}
+	} catch (e) {
+		threw = true;
+		for (const iter of iterators) try {
+			iter.throw?.(e);
+		} catch (_cleanupError) {}
+		throw e;
+	} finally {
+		if (!threw) for (const iter of iterators) try {
+			iter.return?.();
+		} catch (_cleanupError) {}
+	}
+}
+//#endregion
+export { UnionFanIn };
+
+//# sourceMappingURL=union-fan-in.js.map

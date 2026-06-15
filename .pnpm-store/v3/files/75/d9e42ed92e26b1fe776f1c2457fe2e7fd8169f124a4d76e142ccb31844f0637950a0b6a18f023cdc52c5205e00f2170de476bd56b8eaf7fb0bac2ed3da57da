@@ -1,0 +1,87 @@
+import { assert } from "../../../shared/src/asserts.js";
+import { sleep } from "../../../shared/src/sleep.js";
+import { must } from "../../../shared/src/must.js";
+import { mapAST } from "../../../zero-protocol/src/ast.js";
+import { hashOfAST } from "../../../zero-protocol/src/query-hash.js";
+import { skipYields } from "../../../zql/src/ivm/skip-yields.js";
+import { buildPipeline } from "../../../zql/src/builder/builder.js";
+import { astToZQL } from "../../../ast-to-zql/src/ast-to-zql.js";
+import { formatOutput } from "../../../ast-to-zql/src/format.js";
+import { computeZqlSpecs } from "../db/lite-tables.js";
+import { resolveSimpleScalarSubqueries } from "../../../zqlite/src/resolve-scalar-subqueries.js";
+import { transformAndHashQuery } from "../auth/read-authorizer.js";
+import { hydrate } from "./view-syncer/pipeline-driver.js";
+//#region ../zero-cache/src/services/run-ast.ts
+async function runAst(lc, clientSchema, ast, isTransformed, options, yieldProcess) {
+	const { clientToServerMapper, permissions, host, db } = options;
+	const result = {
+		warnings: [],
+		syncedRows: void 0,
+		syncedRowCount: 0,
+		start: 0,
+		end: 0,
+		elapsed: 0,
+		afterPermissions: void 0,
+		readRows: void 0,
+		readRowCountsByQuery: {},
+		readRowCount: void 0
+	};
+	if (!isTransformed) ast = mapAST(ast, must(clientToServerMapper));
+	if (options.applyPermissions) {
+		const auth = options.auth;
+		if (!auth) result.warnings.push("No auth data provided. Permission rules will compare to `NULL` wherever an auth data field is referenced.");
+		ast = transformAndHashQuery(lc, "clientGroupIDForAnalyze", ast, must(permissions), auth, false).transformedAst;
+		result.afterPermissions = await formatOutput(ast.table + astToZQL(ast));
+	}
+	const executor = (subqueryAST, childField) => {
+		const input = buildPipeline(subqueryAST, host, "scalar-subquery");
+		let node;
+		for (const n of skipYields(input.fetch({}))) node ??= n;
+		input.destroy();
+		return node ? node.row[childField] ?? null : void 0;
+	};
+	const { ast: resolvedAst } = resolveSimpleScalarSubqueries(ast, options.tableSpecs, executor);
+	const pipeline = buildPipeline(resolvedAst, host, "query-id", options.costModel, lc, options.planDebugger);
+	const start = performance.now();
+	let syncedRowCount = 0;
+	const rowsByTable = {};
+	const seenByTable = /* @__PURE__ */ new Set();
+	for (const rowChange of hydrate(pipeline, hashOfAST(resolvedAst), clientSchema, computeZqlSpecs(lc, db, { includeBackfillingColumns: false }))) {
+		if (rowChange === "yield") {
+			await yieldProcess();
+			continue;
+		}
+		assert(rowChange.type === 0, "Hydration only handles add row changes");
+		if (syncedRowCount % 10 === 0) await Promise.resolve();
+		if (syncedRowCount % 100 === 0) await sleep(1);
+		let rows = rowsByTable[rowChange.table];
+		const s = rowChange.table + "." + JSON.stringify(rowChange.row);
+		if (seenByTable.has(s)) continue;
+		syncedRowCount++;
+		seenByTable.add(s);
+		if (options.syncedRows) {
+			if (!rows) {
+				rows = [];
+				rowsByTable[rowChange.table] = rows;
+			}
+			rows.push(rowChange.row);
+		}
+	}
+	const end = performance.now();
+	if (options.syncedRows) result.syncedRows = rowsByTable;
+	result.start = start;
+	result.end = end;
+	result.elapsed = end - start;
+	result.syncedRowCount = syncedRowCount;
+	result.readRowCountsByQuery = host.debug?.getVendedRowCounts() ?? {};
+	let readRowCount = 0;
+	for (const c of Object.values(result.readRowCountsByQuery)) for (const v of Object.values(c)) readRowCount += v;
+	result.readRowCount = readRowCount;
+	result.dbScansByQuery = host.debug?.getNVisitCounts() ?? {};
+	if (options.vendedRows) result.readRows = host.debug?.getVendedRows();
+	return result;
+}
+//#endregion
+export { runAst };
+
+//# sourceMappingURL=run-ast.js.map

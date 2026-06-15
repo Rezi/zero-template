@@ -1,0 +1,212 @@
+import { manualSpan } from "../../otel/src/span.js";
+import { version } from "../../otel/src/version.js";
+import { trace } from "@opentelemetry/api";
+import SQLite3Database, { SqliteError } from "@rocicorp/zero-sqlite3";
+//#region ../zqlite/src/db.ts
+var tracer = trace.getTracer("view-syncer", version);
+var AUTO_VACUUM_INCREMENTAL = 2;
+var MB = 1024 * 1024;
+function mb(bytes) {
+	return (bytes / MB).toFixed(2);
+}
+var Database = class {
+	#db;
+	#threshold;
+	#lc;
+	#pageSize;
+	constructor(lc, path, options, slowQueryThreshold = 100) {
+		try {
+			this.#lc = lc.withContext("class", "Database").withContext("path", path);
+			this.#db = new SQLite3Database(path, options);
+			this.#threshold = slowQueryThreshold;
+			const [{ page_size: pageSize }] = this.pragma("page_size");
+			this.#pageSize = pageSize;
+		} catch (cause) {
+			throw new DatabaseInitError(String(cause), { cause });
+		}
+	}
+	prepare(sql) {
+		return this.#run("prepare", sql, () => new Statement(this.#lc.withContext("sql", sql), {
+			class: "Statement",
+			sql
+		}, this.#db.prepare(sql), this.#threshold));
+	}
+	exec(sql) {
+		this.#run("exec", sql, () => this.#db.exec(sql));
+	}
+	pragma(sql) {
+		return this.#run("pragma", sql, () => this.#db.pragma(sql));
+	}
+	#bytes(pages) {
+		return pages * this.#pageSize;
+	}
+	compact(freeableBytesThreshold) {
+		const [{ freelist_count: freelistCount }] = this.pragma("freelist_count");
+		const freeable = this.#bytes(freelistCount);
+		if (freeable < freeableBytesThreshold) {
+			this.#lc.debug?.(`Not compacting ${this.#db.name}: ${mb(freeable)} freeable MB`);
+			return;
+		}
+		const [{ auto_vacuum: autoVacuumMode }] = this.pragma("auto_vacuum");
+		if (autoVacuumMode !== AUTO_VACUUM_INCREMENTAL) {
+			this.#lc.warn?.(`Cannot compact ${mb(freeable)} MB of ${this.#db.name} because AUTO_VACUUM mode is ${autoVacuumMode}.`);
+			return;
+		}
+		const start = Date.now();
+		const [{ page_count: pageCountBefore }] = this.pragma("page_count");
+		this.pragma("incremental_vacuum");
+		const [{ page_count: pageCountAfter }] = this.pragma("page_count");
+		this.#lc.info?.(`Compacted ${this.#db.name} from ${mb(this.#bytes(pageCountBefore))} MB to ${mb(this.#bytes(pageCountAfter))} MB (${Date.now() - start} ms)`);
+	}
+	unsafeMode(unsafe) {
+		this.#db.unsafeMode(unsafe);
+	}
+	#run(method, sql, fn) {
+		const start = performance.now();
+		try {
+			return fn();
+		} catch (e) {
+			if (e instanceof SqliteError) e.message += `: ${sql}`;
+			throw e;
+		} finally {
+			logIfSlow(this.#lc.withContext("method", method), performance.now() - start, { method }, this.#threshold);
+		}
+	}
+	close() {
+		const start = Date.now();
+		if (!this.#db.readonly) try {
+			this.#db.pragma("optimize");
+			const elapsed = Date.now() - start;
+			if (elapsed > 2) this.#lc.debug?.(`PRAGMA optimized (${elapsed} ms)`);
+		} catch (e) {
+			this.#lc.warn?.("error running PRAGMA optimize", e);
+		}
+		this.#db.close();
+	}
+	transaction(fn) {
+		return this.#db.transaction(fn)();
+	}
+	get name() {
+		return this.#db.name;
+	}
+	get inTransaction() {
+		return this.#db.inTransaction;
+	}
+	[Symbol.dispose]() {
+		this.close();
+	}
+};
+var Statement = class {
+	#stmt;
+	#lc;
+	#threshold;
+	#attrs;
+	scanStatus;
+	scanStatusReset;
+	constructor(lc, attrs, stmt, threshold) {
+		this.#lc = lc.withContext("class", "Statement");
+		this.#attrs = attrs;
+		this.#stmt = stmt;
+		this.#threshold = threshold;
+		this.scanStatus = this.#stmt.scanStatusV2.bind(this.#stmt);
+		this.scanStatusReset = this.#stmt.scanStatusReset.bind(this.#stmt);
+	}
+	safeIntegers(useBigInt) {
+		this.#stmt.safeIntegers(useBigInt);
+		return this;
+	}
+	run(...params) {
+		const start = performance.now();
+		const ret = this.#stmt.run(...params);
+		logIfSlow(this.#lc.withContext("method", "run"), performance.now() - start, {
+			...this.#attrs,
+			method: "run"
+		}, this.#threshold);
+		return ret;
+	}
+	get(...params) {
+		const start = performance.now();
+		const ret = this.#stmt.get(...params);
+		logIfSlow(this.#lc.withContext("method", "get"), performance.now() - start, {
+			...this.#attrs,
+			method: "get"
+		}, this.#threshold);
+		return ret;
+	}
+	all(...params) {
+		const start = performance.now();
+		const ret = this.#stmt.all(...params);
+		logIfSlow(this.#lc.withContext("method", "all"), performance.now() - start, {
+			...this.#attrs,
+			method: "all"
+		}, this.#threshold);
+		return ret;
+	}
+	iterate(...params) {
+		return new LoggingIterableIterator(this.#lc.withContext("method", "iterate"), this.#attrs, this.#stmt.iterate(...params), this.#threshold);
+	}
+};
+var LoggingIterableIterator = class {
+	#lc;
+	#it;
+	#threshold;
+	#attrs;
+	#start;
+	#sqliteRowTimeSum;
+	constructor(lc, attrs, it, slowQueryThreshold) {
+		this.#lc = lc;
+		this.#attrs = attrs;
+		this.#it = it;
+		this.#start = performance.now();
+		this.#threshold = slowQueryThreshold;
+		this.#sqliteRowTimeSum = 0;
+	}
+	next() {
+		const start = performance.now();
+		const ret = this.#it.next();
+		const elapsed = performance.now() - start;
+		this.#sqliteRowTimeSum += elapsed;
+		if (ret.done) this.#log();
+		return ret;
+	}
+	#log() {
+		logIfSlow(this.#lc.withContext("type", "total"), performance.now() - this.#start, {
+			...this.#attrs,
+			type: "total",
+			method: "iterate"
+		}, this.#threshold);
+		logIfSlow(this.#lc.withContext("type", "sqlite"), this.#sqliteRowTimeSum, {
+			...this.#attrs,
+			type: "sqlite",
+			method: "iterate"
+		}, this.#threshold);
+	}
+	[Symbol.iterator]() {
+		return this;
+	}
+	return() {
+		this.#log();
+		return this.#it.return?.();
+	}
+	throw(e) {
+		this.#log();
+		return this.#it.throw?.(e);
+	}
+};
+function logIfSlow(lc, elapsed, attrs, threshold) {
+	if (elapsed >= threshold) {
+		for (const [key, value] of Object.entries(attrs)) lc = lc.withContext(key, value);
+		lc.warn?.("Slow SQLite query", elapsed);
+		manualSpan(tracer, "db.slow-query", elapsed, attrs);
+	}
+}
+/**
+* An error indicating that the Database failed to open. This essentially
+* wraps the TypeError thrown by the better-sqlite3 package with something
+* more specific.
+*/
+var DatabaseInitError = class extends Error {};
+//#endregion
+export { Database, DatabaseInitError };
+
+//# sourceMappingURL=db.js.map

@@ -1,0 +1,112 @@
+//#region ../zero-schema/src/builder/table-builder.ts
+function table(name) {
+	return new TableBuilder({
+		name,
+		columns: {},
+		primaryKey: []
+	});
+}
+function string() {
+	return new ColumnBuilder({
+		type: "string",
+		optional: false,
+		customType: null
+	});
+}
+function number() {
+	return new ColumnBuilder({
+		type: "number",
+		optional: false,
+		customType: null
+	});
+}
+function boolean() {
+	return new ColumnBuilder({
+		type: "boolean",
+		optional: false,
+		customType: null
+	});
+}
+function json() {
+	return new ColumnBuilder({
+		type: "json",
+		optional: false,
+		customType: null
+	});
+}
+function enumeration() {
+	return new ColumnBuilder({
+		type: "string",
+		optional: false,
+		customType: null
+	});
+}
+var TableBuilder = class TableBuilder {
+	#schema;
+	constructor(schema) {
+		this.#schema = schema;
+	}
+	from(serverName) {
+		return new TableBuilder({
+			...this.#schema,
+			serverName: serverName.startsWith("public.") ? serverName.substring(7) : serverName
+		});
+	}
+	columns(columns) {
+		const columnSchemas = Object.fromEntries(Object.entries(columns).map(([k, v]) => [k, v.schema]));
+		return new TableBuilderWithColumns({
+			...this.#schema,
+			columns: columnSchemas
+		});
+	}
+};
+var TableBuilderWithColumns = class TableBuilderWithColumns {
+	#schema;
+	constructor(schema) {
+		this.#schema = schema;
+	}
+	primaryKey(...pkColumnNames) {
+		return new TableBuilderWithColumns({
+			...this.#schema,
+			primaryKey: pkColumnNames
+		});
+	}
+	get schema() {
+		return this.#schema;
+	}
+	build() {
+		if (this.#schema.primaryKey.length === 0) throw new Error(`Table "${this.#schema.name}" is missing a primary key`);
+		const names = /* @__PURE__ */ new Set();
+		for (const [col, { serverName }] of Object.entries(this.#schema.columns)) {
+			const name = serverName ?? col;
+			if (names.has(name)) throw new Error(`Table "${this.#schema.name}" has multiple columns referencing "${name}"`);
+			names.add(name);
+		}
+		return this.#schema;
+	}
+};
+var ColumnBuilder = class ColumnBuilder {
+	#schema;
+	constructor(schema) {
+		this.#schema = schema;
+	}
+	from(serverName) {
+		return new ColumnBuilder({
+			...this.#schema,
+			serverName
+		});
+	}
+	optional() {
+		return new ColumnBuilder({
+			...this.#schema,
+			optional: true
+		});
+	}
+	get schema() {
+		return this.#schema;
+	}
+};
+//#endregion
+export { boolean, enumeration, json, number, string, table };
+
+//# sourceMappingURL=table-builder.js.map

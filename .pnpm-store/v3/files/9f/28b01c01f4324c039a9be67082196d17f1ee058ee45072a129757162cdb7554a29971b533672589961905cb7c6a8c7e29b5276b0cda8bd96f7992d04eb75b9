@@ -1,0 +1,8 @@
+import { valita_exports } from "../../shared/src/valita.js";
+//#region ../zero-protocol/src/update-auth.ts
+var updateAuthBodySchema = valita_exports.object({ auth: valita_exports.string() });
+var updateAuthMessageSchema = valita_exports.tuple([valita_exports.literal("updateAuth"), updateAuthBodySchema]);
+//#endregion
+export { updateAuthMessageSchema };
+
+//# sourceMappingURL=update-auth.js.map

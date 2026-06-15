@@ -1,0 +1,8 @@
+//#region ../zero-cache/src/types/names.ts
+function liteTableName(t) {
+	return t.schema === "public" ? t.name : `${t.schema}.${t.name}`;
+}
+//#endregion
+export { liteTableName };
+
+//# sourceMappingURL=names.js.map

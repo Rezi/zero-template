@@ -1,0 +1,89 @@
+import { assert } from "../../../shared/src/asserts.js";
+import { Internal } from "../../../zero-protocol/src/error-kind-enum.js";
+import { MeasurePushOperator } from "../../../zql/src/query/measure-push-operator.js";
+import { QueryDelegateBase } from "../../../zql/src/query/query-delegate-base.js";
+import "./ivm-branch.js";
+//#region ../zero-client/src/client/context.ts
+/**
+* ZeroContext glues together zql and Replicache. It listens to changes in
+* Replicache data and pushes them into IVM and on tells the server about new
+* queries.
+*/
+var ZeroContext = class extends QueryDelegateBase {
+	#lc;
+	#mainSources;
+	addServerQuery;
+	addCustomQuery;
+	updateServerQuery;
+	updateCustomQuery;
+	flushQueryChanges;
+	#batchViewUpdates;
+	#commitListeners = /* @__PURE__ */ new Set();
+	assertValidRunOptions;
+	/**
+	* Client-side queries start out as "unknown" and are then updated to
+	* "complete" once the server has sent back the query result.
+	*/
+	defaultQueryComplete = false;
+	addMetric;
+	constructor(lc, mainSources, addQuery, addCustomQuery, updateQuery, updateCustomQuery, flushQueryChanges, batchViewUpdates, addMetric, assertValidRunOptions) {
+		super();
+		this.#lc = lc;
+		this.#mainSources = mainSources;
+		this.addServerQuery = addQuery;
+		this.updateServerQuery = updateQuery;
+		this.updateCustomQuery = updateCustomQuery;
+		this.#batchViewUpdates = batchViewUpdates;
+		this.assertValidRunOptions = assertValidRunOptions;
+		this.addCustomQuery = addCustomQuery;
+		this.flushQueryChanges = flushQueryChanges;
+		this.addMetric = addMetric;
+	}
+	applyFiltersAnyway;
+	debug;
+	getSource(name) {
+		return this.#mainSources.getSource(name);
+	}
+	mapAst(ast) {
+		return ast;
+	}
+	decorateSourceInput(input, queryID) {
+		return new MeasurePushOperator(input, queryID, this, "query-update-client");
+	}
+	onTransactionCommit(cb) {
+		this.#commitListeners.add(cb);
+		return () => {
+			this.#commitListeners.delete(cb);
+		};
+	}
+	batchViewUpdates(applyViewUpdates) {
+		let result;
+		let viewChangesPerformed = false;
+		this.#batchViewUpdates(() => {
+			result = applyViewUpdates();
+			viewChangesPerformed = true;
+		});
+		assert(viewChangesPerformed, "batchViewUpdates must call applyViewUpdates synchronously.");
+		return result;
+	}
+	processChanges(expectedHead, newHead, changes) {
+		this.batchViewUpdates(() => {
+			try {
+				this.#mainSources.advance(expectedHead, newHead, changes);
+			} finally {
+				this.#endTransaction();
+			}
+		});
+	}
+	#endTransaction() {
+		for (const listener of this.#commitListeners) try {
+			listener();
+		} catch (e) {
+			this.#lc.error?.(Internal, "Failed notifying a commit listener of IVM updates", e);
+		}
+	}
+};
+//#endregion
+export { ZeroContext };
+
+//# sourceMappingURL=context.js.map

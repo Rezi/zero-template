@@ -1,0 +1,6 @@
+export declare function assertHTTPRequestInfo(v: unknown): asserts v is HTTPRequestInfo;
+export type HTTPRequestInfo = {
+    httpStatusCode: number;
+    errorMessage: string;
+};
+//# sourceMappingURL=http-request-info.d.ts.map

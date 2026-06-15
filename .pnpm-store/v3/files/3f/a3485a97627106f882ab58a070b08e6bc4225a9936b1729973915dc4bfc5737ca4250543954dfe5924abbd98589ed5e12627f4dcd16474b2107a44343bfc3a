@@ -1,0 +1,14 @@
+import * as v from '../../../../../shared/src/valita.ts';
+export declare const columnMetadataSchema: v.ObjectType<{
+    attNum: v.Type<number>;
+}, undefined>;
+export type ColumnMetadata = v.Infer<typeof columnMetadataSchema>;
+export declare const tableMetadataSchema: v.ObjectType<{
+    schemaOID: v.Type<number>;
+    relationOID: v.Type<number>;
+    rowKey: v.Type<Record<string, {
+        attNum: number;
+    }>>;
+}, undefined>;
+export type TableMetadata = v.Infer<typeof tableMetadataSchema>;
+//# sourceMappingURL=backfill-metadata.d.ts.map

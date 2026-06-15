@@ -1,0 +1,176 @@
+import { assert, unreachable } from "../../../../../shared/src/asserts.js";
+import { deepEqual } from "../../../../../shared/src/json.js";
+import { stringify } from "../../../../../shared/src/bigint-json.js";
+import { changeStreamMessageSchema } from "../protocol/current/downstream.js";
+import "../protocol/current/upstream.js";
+import { Database } from "../../../../../zqlite/src/db.js";
+import { computeZqlSpecs } from "../../../db/lite-tables.js";
+import { createReplicationStateTables, getSubscriptionState, initReplicationState } from "../../replicator/schema/replication-state.js";
+import { StatementRunner } from "../../../db/statements.js";
+import { AutoResetSignal } from "../../change-streamer/schema/tables.js";
+import { initReplica } from "../common/replica-schema.js";
+import { stream } from "../../../types/streams.js";
+import { ChangeProcessor } from "../../replicator/change-processor.js";
+import { ReplicationStatusPublisher } from "../../replicator/replication-status.js";
+import { WebSocket } from "ws";
+//#region ../zero-cache/src/services/change-source/custom/change-source.ts
+/**
+* Initializes a Custom change source before streaming changes from the
+* corresponding logical replication stream.
+*/
+async function initializeCustomChangeSource(lc, upstreamURI, shard, replicaDbFile, context) {
+	await initReplica(lc, `replica-${shard.appID}-${shard.shardNum}`, replicaDbFile, (log, tx) => initialSync(log, shard, tx, upstreamURI, context));
+	const replica = new Database(lc, replicaDbFile);
+	const subscriptionState = getSubscriptionState(new StatementRunner(replica));
+	replica.close();
+	if (shard.publications.length) {
+		const requested = shard.publications.toSorted();
+		const replicated = subscriptionState.publications.sort();
+		if (!deepEqual(requested, replicated)) throw new Error(`Invalid ShardConfig. Requested publications [${requested}] do not match synced publications: [${replicated}]`);
+	}
+	return {
+		subscriptionState,
+		changeSource: new CustomChangeSource(lc, upstreamURI, shard, subscriptionState)
+	};
+}
+var CustomChangeSource = class {
+	#lc;
+	#upstreamUri;
+	#shard;
+	#replicationConfig;
+	constructor(lc, upstreamUri, shard, replicationConfig) {
+		this.#lc = lc.withContext("component", "change-source");
+		this.#upstreamUri = upstreamUri;
+		this.#shard = shard;
+		this.#replicationConfig = replicationConfig;
+	}
+	initialSync() {
+		return this.#startStream();
+	}
+	startLagReporter() {
+		return null;
+	}
+	stop() {
+		return Promise.resolve();
+	}
+	startStream(clientWatermark, backfillRequests = []) {
+		if (backfillRequests?.length) throw new Error("backfill is yet not supported for custom change sources");
+		return Promise.resolve(this.#startStream(clientWatermark));
+	}
+	#startStream(clientWatermark) {
+		const { publications, replicaVersion } = this.#replicationConfig;
+		const { appID, shardNum } = this.#shard;
+		const url = new URL(this.#upstreamUri);
+		url.searchParams.set("appID", appID);
+		url.searchParams.set("shardNum", String(shardNum));
+		for (const pub of publications) url.searchParams.append("publications", pub);
+		if (clientWatermark) {
+			assert(replicaVersion.length, "replicaVersion is required when clientWatermark is set");
+			url.searchParams.set("lastWatermark", clientWatermark);
+			url.searchParams.set("replicaVersion", replicaVersion);
+		}
+		const ws = new WebSocket(url);
+		const { instream, outstream } = stream(this.#lc, ws, changeStreamMessageSchema, { coalesce: (curr) => curr });
+		return {
+			changes: instream,
+			acks: outstream
+		};
+	}
+};
+/**
+* Initial sync for a custom change source makes a request to the
+* change source endpoint with no `replicaVersion` or `lastWatermark`.
+* The initial transaction returned by the endpoint is treated as
+* the initial sync, and the commit watermark of that transaction
+* becomes the `replicaVersion` of the initialized replica.
+*
+* Note that this is equivalent to how the LSN of the Postgres WAL
+* at initial sync time is the `replicaVersion` (and starting
+* version for all initially-synced rows).
+*/
+async function initialSync(lc, shard, tx, upstreamURI, context) {
+	const { appID: id, publications } = shard;
+	const { changes } = new CustomChangeSource(lc, upstreamURI, shard, {
+		replicaVersion: "",
+		publications
+	}).initialSync();
+	createReplicationStateTables(tx);
+	const processor = new ChangeProcessor(new StatementRunner(tx), "initial-sync", (_, err) => {
+		throw err;
+	});
+	const statusPublisher = ReplicationStatusPublisher.forRunningTransaction(tx);
+	try {
+		let num = 0;
+		for await (const change of changes) {
+			const [tag] = change;
+			switch (tag) {
+				case "begin": {
+					const { commitWatermark } = change[2];
+					lc.info?.(`initial sync of shard ${id} at replicaVersion ${commitWatermark}`);
+					statusPublisher.publish(lc, "Initializing", `Copying upstream tables at version ${commitWatermark}`, 5e3);
+					initReplicationState(tx, publications.toSorted(), commitWatermark, context, false);
+					processor.processMessage(lc, change);
+					break;
+				}
+				case "data":
+					processor.processMessage(lc, change);
+					if (++num % 1e3 === 0) lc.debug?.(`processed ${num} changes`);
+					break;
+				case "commit":
+					processor.processMessage(lc, change);
+					validateInitiallySyncedData(lc, tx, shard);
+					lc.info?.(`finished initial-sync of ${num} changes`);
+					return;
+				case "status": break;
+				case "control": {
+					const { tag, message } = change[1];
+					if (tag === "reset-required") throw new AutoResetSignal(message ?? "auto-reset signaled by change source");
+				}
+				case "rollback": throw new Error(`unexpected message during initial-sync: ${stringify(change)}`);
+				default: unreachable(change);
+			}
+		}
+		throw new Error(`change source ${upstreamURI} closed before initial-sync completed`);
+	} catch (e) {
+		await statusPublisher.publishAndThrowError(lc, "Initializing", e);
+	} finally {
+		statusPublisher.stop();
+	}
+}
+function getRequiredTables({ appID, shardNum }) {
+	return {
+		[`${appID}_${shardNum}.clients`]: {
+			clientGroupID: { type: "string" },
+			clientID: { type: "string" },
+			lastMutationID: { type: "number" },
+			userID: { type: "string" }
+		},
+		[`${appID}_${shardNum}.mutations`]: {
+			clientGroupID: { type: "string" },
+			clientID: { type: "string" },
+			mutationID: { type: "number" },
+			mutation: { type: "json" }
+		},
+		[`${appID}.permissions`]: {
+			permissions: { type: "json" },
+			hash: { type: "string" }
+		}
+	};
+}
+function validateInitiallySyncedData(lc, db, shard) {
+	const tables = computeZqlSpecs(lc, db, { includeBackfillingColumns: true });
+	const required = getRequiredTables(shard);
+	for (const [name, columns] of Object.entries(required)) {
+		const table = tables.get(name)?.zqlSpec;
+		if (!table) throw new Error(`Upstream is missing the "${name}" table. (Found ${[...tables.keys()]})Please ensure that each table has a unique index over one or more non-null columns.`);
+		for (const [col, { type }] of Object.entries(columns)) {
+			const found = table[col];
+			if (!found) throw new Error(`Upstream "${table}" table is missing the "${col}" column`);
+			if (found.type !== type) throw new Error(`Upstream "${table}.${col}" column is a ${found.type} type but must be a ${type} type.`);
+		}
+	}
+}
+//#endregion
+export { initializeCustomChangeSource };
+
+//# sourceMappingURL=change-source.js.map

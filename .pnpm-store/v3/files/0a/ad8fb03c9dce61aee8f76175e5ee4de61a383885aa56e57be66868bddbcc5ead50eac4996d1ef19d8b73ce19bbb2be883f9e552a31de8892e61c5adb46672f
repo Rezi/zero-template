@@ -1,0 +1,37 @@
+import { createLogContext as createLogContext$1, getLogSink } from "../../../shared/src/logging.js";
+import "../services/life-cycle.js";
+import { otelLogsEnabled } from "../../../otel/src/enabled.js";
+import { OtelLogSink } from "./otel-log-sink.js";
+import "@rocicorp/logger";
+//#region ../zero-cache/src/server/logging.ts
+function createLogContext({ log }, worker, workerIndex = 0, includeOtel = true) {
+	const logSink = createLogSink(log, includeOtel);
+	const lc = createLogContext$1({ log }, {
+		worker,
+		workerIndex
+	}, logSink);
+	process.on("uncaughtException", async (err, origin) => {
+		lc.error?.(origin, err);
+		await logSink.flush?.();
+		process.exit(13);
+	});
+	return lc;
+}
+function createLogSink(config, includeOtel) {
+	const sink = getLogSink(config);
+	if (includeOtel && otelLogsEnabled()) return new CompositeLogSink([new OtelLogSink(), sink]);
+	return sink;
+}
+var CompositeLogSink = class {
+	#sinks;
+	constructor(sinks) {
+		this.#sinks = sinks;
+	}
+	log(level, context, ...args) {
+		for (const sink of this.#sinks) sink.log(level, context, ...args);
+	}
+};
+//#endregion
+export { createLogContext };
+
+//# sourceMappingURL=logging.js.map

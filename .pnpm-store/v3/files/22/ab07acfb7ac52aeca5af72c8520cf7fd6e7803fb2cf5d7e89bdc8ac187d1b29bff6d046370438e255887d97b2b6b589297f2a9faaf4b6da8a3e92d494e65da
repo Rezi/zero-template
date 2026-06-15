@@ -1,0 +1,4 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { StoreProvider } from './kv/store.ts';
+export declare function getKVStoreProvider(lc: LogContext, kvStore: 'mem' | 'idb' | StoreProvider | undefined): StoreProvider;
+//# sourceMappingURL=get-kv-store-provider.d.ts.map

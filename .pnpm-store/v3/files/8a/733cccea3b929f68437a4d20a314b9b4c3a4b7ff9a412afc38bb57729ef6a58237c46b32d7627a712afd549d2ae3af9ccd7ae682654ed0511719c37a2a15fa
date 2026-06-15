@@ -1,0 +1,35 @@
+import type { Hash } from '../hash.ts';
+declare const refsTag: unique symbol;
+/**
+ * Opaque type representing a Refs. The reason to use an opaque type here is to
+ * make sure that Refs are always sorted and have no duplicates.
+ */
+export type Refs = [] | readonly [Hash] | (readonly Hash[] & {
+    [refsTag]: true;
+});
+/**
+ * Convert to a Refs when we already know it is sorted and has no duplicates.
+ */
+export declare function asRefs(sortedRefs: Hash[]): Refs;
+/**
+ * Sorts and tags as Refs. If an Array is passed in the array is sorted in
+ * place, otherwise a copy of the iterable is created. This checks for duplicates.
+ */
+export declare function toRefs(refs: Hash[] | Set<Hash>): Refs;
+export declare class Chunk<V = unknown> {
+    readonly hash: Hash;
+    readonly data: V;
+    /**
+     * Meta is an array of refs. If there are no refs we do not write a meta
+     * chunk.
+     */
+    readonly meta: Refs;
+    constructor(hash: Hash, data: V, refs: Refs);
+}
+export declare function assertRefs(v: unknown): asserts v is Refs;
+export declare function createChunk<V>(data: V, refs: Refs, chunkHasher: ChunkHasher): Chunk<V>;
+export type CreateChunk = <V>(data: V, refs: Refs) => Chunk<V>;
+export type ChunkHasher = () => Hash;
+export declare function throwChunkHasher(): Hash;
+export {};
+//# sourceMappingURL=chunk.d.ts.map

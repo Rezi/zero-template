@@ -1,0 +1,2 @@
+import "../services/replicator/write-worker.js";
+export {};

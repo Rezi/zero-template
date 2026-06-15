@@ -1,0 +1,63 @@
+import { SQLiteStore, dropStore } from "../sqlite-store.js";
+import { open } from "./types.js";
+//#region ../replicache/src/kv/op-sqlite/store.ts
+function dropOpSQLiteStore(name, opts) {
+	return dropStore(name, (filename, options) => new OpSQLiteDatabase(filename, options), opts);
+}
+/**
+* Creates a StoreProvider for SQLite-based stores using @op-engineering/op-sqlite.
+* Supports shared connections between multiple store instances with the same name,
+* providing efficient resource utilization and proper transaction isolation.
+* Uses parameterized queries for safety and performance.
+*/
+function opSQLiteStoreProvider(opts) {
+	return {
+		create: (name) => new SQLiteStore(name, (name, options) => new OpSQLiteDatabase(name, options), opts),
+		drop: (name) => dropOpSQLiteStore(name, opts)
+	};
+}
+var OpSQLitePreparedStatement = class {
+	#db;
+	#sql;
+	constructor(db, sql) {
+		this.#db = db;
+		this.#sql = sql;
+	}
+	async exec(params) {
+		await this.#db.executeRaw(this.#sql, params);
+	}
+	all(params) {
+		return this.#db.executeRaw(this.#sql, params);
+	}
+};
+var OpSQLiteDatabase = class {
+	#db;
+	#filename;
+	constructor(filename, opts) {
+		this.#filename = filename;
+		const openOpts = { name: filename };
+		if (opts?.location) openOpts.location = opts.location;
+		if (opts?.encryptionKey) openOpts.encryptionKey = opts.encryptionKey;
+		this.#db = open(openOpts);
+	}
+	close() {
+		this.#db.close();
+	}
+	destroy() {
+		try {
+			const tempDb = open({ name: this.#filename });
+			tempDb.delete();
+			tempDb.close();
+		} catch (_error) {}
+	}
+	prepare(sql) {
+		return new OpSQLitePreparedStatement(this.#db, sql);
+	}
+	execSync(sql) {
+		this.#db.executeRawSync(sql, []);
+	}
+};
+//#endregion
+export { opSQLiteStoreProvider };
+
+//# sourceMappingURL=store.js.map

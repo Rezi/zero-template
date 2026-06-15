@@ -1,0 +1,16 @@
+import { getNonCryptoRandomValues } from "../../../shared/src/random-values.js";
+//#region ../zero-client/src/util/nanoid.ts
+function nanoid(size = 21) {
+	return getNonCryptoRandomValues(new Uint8Array(size)).reduce((id, byte) => {
+		byte &= 63;
+		if (byte < 36) id += byte.toString(36);
+		else if (byte < 62) id += (byte - 26).toString(36).toUpperCase();
+		else if (byte > 62) id += "-";
+		else id += "_";
+		return id;
+	}, "");
+}
+//#endregion
+export { nanoid };
+
+//# sourceMappingURL=nanoid.js.map

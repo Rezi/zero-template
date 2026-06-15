@@ -1,0 +1,54 @@
+import { promiseVoid } from "../../../../shared/src/resolved-promises.js";
+import { Database } from "../../../../zqlite/src/db.js";
+import { getReplicationState } from "../replicator/schema/replication-state.js";
+import { StatementRunner } from "../../db/statements.js";
+import { RunningState } from "../running-state.js";
+//#region ../zero-cache/src/services/change-streamer/replica-monitor.ts
+var CHECK_INTERVAL_MS = 30 * 1e3;
+/**
+* The single-node equivalent of the {@link BackupMonitor} polls the replica
+* file every 30 seconds and schedules cleanup when the watermark
+* (i.e. stateVersion) moves forward.
+*/
+var ReplicaMonitor = class {
+	id = "replica-monitor";
+	#lc;
+	#replicaFile;
+	#changeStreamer;
+	#state = new RunningState(this.id);
+	#lastWatermark = "";
+	constructor(lc, replicaFile, changeStreamer) {
+		this.#lc = lc.withContext("component", this.id);
+		this.#replicaFile = replicaFile;
+		this.#changeStreamer = changeStreamer;
+	}
+	async run() {
+		this.#lc.info?.(`starting replica monitor`);
+		await this.#state.sleep(CHECK_INTERVAL_MS);
+		while (this.#state.shouldRun()) {
+			const db = new Database(this.#lc, this.#replicaFile);
+			try {
+				const { stateVersion } = getReplicationState(new StatementRunner(db));
+				if (stateVersion !== this.#lastWatermark) {
+					this.#lastWatermark = stateVersion;
+					this.#lc.debug?.(`replicated up to watermark ${stateVersion}`);
+					this.#changeStreamer.scheduleCleanup(stateVersion);
+				}
+			} catch (e) {
+				this.#lc.error?.(`Unable to read watermark from replica`, e);
+			} finally {
+				db.close();
+			}
+			await this.#state.sleep(CHECK_INTERVAL_MS);
+		}
+		this.#lc.info?.(`replica monitor stopped`);
+	}
+	stop() {
+		this.#state.stop(this.#lc);
+		return promiseVoid;
+	}
+};
+//#endregion
+export { ReplicaMonitor };
+
+//# sourceMappingURL=replica-monitor.js.map

@@ -1,0 +1,9 @@
+export declare const ADD = 0;
+export declare const REMOVE = 1;
+export declare const EDIT = 2;
+export declare const CHILD = 3;
+export type ADD = typeof ADD;
+export type REMOVE = typeof REMOVE;
+export type EDIT = typeof EDIT;
+export type CHILD = typeof CHILD;
+//# sourceMappingURL=change-type-enum.d.ts.map

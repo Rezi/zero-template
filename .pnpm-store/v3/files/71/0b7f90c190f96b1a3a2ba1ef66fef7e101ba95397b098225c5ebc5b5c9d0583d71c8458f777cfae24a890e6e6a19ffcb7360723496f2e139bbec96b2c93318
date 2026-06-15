@@ -1,0 +1,36 @@
+import type { LogContext } from '@rocicorp/logger';
+import * as v from '../../../../../shared/src/valita.ts';
+import type { PublishedTableSpec } from '../../../db/specs.ts';
+import { type LexiVersion } from '../../../types/lexi-version.ts';
+import { type ShardConfig } from '../../../types/shards.ts';
+import type { Sink } from '../../../types/streams.ts';
+import { type SubscriptionState } from '../../replicator/schema/replication-state.ts';
+import type { ChangeSource } from '../change-source.ts';
+import { type Listener } from '../common/change-stream-multiplexer.ts';
+import type { ChangeStreamMessage } from '../protocol/current/downstream.ts';
+import { type InitialSyncOptions, type ServerContext } from './initial-sync.ts';
+import type { MessageRelation as PostgresRelation } from './logical-replication/pgoutput.types.ts';
+/**
+ * Initializes a Postgres change source, including the initial sync of the
+ * replica, before streaming changes from the corresponding logical replication
+ * stream.
+ */
+export declare function initializePostgresChangeSource(lc: LogContext, upstreamURI: string, shard: ShardConfig, replicaDbFile: string, syncOptions: InitialSyncOptions, context: ServerContext, lagReportIntervalMs?: number): Promise<{
+    subscriptionState: SubscriptionState;
+    changeSource: ChangeSource;
+}>;
+export declare class Acker implements Listener {
+    #private;
+    constructor(acks: Sink<bigint>);
+    onChange(change: ChangeStreamMessage): void;
+    ack(watermark: LexiVersion): void;
+}
+declare const lagReportSchema: v.ObjectType<{
+    id: v.Type<string>;
+    sendTimeMs: v.Type<number>;
+    commitTimeMs: v.Type<number>;
+}, undefined>;
+export type LagReport = v.Infer<typeof lagReportSchema>;
+export declare function relationDifferent(a: PublishedTableSpec, b: PostgresRelation): boolean;
+export {};
+//# sourceMappingURL=change-source.d.ts.map

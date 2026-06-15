@@ -1,0 +1,13 @@
+import type { Hash } from '../hash.ts';
+import type { Chunk } from './chunk.ts';
+import type { MustGetChunk } from './store.ts';
+/**
+ * A visitor walks the DAG starting at a given root and visits each chunk.
+ */
+export declare class Visitor {
+    #private;
+    constructor(dagRead: MustGetChunk);
+    visit(h: Hash): Promise<void>;
+    visitChunk(chunk: Chunk<unknown>): Promise<void>;
+}
+//# sourceMappingURL=visitor.d.ts.map

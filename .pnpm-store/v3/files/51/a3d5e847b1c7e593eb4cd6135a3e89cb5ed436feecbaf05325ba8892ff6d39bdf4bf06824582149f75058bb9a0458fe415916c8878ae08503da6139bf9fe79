@@ -1,0 +1,54 @@
+//#region ../zql/src/query/ttl.ts
+var DEFAULT_TTL_MS = 1e3 * 60 * 5;
+var MAX_TTL_MS = 1e3 * 60 * 10;
+var multiplier = {
+	s: 1e3,
+	m: 60 * 1e3,
+	h: 3600 * 1e3,
+	d: 1440 * 60 * 1e3,
+	y: 365 * 24 * 60 * 60 * 1e3
+};
+function parseTTL(ttl) {
+	if (typeof ttl === "number") return Number.isNaN(ttl) ? 0 : !Number.isFinite(ttl) || ttl < 0 ? -1 : ttl;
+	if (ttl === "none") return 0;
+	if (ttl === "forever") return -1;
+	const multi = multiplier[ttl.at(-1)];
+	return Number(ttl.slice(0, -1)) * multi;
+}
+function compareTTL(a, b) {
+	const ap = parseTTL(a);
+	const bp = parseTTL(b);
+	if (ap === -1 && bp !== -1) return 1;
+	if (ap !== -1 && bp === -1) return -1;
+	return ap - bp;
+}
+function normalizeTTL(ttl) {
+	if (typeof ttl === "string") return ttl;
+	if (ttl < 0) return "forever";
+	if (ttl === 0) return "none";
+	let shortest = ttl.toString();
+	const lengthOfNumber = shortest.length;
+	for (const unit of [
+		"y",
+		"d",
+		"h",
+		"m",
+		"s"
+	]) {
+		const candidate = `${ttl / multiplier[unit]}${unit}`;
+		if (candidate.length < shortest.length) shortest = candidate;
+	}
+	return shortest.length < lengthOfNumber ? shortest : ttl;
+}
+function clampTTL(ttl, lc) {
+	const parsedTTL = parseTTL(ttl);
+	if (parsedTTL === -1 || parsedTTL > 600 * 1e3) {
+		lc?.warn?.(`TTL (${ttl}) is too high, clamping to 10m`);
+		return parseTTL("10m");
+	}
+	return parsedTTL;
+}
+//#endregion
+export { DEFAULT_TTL_MS, MAX_TTL_MS, clampTTL, compareTTL, normalizeTTL };
+
+//# sourceMappingURL=ttl.js.map

@@ -1,0 +1,24 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { QueryServerMetrics } from '../../../../zero-protocol/src/inspect-down.ts';
+import type { InspectUpBody } from '../../../../zero-protocol/src/inspect-up.ts';
+import type { NormalizedZeroConfig } from '../../config/normalize.ts';
+import type { InspectorDelegate } from '../../server/inspector-delegate.ts';
+import type { ClientHandler } from './client-handler.ts';
+import type { ConnectionContext } from './connection-context-manager.ts';
+import type { CVRStore } from './cvr-store.ts';
+import type { CVRSnapshot } from './cvr.ts';
+export declare function handleInspect(lc: LogContext, body: InspectUpBody, cvr: CVRSnapshot, client: ClientHandler, inspectorDelegate: InspectorDelegate, clientGroupID: string, cvrStore: CVRStore, config: NormalizedZeroConfig, ctx: ConnectionContext): Promise<void>;
+/**
+ * Converts per-query server metrics to the appropriate wire format based on the
+ * client's protocol version.
+ *
+ * Protocol >= 51: new format — `query-hydration-server-ms` (plain number) +
+ *   `query-update-server` (TDigest).
+ * Protocol < 51: old format — `query-materialization-server` (TDigest) +
+ *   `query-update-server` (TDigest). The scalar hydration time is wrapped into a
+ *   one-point TDigest for backward compatibility.
+ *
+ * @visibleForTesting
+ */
+export declare function metricsForProtocol(metrics: QueryServerMetrics | null, protocolVersion: number): QueryServerMetrics | null;
+//# sourceMappingURL=inspect-handler.d.ts.map

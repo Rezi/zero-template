@@ -1,0 +1,12 @@
+import type { PullResponseV1, Puller, PullerResultV1 } from './puller.ts';
+/**
+ * This creates a default puller which uses HTTP POST to send the pull request.
+ */
+export declare function getDefaultPuller(rep: {
+    pullURL: string;
+    auth: string;
+}): Puller;
+export declare function isDefaultPuller(puller: Puller): boolean;
+export declare function assertPullResponseV1(v: unknown): asserts v is PullResponseV1;
+export declare function assertPullerResultV1(v: unknown): asserts v is PullerResultV1;
+//# sourceMappingURL=get-default-puller.d.ts.map

@@ -1,0 +1,30 @@
+import { assertJSONObject } from "../../shared/src/json.js";
+import { stringCompare } from "../../shared/src/string-compare.js";
+//#region ../replicache/src/cookies.ts
+/**
+* Compare two cookies.
+* `null` is considered to be less than any other cookie.
+*/
+function compareCookies(a, b) {
+	if (a === b) return 0;
+	if (a === null) return -1;
+	if (b === null) return 1;
+	const cva = getCompareValue(a);
+	const cvb = getCompareValue(b);
+	if (typeof cva === "string" || typeof cvb === "string") return stringCompare(String(cva), String(cvb));
+	return cva - cvb;
+}
+function getCompareValue(cookie) {
+	if (typeof cookie === "string" || typeof cookie === "number") return cookie;
+	return cookie.order;
+}
+function assertCookie(v) {
+	if (v === null || typeof v === "string" || typeof v === "number") return;
+	assertJSONObject(v);
+	if (typeof v.order === "string" || typeof v.order === "number") return;
+	throw new Error("Invalid cookie");
+}
+//#endregion
+export { assertCookie, compareCookies };
+
+//# sourceMappingURL=cookies.js.map

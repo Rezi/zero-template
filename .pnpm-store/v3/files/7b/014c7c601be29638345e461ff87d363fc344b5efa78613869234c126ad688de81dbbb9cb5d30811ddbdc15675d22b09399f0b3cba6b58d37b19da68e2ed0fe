@@ -1,0 +1,48 @@
+/**
+ * Replication metadata, used for incremental view maintenance and catchup.
+ *
+ * These tables are created atomically in {@link setupReplicationTables}
+ * after the logical replication handoff when initial data synchronization has completed.
+ */
+import { type JSONObject } from '../../../../../shared/src/bigint-json.ts';
+import * as v from '../../../../../shared/src/valita.ts';
+import type { Database } from '../../../../../zqlite/src/db.ts';
+import type { StatementRunner } from '../../../db/statements.ts';
+import { ZERO_VERSION_COLUMN_NAME } from './constants.ts';
+export { ZERO_VERSION_COLUMN_NAME };
+export type RuntimeEvent = 'sync' | 'upgrade' | 'vacuum';
+export declare const CREATE_RUNTIME_EVENTS_TABLE = "\n  CREATE TABLE \"_zero.runtimeEvents\" (\n    event TEXT PRIMARY KEY ON CONFLICT REPLACE,\n    timestamp TEXT NOT NULL DEFAULT (current_timestamp)\n  );\n";
+declare const subscriptionStateSchema: v.Type<{
+    publications: string[];
+    replicaVersion: string;
+    watermark: string;
+}>;
+export type SubscriptionState = v.Infer<typeof subscriptionStateSchema>;
+declare const subscriptionStateAndContextSchema: v.Type<{
+    publications: string[];
+    initialSyncContext: Readonly<Record<string, import("../../../../../shared/src/bigint-json.ts").JSONValue>>;
+    replicaVersion: string;
+    watermark: string;
+}>;
+export type SubscriptionStateAndContext = v.Infer<typeof subscriptionStateAndContextSchema>;
+declare const replicationStateSchema: v.ObjectType<{
+    stateVersion: v.Type<string>;
+}, undefined>;
+export type ReplicationState = v.Infer<typeof replicationStateSchema>;
+export declare function initReplicationState(db: Database, publications: string[], watermark: string, initialSyncContext?: JSONObject, createTables?: boolean): void;
+/**
+ * Exposed as a separate function for the custom change source,
+ * which needs the tables to be created in order to construct
+ * ChangeProcessor before it knows the initial watermark.
+ */
+export declare function createReplicationStateTables(db: Database): void;
+export declare function recordEvent(db: Database, event: RuntimeEvent): void;
+export declare function getAscendingEvents(db: Database): {
+    event: string;
+    timestamp: Date;
+}[];
+export declare function getSubscriptionState(db: StatementRunner): SubscriptionState;
+export declare function getSubscriptionStateAndContext(db: StatementRunner): SubscriptionStateAndContext;
+export declare function updateReplicationWatermark(db: StatementRunner, watermark: string): void;
+export declare function getReplicationState(db: StatementRunner): ReplicationState;
+//# sourceMappingURL=replication-state.d.ts.map

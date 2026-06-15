@@ -1,0 +1,4 @@
+export declare class MutationAlreadyProcessedError extends Error {
+    constructor(clientID: string, received: number, actual: number | bigint);
+}
+//# sourceMappingURL=error.d.ts.map

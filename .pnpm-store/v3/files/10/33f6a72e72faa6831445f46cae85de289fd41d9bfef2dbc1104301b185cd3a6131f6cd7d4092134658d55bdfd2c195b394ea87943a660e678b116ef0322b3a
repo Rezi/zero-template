@@ -1,0 +1,197 @@
+import { assert } from "../../../../../shared/src/asserts.js";
+import { parse } from "../../../../../shared/src/valita.js";
+import { equals } from "../../../../../shared/src/set-utils.js";
+import { connectPgClient, pgClient } from "../../../types/pg.js";
+import { toStateVersionString } from "./lsn.js";
+import { READONLY } from "../../../db/mode-enum.js";
+import { getPublicationInfo } from "./schema/published.js";
+import { SchemaIncompatibilityError } from "../common/backfill-manager.js";
+import { BinaryCopyParser, hasBinaryDecoder, makeBinaryDecoder, textCastDecoder } from "../../../db/pg-copy-binary.js";
+import { TsvParser } from "../../../db/pg-copy.js";
+import { getTypeParsers } from "../../../db/pg-type-parser.js";
+import { TransactionPool, importSnapshot } from "../../../db/transaction-pool.js";
+import { columnMetadataSchema, tableMetadataSchema } from "./backfill-metadata.js";
+import { createReplicationSlot } from "./replication-slots.js";
+import { makeBinarySelectExprs, makeDownloadStatements } from "./initial-sync.js";
+import postgres from "postgres";
+import { PG_UNDEFINED_COLUMN, PG_UNDEFINED_TABLE } from "@drdgvhbh/postgres-error-codes";
+//#region ../zero-cache/src/services/change-source/pg/backfill-stream.ts
+var POSTGRES_COPY_CHUNK_SIZE = 64 * 1024;
+var SAMPLE_OR_LIMIT_RE = /\sTABLESAMPLE\s+BERNOULLI\b|\sLIMIT\s+\d/i;
+/**
+* Streams a series of `backfill` messages (ending with `backfill-complete`)
+* at a set watermark (i.e. LSN). The data is retrieved via a COPY stream
+* made at a transaction snapshot corresponding to specific LSN, obtained by
+* creating a short-lived replication slot.
+*/
+async function* streamBackfill(lc, upstreamURI, { slot, publications }, bf, opts = {}) {
+	lc = lc.withContext("component", "backfill").withContext("table", bf.table.name);
+	const { flushThresholdBytes = POSTGRES_COPY_CHUNK_SIZE, textCopy = false } = opts;
+	const db = await connectPgClient(lc, upstreamURI, "backfill-stream", { ["max_lifetime"]: 7200 });
+	let tx;
+	let watermark;
+	try {
+		({tx, watermark} = await createSnapshotTransaction(lc, upstreamURI, db, slot));
+		const { tableSpec, backfill } = await validateSchema(tx, publications, bf, watermark);
+		const { relation, columns } = backfill;
+		const cols = [...relation.rowKey.columns, ...columns];
+		const stmts = makeDownloadStatements(tableSpec, cols);
+		if (textCopy) {
+			const types = await getTypeParsers(db, { returnJsonAsString: true });
+			yield* stream(lc, tx, backfill, stmts, `COPY (${stmts.select}) TO STDOUT`, new TsvParser(), cols.map((col) => {
+				const parser = types.getTypeParser(tableSpec.columns[col].typeOID);
+				return (text) => parser(text);
+			}), flushThresholdBytes);
+		} else {
+			const binaryStmts = makeDownloadStatements(tableSpec, cols, void 0, void 0, makeBinarySelectExprs(tableSpec, cols));
+			yield* stream(lc, tx, backfill, stmts, `COPY (${binaryStmts.select}) TO STDOUT WITH (FORMAT binary)`, new BinaryCopyParser(), cols.map((col) => {
+				const spec = tableSpec.columns[col];
+				const decoder = hasBinaryDecoder(spec) ? makeBinaryDecoder(spec) : textCastDecoder;
+				return (buf) => decoder(buf);
+			}), flushThresholdBytes);
+		}
+	} catch (e) {
+		if (e instanceof postgres.PostgresError && (e.code === PG_UNDEFINED_TABLE || e.code === PG_UNDEFINED_COLUMN)) throw new SchemaIncompatibilityError(bf, String(e), { cause: e });
+		throw e;
+	} finally {
+		tx?.setDone();
+		db.end().catch((e) => lc.warn?.(`error closing backfill connection`, e));
+	}
+}
+async function* stream(lc, tx, backfill, { getTotalRows, getTotalBytes }, copyCommand, parser, decoders, flushThresholdBytes) {
+	assert(!SAMPLE_OR_LIMIT_RE.test(copyCommand), `backfill COPY must not sample or limit: ${copyCommand}`);
+	const start = performance.now();
+	const [rows, bytes] = await tx.processReadTask((sql) => Promise.all([sql.unsafe(getTotalRows), sql.unsafe(getTotalBytes)]));
+	const status = {
+		rows: 0,
+		totalRows: Number(rows[0].totalRows),
+		totalBytes: Number(bytes[0].totalBytes)
+	};
+	let elapsed = (performance.now() - start).toFixed(3);
+	lc.info?.(`Computed total rows and bytes for: ${copyCommand} (${elapsed} ms)`, { status });
+	const copyStream = await tx.processReadTask((sql) => sql.unsafe(copyCommand).readable());
+	let totalBytes = 0;
+	let totalMsgs = 0;
+	let rowValues = [];
+	let bufferedBytes = 0;
+	const logFlushed = () => {
+		lc.debug?.(`Flushed ${rowValues.length} rows, ${bufferedBytes} bytes (total: rows=${status.rows}, msgs=${totalMsgs}, bytes=${totalBytes})`);
+	};
+	let row = Array.from({ length: decoders.length });
+	let col = 0;
+	for await (const data of copyStream) {
+		const chunk = data;
+		for (const field of parser.parse(chunk)) {
+			row[col] = field === null ? null : decoders[col](field);
+			if (++col === decoders.length) {
+				rowValues.push(row);
+				status.rows++;
+				row = Array.from({ length: decoders.length });
+				col = 0;
+			}
+		}
+		bufferedBytes += chunk.byteLength;
+		totalBytes += chunk.byteLength;
+		if (bufferedBytes >= flushThresholdBytes) {
+			yield {
+				tag: "backfill",
+				...backfill,
+				rowValues,
+				status
+			};
+			totalMsgs++;
+			logFlushed();
+			rowValues = [];
+			bufferedBytes = 0;
+		}
+	}
+	if (rowValues.length > 0) {
+		yield {
+			tag: "backfill",
+			...backfill,
+			rowValues,
+			status
+		};
+		totalMsgs++;
+		logFlushed();
+	}
+	yield {
+		tag: "backfill-completed",
+		...backfill,
+		status
+	};
+	elapsed = (performance.now() - start).toFixed(3);
+	lc.info?.(`Finished streaming ${status.rows} rows, ${totalMsgs} msgs, ${totalBytes} bytes (${elapsed} ms)`);
+}
+/**
+* Creates (and drops) a replication slot in order to obtain a snapshot
+* that corresponds with a specific LSN. Sets the snapshot on the
+* TransactionPool and returns the watermark corresponding to the LSN.
+*
+* (Note that PG's other LSN-related functions are not scoped to a
+*  transaction; this is the only way to get set a transaction at a specific
+*  LSN.)
+*/
+async function createSnapshotTransaction(lc, upstreamURI, db, slotNamePrefix) {
+	const replicationSession = pgClient(lc, upstreamURI, "backfill-replication-session", {
+		["fetch_types"]: false,
+		connection: { replication: "database" }
+	});
+	const slotName = `${slotNamePrefix}_bf_${Date.now()}`;
+	try {
+		const { snapshot_name: snapshot, consistent_point: lsn } = await createReplicationSlot(lc, replicationSession, { slotName });
+		const { init, imported } = importSnapshot(snapshot);
+		const tx = new TransactionPool(lc, {
+			mode: READONLY,
+			init
+		}).run(db);
+		await imported;
+		await replicationSession.unsafe(`DROP_REPLICATION_SLOT "${slotName}"`);
+		const watermark = toStateVersionString(lsn);
+		lc.info?.(`Opened snapshot transaction at LSN ${lsn} (${watermark})`);
+		return {
+			tx,
+			watermark
+		};
+	} catch (e) {
+		await replicationSession.unsafe(`SELECT pg_drop_replication_slot(slot_name) FROM pg_replication_slots
+         WHERE slot_name = '${slotName}'`);
+		lc.warn?.(`Failed to create backfill snapshot`, e);
+		throw e;
+	} finally {
+		await replicationSession.end();
+	}
+}
+function validateSchema(tx, publications, bf, watermark) {
+	return tx.processReadTask(async (sql) => {
+		const { tables } = await getPublicationInfo(sql, publications);
+		const spec = tables.find((spec) => spec.schema === bf.table.schema && spec.name === bf.table.name);
+		if (!spec) throw new SchemaIncompatibilityError(bf, `Table has been renamed or dropped`);
+		const tableMeta = parse(bf.table.metadata, tableMetadataSchema);
+		if (spec.schemaOID !== tableMeta.schemaOID) throw new SchemaIncompatibilityError(bf, `Schema no longer corresponds to the original schema`);
+		if (spec.oid !== tableMeta.relationOID) throw new SchemaIncompatibilityError(bf, `Table no longer corresponds to the original table`);
+		if (!equals(new Set(Object.keys(tableMeta.rowKey)), new Set(spec.replicaIdentityColumns))) throw new SchemaIncompatibilityError(bf, "Row key (e.g. PRIMARY KEY or INDEX) has changed");
+		const allCols = [...Object.entries(tableMeta.rowKey), ...Object.entries(bf.columns)];
+		for (const [col, val] of allCols) {
+			const colSpec = spec.columns[col];
+			if (!colSpec) throw new SchemaIncompatibilityError(bf, `Column ${col} has been renamed or dropped`);
+			if (parse(val, columnMetadataSchema).attNum !== colSpec.pos) throw new SchemaIncompatibilityError(bf, `Column ${col} no longer corresponds to the original column`);
+		}
+		return {
+			tableSpec: spec,
+			backfill: {
+				relation: {
+					schema: bf.table.schema,
+					name: bf.table.name,
+					rowKey: { columns: Object.keys(tableMeta.rowKey) }
+				},
+				columns: Object.keys(bf.columns).filter((col) => !(col in tableMeta.rowKey)),
+				watermark
+			}
+		};
+	});
+}
+//#endregion
+export { streamBackfill };
+
+//# sourceMappingURL=backfill-stream.js.map

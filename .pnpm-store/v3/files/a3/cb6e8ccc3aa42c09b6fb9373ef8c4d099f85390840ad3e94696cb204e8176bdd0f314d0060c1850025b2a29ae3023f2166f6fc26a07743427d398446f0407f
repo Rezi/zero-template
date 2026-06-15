@@ -1,0 +1,48 @@
+import type { LogContext } from '@rocicorp/logger';
+import { Subscription } from '../../types/subscription.ts';
+import type { Service } from '../service.ts';
+import type { ChangeStreamerService } from './change-streamer.ts';
+import type { SnapshotMessage } from './snapshot.ts';
+export declare const CHECK_INTERVAL_MS = 60000;
+/**
+ * The BackupMonitor polls the litestream "/metrics" endpoint to track the
+ * watermark (label) value of the `litestream_replica_progress` gauge and
+ * schedules cleanup of change log entries that can be purged as a result.
+ *
+ * See: https://github.com/rocicorp/litestream/pull/3
+ *
+ * Note that change log entries cannot simply be purged as soon as they
+ * have been applied and backed up by litestream. Consider the case in which
+ * litestream backs up new wal segments every minute, but it takes 5 minutes
+ * to restore a replica: if a zero-cache starts restoring a replica at
+ * minute 0, and new watermarks are replicated at minutes 1, 2, 3, 4, and 5,
+ * purging changelog records as soon as those watermarks are replicated would
+ * result in the zero-cache not being able to catch up from minute 0 once it
+ * has finished restoring the replica.
+ *
+ * The `/snapshot` reservation protocol is used to prevent premature change
+ * log cleanup:
+ * - Clients restoring a snapshot initiate a `/snapshot` request and hold that
+ *   request open while it restores its snapshot, prepares it, and
+ *   starts its subscription to the change stream. During this time, no
+ *   cleanups are scheduled.
+ * - When the subscription is started, the interval since the beginning of
+ *   of the reservation is tracked to increase the background cleanup delay
+ *   interval if needed. The reservation is ended (and request closed), and
+ *   cleanup scheduling is resumed with the current delay interval.
+ *
+ * Note that the reservation request is the primary mechanism by which
+ * premature change log cleanup is prevented. The cleanup delay interval is
+ * a secondary safeguard.
+ */
+export declare class BackupMonitor implements Service {
+    #private;
+    readonly id = "backup-monitor";
+    constructor(lc: LogContext, replicaFile: string, backupURL: string, metricsEndpoint: string, changeStreamer: ChangeStreamerService, initialCleanupDelayMs: number);
+    run(): Promise<void>;
+    startSnapshotReservation(taskID: string): Subscription<SnapshotMessage>;
+    endReservation(taskID: string, updateCleanupDelay?: boolean): void;
+    readonly checkWatermarksAndScheduleCleanup: () => Promise<void>;
+    stop(): Promise<void>;
+}
+//# sourceMappingURL=backup-monitor.d.ts.map

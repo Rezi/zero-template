@@ -1,0 +1,173 @@
+import { sleep } from "../../../../shared/src/sleep.js";
+import { must } from "../../../../shared/src/must.js";
+import { getShardConfig } from "../../types/shards.js";
+import { assertNormalized } from "../../config/normalize.js";
+import { Database } from "../../../../zqlite/src/db.js";
+import { getSubscriptionState } from "../replicator/schema/replication-state.js";
+import { StatementRunner } from "../../db/statements.js";
+import { deleteLiteDB } from "../../db/delete-lite-db.js";
+import { ChangeStreamerHttpClient } from "../change-streamer/change-streamer-http.js";
+import { resolver } from "@rocicorp/resolver";
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+//#region ../zero-cache/src/services/litestream/commands.ts
+var MAX_RETRIES = 60;
+var RETRY_INTERVAL_MS = 3e3;
+var BackupNotFoundException = class extends Error {
+	static name = "BackupNotFoundException";
+	constructor(backupURL) {
+		super(`backup not found at ${backupURL}`);
+	}
+};
+/**
+* @param replicaConstraints The constraints of the restored backup when
+*        restoring for the change-streamer (replication-manager). For the
+*        view-syncer, this should be unspecified so that the constraints are
+*        retrieved from the replication-manager via the snapshot protocol.
+*/
+async function restoreReplica(lc, config, replicaConstraints) {
+	for (let i = 0; i < MAX_RETRIES; i++) {
+		try {
+			if (await tryRestore(lc, config, replicaConstraints)) return;
+		} catch (e) {
+			if (i === 0) {
+				lc.warn?.(`initial restore attempt failed. retrying once`, e);
+				continue;
+			}
+			throw e;
+		}
+		if (replicaConstraints) throw new BackupNotFoundException(config.litestream.backupURL);
+		lc.info?.(`replica not found. retrying in ${RETRY_INTERVAL_MS / 1e3} seconds`);
+		await sleep(RETRY_INTERVAL_MS);
+	}
+	throw new Error(`max attempts exceeded restoring replica`);
+}
+function getLitestream(mode, config, logLevelOverride, backupURLOverride) {
+	const { executable, executableV5, restoreUsingV5, backupURL, logLevel, configPath, endpoint, region, port = config.port + 2, checkpointThresholdMB, minCheckpointPageCount = checkpointThresholdMB * 250, maxCheckpointPageCount = minCheckpointPageCount * 10, incrementalBackupIntervalMinutes, snapshotBackupIntervalHours, multipartConcurrency, multipartSize } = config.litestream;
+	const snapshotBackupIntervalMinutes = snapshotBackupIntervalHours * 60 - 5;
+	return {
+		litestream: (mode === "restore" && restoreUsingV5 ? executableV5 : executable) ?? must(executable, `Missing --litestream-executable`),
+		env: {
+			...process.env,
+			["ZERO_REPLICA_FILE"]: config.replica.file,
+			["ZERO_LITESTREAM_BACKUP_URL"]: must(backupURLOverride ?? backupURL),
+			["ZERO_LITESTREAM_MIN_CHECKPOINT_PAGE_COUNT"]: String(minCheckpointPageCount),
+			["ZERO_LITESTREAM_MAX_CHECKPOINT_PAGE_COUNT"]: String(maxCheckpointPageCount),
+			["ZERO_LITESTREAM_INCREMENTAL_BACKUP_INTERVAL_MINUTES"]: String(incrementalBackupIntervalMinutes),
+			["ZERO_LITESTREAM_LOG_LEVEL"]: logLevelOverride ?? logLevel,
+			["ZERO_LITESTREAM_SNAPSHOT_BACKUP_INTERVAL_MINUTES"]: String(snapshotBackupIntervalMinutes),
+			["ZERO_LITESTREAM_MULTIPART_CONCURRENCY"]: String(multipartConcurrency),
+			["ZERO_LITESTREAM_MULTIPART_SIZE"]: String(multipartSize),
+			["ZERO_LOG_FORMAT"]: config.log.format,
+			["LITESTREAM_CONFIG"]: configPath,
+			["LITESTREAM_PORT"]: String(port),
+			...endpoint ? { ["ZERO_LITESTREAM_ENDPOINT"]: endpoint } : {},
+			...region ? { ["ZERO_LITESTREAM_REGION"]: region } : {}
+		}
+	};
+}
+async function tryRestore(lc, config, replicaConstraints) {
+	let snapshotStatus;
+	if (!replicaConstraints) {
+		snapshotStatus = await reserveAndGetSnapshotStatus(lc, config);
+		lc.info?.(`restoring backup from ${snapshotStatus.backupURL}`);
+		replicaConstraints = snapshotStatus;
+	}
+	const { litestream, env } = getLitestream("restore", config, "debug", snapshotStatus?.backupURL);
+	const { restoreParallelism: parallelism } = config.litestream;
+	const proc = spawn(litestream, [
+		"restore",
+		"-if-db-not-exists",
+		"-if-replica-exists",
+		"-parallelism",
+		String(parallelism),
+		config.replica.file
+	], {
+		env,
+		stdio: "inherit",
+		windowsHide: true
+	});
+	const { promise, resolve, reject } = resolver();
+	proc.on("error", reject);
+	proc.on("close", (code, signal) => {
+		if (signal) reject(`litestream killed with ${signal}`);
+		else if (code !== 0) reject(`litestream exited with code ${code}`);
+		else resolve();
+	});
+	await promise;
+	if (!existsSync(config.replica.file)) return false;
+	if (!replicaIsValid(lc, config.replica.file, replicaConstraints)) {
+		lc.info?.(`Deleting local replica and retrying restore`);
+		deleteLiteDB(config.replica.file);
+		return false;
+	}
+	return true;
+}
+function replicaIsValid(lc, replica, constraints) {
+	const db = new Database(lc, replica);
+	try {
+		const { replicaVersion, watermark } = getSubscriptionState(new StatementRunner(db));
+		if (replicaVersion !== constraints.replicaVersion) {
+			lc.warn?.(`Local replica version ${replicaVersion} does not match expected replicaVersion ${constraints.replicaVersion}`, constraints);
+			return false;
+		}
+		if (watermark < constraints.minWatermark) {
+			lc.warn?.(`Local replica watermark ${watermark} is earlier than minWatermark ${constraints.minWatermark}`);
+			return false;
+		}
+		lc.info?.(`Local replica at version ${replicaVersion} and watermark ${watermark} is compatible`, constraints);
+		return true;
+	} catch (e) {
+		lc.error?.("Error while validating restored replica", e);
+		return false;
+	} finally {
+		db.close();
+	}
+}
+function startReplicaBackupProcess(lc, config) {
+	const { litestream, env } = getLitestream("replicate", config);
+	lc.info?.(`starting litestream backup to ${config.litestream.backupURL}`);
+	return spawn(litestream, ["replicate"], {
+		env,
+		stdio: "inherit",
+		windowsHide: true
+	});
+}
+function reserveAndGetSnapshotStatus(lc, config) {
+	const { promise: status, resolve, reject } = resolver();
+	(async function() {
+		const abort = new AbortController();
+		process.on("SIGINT", () => abort.abort());
+		process.on("SIGTERM", () => abort.abort());
+		for (let i = 0;; i++) {
+			let err;
+			try {
+				let resolved = false;
+				const stream = await reserveSnapshot(lc, config);
+				for await (const msg of stream) {
+					resolve(msg[1]);
+					resolved = true;
+				}
+				if (resolved) break;
+			} catch (e) {
+				err = e;
+			}
+			lc.warn?.(`Unable to reserve snapshot (attempt ${i + 1}). Retrying in 5 seconds.`, String(err));
+			try {
+				await sleep(5e3, abort.signal);
+			} catch (e) {
+				return reject(e);
+			}
+		}
+	})();
+	return status;
+}
+function reserveSnapshot(lc, config) {
+	assertNormalized(config);
+	const { taskID, change, changeStreamer } = config;
+	return new ChangeStreamerHttpClient(lc, getShardConfig(config), change.db, changeStreamer.uri).reserveSnapshot(taskID);
+}
+//#endregion
+export { BackupNotFoundException, restoreReplica, startReplicaBackupProcess };
+
+//# sourceMappingURL=commands.js.map

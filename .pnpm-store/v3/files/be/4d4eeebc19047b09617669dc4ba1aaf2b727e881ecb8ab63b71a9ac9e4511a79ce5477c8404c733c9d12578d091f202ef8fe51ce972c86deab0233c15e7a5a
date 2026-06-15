@@ -1,0 +1,125 @@
+import { assert } from "../../../../shared/src/asserts.js";
+import { WRITE_WORKER_URL } from "../../server/worker-urls.js";
+import { resolver } from "@rocicorp/resolver";
+import { Worker } from "node:worker_threads";
+//#region ../zero-cache/src/services/replicator/write-worker-client.ts
+function serializeError(err) {
+	if (!(err instanceof Error)) return {
+		name: "Error",
+		message: String(err),
+		details: err && typeof err === "object" ? { ...err } : void 0
+	};
+	const details = Object.fromEntries(Object.getOwnPropertyNames(err).filter((key) => ![
+		"name",
+		"message",
+		"stack",
+		"cause"
+	].includes(key)).map((key) => [key, err[key]]));
+	const cause = err.cause instanceof Error ? serializeError(err.cause) : err.cause === void 0 ? void 0 : String(err.cause);
+	return {
+		name: err.name,
+		message: err.message,
+		stack: err.stack,
+		cause,
+		details: Object.keys(details).length ? details : void 0
+	};
+}
+function deserializeError(serialized) {
+	const err = new Error(serialized.message);
+	err.name = serialized.name;
+	if (serialized.stack !== void 0) err.stack = serialized.stack;
+	if (serialized.cause !== void 0) err.cause = typeof serialized.cause === "string" ? serialized.cause : deserializeError(serialized.cause);
+	if (serialized.details) Object.assign(err, serialized.details);
+	return err;
+}
+function applyPragmas(db, pragmas) {
+	db.pragma(`busy_timeout = ${pragmas.busyTimeout}`);
+	db.pragma(`analysis_limit = ${pragmas.analysisLimit}`);
+	if (pragmas.walAutocheckpoint !== void 0) db.pragma(`wal_autocheckpoint = ${pragmas.walAutocheckpoint}`);
+}
+/**
+* Delegates SQLite writes to a worker_thread,
+* keeping the main event loop free for WebSocket heartbeats and IPC.
+*/
+var ThreadWriteWorkerClient = class {
+	#worker;
+	#pending = null;
+	#errorHandler = () => {};
+	#terminated = false;
+	constructor() {
+		this.#worker = new Worker(WRITE_WORKER_URL);
+		this.#worker.on("message", (msg) => {
+			if ("writeError" in msg) {
+				const error = deserializeError(msg.writeError);
+				this.#rejectAll(error);
+				this.#errorHandler(error);
+				return;
+			}
+			const r = this.#pending;
+			if (!r) return;
+			this.#pending = null;
+			if (msg.error !== void 0) r.reject(deserializeError(msg.error));
+			else r.resolve(msg.result);
+		});
+		this.#worker.on("error", (err) => {
+			this.#rejectAll(err);
+			this.#errorHandler(err);
+		});
+		this.#worker.on("exit", (code) => {
+			this.#terminated = true;
+			if (code !== 0) {
+				const err = /* @__PURE__ */ new Error(`Worker exited with code ${code}`);
+				this.#rejectAll(err);
+				this.#errorHandler(err);
+			}
+		});
+	}
+	#rejectAll(err) {
+		const r = this.#pending;
+		if (r) {
+			this.#pending = null;
+			r.reject(err);
+		}
+	}
+	#call(method, args) {
+		assert(this.#pending === null, `concurrent call: ${method}`);
+		const r = resolver();
+		this.#pending = r;
+		this.#worker.postMessage({
+			method,
+			args
+		});
+		return r.promise;
+	}
+	init(dbPath, mode, pragmas, logConfig) {
+		return this.#call("init", [
+			dbPath,
+			mode,
+			pragmas,
+			logConfig
+		]);
+	}
+	getSubscriptionState() {
+		return this.#call("getSubscriptionState", []);
+	}
+	processMessage(downstream) {
+		return this.#call("processMessage", [downstream]);
+	}
+	abort() {
+		if (!this.#terminated) this.#worker.postMessage({
+			method: "abort",
+			args: []
+		});
+	}
+	async stop() {
+		await this.#call("stop", []);
+		if (!this.#terminated) await this.#worker.terminate();
+	}
+	onError(handler) {
+		this.#errorHandler = handler;
+	}
+};
+//#endregion
+export { ThreadWriteWorkerClient, applyPragmas, serializeError };
+
+//# sourceMappingURL=write-worker-client.js.map

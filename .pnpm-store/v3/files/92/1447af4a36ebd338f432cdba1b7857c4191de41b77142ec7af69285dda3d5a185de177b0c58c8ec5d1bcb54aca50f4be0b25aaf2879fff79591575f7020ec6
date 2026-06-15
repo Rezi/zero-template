@@ -1,0 +1,62 @@
+import type { LogContext } from '@rocicorp/logger';
+import { type ErroredQuery } from '../../../zero-protocol/src/custom-queries.ts';
+import { type TransformFailedBody } from '../../../zero-protocol/src/error.ts';
+import { type QueryResponseBody } from '../../../zero-protocol/src/query-server.ts';
+import type { TransformedAndHashed } from '../auth/read-authorizer.ts';
+import type { ConnectionContext, ConnectionValidation } from '../services/view-syncer/connection-context-manager.ts';
+import type { CustomQueryRecord } from '../services/view-syncer/schema/types.ts';
+import type { ShardID } from '../types/shards.ts';
+export type TransformResponse = {
+    kind: 'QueryResponse';
+    queries: QueryResponseBody;
+    validation: ConnectionValidation;
+} | TransformFailedBody;
+export type HashedTransformResponse = {
+    kind: 'failed';
+    result: TransformFailedBody;
+} | ({
+    kind: 'success';
+    result: (TransformedAndHashed | ErroredQuery)[];
+} & ({
+    cached: true;
+} | {
+    cached: false;
+    validation: ConnectionValidation;
+}));
+/**
+ * Transforms a custom query by calling the user's API server.
+ * Caches the transformed queries for 5 seconds to avoid unnecessary API calls.
+ *
+ * Error responses are not cached as the user may want to retry the query
+ * and the error may be transient.
+ *
+ * The TTL was chosen to be 5 seconds since custom query requests come with
+ * a token which itself may have a short TTL (e.g., 10 seconds).
+ *
+ * Token expiration isn't expected to be exact so this 5 second
+ * caching shouldn't cause unexpected behavior. E.g., many JWT libraries
+ * implement leeway for expiration checks: https://github.com/panva/jose/blob/main/docs/jwt/verify/interfaces/JWTVerifyOptions.md#clocktolerance
+ *
+ * The ViewSyncer will call the API server 3-4 times with the exact same queries
+ * if we do not cache requests.
+ *
+ * Caching is safe here because the cache key encodes the effective request
+ * identity used for `/query`: auth, userID, forwarded cookies, origin,
+ * custom headers, target URL, and the query hash itself.
+ */
+export declare class CustomQueryTransformer {
+    #private;
+    constructor(lc: LogContext, shard: ShardID);
+    /**
+     * Forces the empty `/query` validation request used by auth maintenance.
+     *
+     * This stays separate from `transform()` because `transform([], ...)`
+     * short-circuits locally and never hits the API server, while validation
+     * still needs to make the request so auth failures are surfaced.
+     * Successful validation is intentionally opaque because callers only care
+     * whether the request succeeded or failed.
+     */
+    validate(ctx: ConnectionContext): Promise<TransformResponse>;
+    transform(ctx: ConnectionContext, queries: Iterable<CustomQueryRecord>): Promise<HashedTransformResponse>;
+}
+//# sourceMappingURL=transform-query.d.ts.map

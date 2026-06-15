@@ -1,0 +1,6 @@
+/**
+ * A Promise wrapper for requestIdleCallback with fallback to setTimeout for
+ * browsers without support (aka Safari)
+ */
+export declare function requestIdle(timeout: number): Promise<void>;
+//# sourceMappingURL=request-idle.d.ts.map

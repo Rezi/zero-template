@@ -1,0 +1,6 @@
+export declare function mapValues<T extends Record<string, unknown>, U>(input: T, mapper: (value: T[keyof T]) => U): {
+    [K in keyof T]: U;
+};
+export declare function mapEntries<T, U>(input: Record<string, T>, mapper: (key: string, val: T) => [key: string, val: U]): Record<string, U>;
+export declare function mapAllEntries<T, U>(input: Record<string, T>, mapper: (entries: [key: string, val: T][]) => [key: string, val: U][]): Record<string, U>;
+//# sourceMappingURL=objects.d.ts.map

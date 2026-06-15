@@ -1,0 +1,54 @@
+//#region ../shared/src/custom-key-set.ts
+/**
+* A {@link Set} that uses a custom value transformation function to convert values
+* to a primitive type that can be used as a {@link Set} value.
+*
+* This allows for using objects as values in a {@link Set} without worrying about
+* reference equality.
+*/
+var CustomKeySet = class {
+	[Symbol.toStringTag] = "CustomKeySet";
+	#toKey;
+	#map = /* @__PURE__ */ new Map();
+	constructor(toKey, iterable) {
+		this.#toKey = toKey;
+		if (iterable) for (const value of iterable ?? []) this.#map.set(toKey(value), value);
+	}
+	add(value) {
+		this.#map.set(this.#toKey(value), value);
+		return this;
+	}
+	clear() {
+		this.#map.clear();
+	}
+	delete(value) {
+		return this.#map.delete(this.#toKey(value));
+	}
+	forEach(callbackfn, thisArg) {
+		this.#map.forEach((value) => {
+			callbackfn.call(thisArg, value, value, this);
+		});
+	}
+	has(value) {
+		return this.#map.has(this.#toKey(value));
+	}
+	get size() {
+		return this.#map.size;
+	}
+	*entries() {
+		for (const value of this.#map.values()) yield [value, value];
+	}
+	keys() {
+		return this.#map.values();
+	}
+	values() {
+		return this.#map.values();
+	}
+	[Symbol.iterator]() {
+		return this.#map.values();
+	}
+};
+//#endregion
+export { CustomKeySet };
+
+//# sourceMappingURL=custom-key-set.js.map

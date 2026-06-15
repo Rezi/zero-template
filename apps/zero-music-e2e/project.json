@@ -1,0 +1,26 @@
+{
+  "name": "zero-music-e2e",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/zero-music-e2e/src",
+  "implicitDependencies": ["zero-music"],
+  "tags": ["type:e2e"],
+  "targets": {
+    "e2e": {
+      "executor": "@nx/playwright:playwright",
+      "outputs": ["{workspaceRoot}/dist/.playwright/apps/zero-music-e2e"],
+      "options": {
+        "config": "apps/zero-music-e2e/playwright.config.ts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint",
+      "options": {
+        "lintFilePatterns": [
+          "apps/zero-music-e2e/src/**/*.ts",
+          "apps/zero-music-e2e/playwright.config.ts"
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,37 @@
+import { BTreeSet } from "../../../shared/src/btree-set.js";
+import { compareUTF8 } from "compare-utf8";
+//#region ../zql/src/ivm/memory-storage.ts
+function comparator(a, b) {
+	return compareUTF8(a[0], b[0]);
+}
+/**
+* MemoryStorage is a simple in-memory implementation of `Storage` for use
+* on the client and in tests.
+*/
+var MemoryStorage = class {
+	#data = new BTreeSet(comparator);
+	set(key, value) {
+		this.#data.add([key, value]);
+	}
+	get(key, def) {
+		const r = this.#data.get([key, null]);
+		if (r !== void 0) return r[1];
+		return def;
+	}
+	del(key) {
+		this.#data.delete([key, null]);
+	}
+	*scan(options) {
+		for (const entry of this.#data.valuesFrom(options && [options.prefix, null])) {
+			if (options && !entry[0].startsWith(options.prefix)) return;
+			yield entry;
+		}
+	}
+	cloneData() {
+		return structuredClone(Object.fromEntries(this.#data.values()));
+	}
+};
+//#endregion
+export { MemoryStorage };
+
+//# sourceMappingURL=memory-storage.js.map

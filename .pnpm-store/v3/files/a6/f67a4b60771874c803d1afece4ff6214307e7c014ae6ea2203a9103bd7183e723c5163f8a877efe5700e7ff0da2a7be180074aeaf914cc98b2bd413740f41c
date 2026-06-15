@@ -1,0 +1,30 @@
+import type { RowCountsBySource, RowsBySource } from '../../../zero-protocol/src/analyze-query-result.ts';
+import { type Row } from '../../../zero-protocol/src/data.ts';
+export declare const runtimeDebugFlags: {
+    trackRowCountsVended: boolean;
+    trackRowsVended: boolean;
+};
+type SourceName = string;
+type SQL = string;
+export interface DebugDelegate {
+    initQuery(table: SourceName, query: SQL): void;
+    rowVended(table: SourceName, query: SQL, row: Row): void;
+    getVendedRowCounts(): RowCountsBySource;
+    getVendedRows(): RowsBySource;
+    recordNVisit(table: SourceName, query: SQL, nvisit: number): void;
+    getNVisitCounts(): RowCountsBySource;
+    reset(): void;
+}
+export declare class Debug implements DebugDelegate {
+    #private;
+    constructor();
+    getVendedRowCounts(): RowCountsBySource;
+    getVendedRows(): RowsBySource;
+    getNVisitCounts(): RowCountsBySource;
+    initQuery(table: SourceName, query: SQL): void;
+    reset(): void;
+    rowVended(table: SourceName, query: SQL, row: Row): void;
+    recordNVisit(table: SourceName, query: SQL, nvisit: number): void;
+}
+export {};
+//# sourceMappingURL=debug-delegate.d.ts.map

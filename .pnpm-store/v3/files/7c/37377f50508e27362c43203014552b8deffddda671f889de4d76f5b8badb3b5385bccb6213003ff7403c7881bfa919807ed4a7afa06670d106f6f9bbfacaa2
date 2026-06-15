@@ -1,0 +1,20 @@
+import { valita_exports } from "../../../../../shared/src/valita.js";
+//#region ../zero-cache/src/services/replicator/reporter/report-schema.ts
+var changeSourceTimingsSchema = valita_exports.object({
+	sendTimeMs: valita_exports.number(),
+	commitTimeMs: valita_exports.number(),
+	receiveTimeMs: valita_exports.number()
+});
+var changeSourceReportSchema = valita_exports.object({
+	lastTimings: changeSourceTimingsSchema,
+	nextSendTimeMs: valita_exports.number()
+});
+var replicationTimingsSchema = changeSourceTimingsSchema.extend({ replicateTimeMs: valita_exports.number() });
+valita_exports.object({
+	lastTimings: replicationTimingsSchema.optional(),
+	nextSendTimeMs: valita_exports.number()
+});
+//#endregion
+export { changeSourceReportSchema, changeSourceTimingsSchema };
+
+//# sourceMappingURL=report-schema.js.map

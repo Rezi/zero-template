@@ -1,0 +1,145 @@
+import { Subscribable } from '../../../shared/src/subscribable.ts';
+import { ConnectionStatus } from './connection-status.ts';
+import { type AuthError, type ClosedError, type DisconnectedReason, type ZeroError } from './error.ts';
+export type ConnectionManagerState = {
+    name: ConnectionStatus.Disconnected;
+    reason: DisconnectedReason;
+} | {
+    name: ConnectionStatus.Connecting;
+    attempt: number;
+    disconnectAt: number;
+    reason?: ZeroError | undefined;
+} | {
+    name: ConnectionStatus.Connected;
+} | {
+    name: ConnectionStatus.NeedsAuth;
+    reason: AuthError;
+} | {
+    name: ConnectionStatus.Error;
+    reason: ZeroError;
+} | {
+    name: ConnectionStatus.Closed;
+    reason: ClosedError;
+};
+export type ConnectionManagerOptions = {
+    /**
+     * The amount of milliseconds we allow for continuous connecting attempts before
+     * transitioning to disconnected state.
+     */
+    disconnectTimeout: number;
+    /**
+     * How frequently we check whether the connecting timeout has elapsed.
+     * Defaults to 1 second.
+     */
+    timeoutCheckIntervalMs?: number | undefined;
+};
+declare const TERMINAL_STATES: ["needs-auth", "error"];
+type TerminalConnectionStatus = (typeof TERMINAL_STATES)[number];
+type TerminalConnectionManagerState = Extract<ConnectionManagerState, {
+    name: TerminalConnectionStatus;
+}>;
+export declare class ConnectionManager extends Subscribable<ConnectionManagerState> {
+    #private;
+    constructor(options: ConnectionManagerOptions);
+    get state(): ConnectionManagerState;
+    /**
+     * Returns true if the current state is equal to the given status.
+     */
+    is(status: ConnectionStatus): boolean;
+    /**
+     * Returns true if the current state is a terminal state
+     * that can be recovered from by calling connect().
+     */
+    isInTerminalState(): boolean;
+    /**
+     * Returns true if the given status is a terminal state
+     * that can be recovered from by calling connect().
+     */
+    static isTerminalState(state: ConnectionManagerState): state is TerminalConnectionManagerState;
+    /**
+     * Returns true if the run loop should continue.
+     * The run loop continues in all states except closed.
+     * In needs-auth and error states, the run loop pauses and waits for connect() to be called.
+     */
+    shouldContinueRunLoop(): boolean;
+    /**
+     * Waits for the next state change.
+     * @returns A promise that resolves when the next state change occurs.
+     */
+    waitForStateChange(): Promise<ConnectionManagerState>;
+    requestConnect(): void;
+    waitForConnectRequest(): Promise<void>;
+    /**
+     * Consume a pending connect request and resume connecting.
+     *
+     * @returns true if a pending request was handled.
+     */
+    resumeFromConnectRequest(): boolean;
+    /**
+     * Transition to connecting state.
+     *
+     * This starts the timeout timer, but if we've entered disconnected state,
+     * we stay there and continue retrying.
+     *
+     * If we're disconnected due to a hidden tab, allow a transition back to
+     * connecting when visibility returns.
+     *
+     * @returns An object containing a promise that resolves on the next state change.
+     */
+    connecting(reason?: ZeroError): {
+        nextStatePromise: Promise<ConnectionManagerState>;
+    };
+    /**
+     * Transition to connected state.
+     * This resets the connecting timeout timer.
+     *
+     * @returns An object containing a promise that resolves on the next state change.
+     */
+    connected(): {
+        nextStatePromise: Promise<ConnectionManagerState>;
+    };
+    /**
+     * Transition to disconnected state.
+     * This is called when the timeout expires.
+     * The run loop will continue trying to reconnect.
+     *
+     * @returns An object containing a promise that resolves on the next state change.
+     */
+    disconnected(reason: DisconnectedReason): {
+        nextStatePromise: Promise<ConnectionManagerState>;
+    };
+    /**
+     * Transition to needs-auth state.
+     * This pauses the run loop until connect() is called with new credentials.
+     * Resets the retry window and attempt counter.
+     *
+     * @returns An object containing a promise that resolves on the next state change.
+     */
+    needsAuth(reason: AuthError): {
+        nextStatePromise: Promise<ConnectionManagerState>;
+    };
+    /**
+     * Transition to error state.
+     * This pauses the run loop until connect() is called.
+     * Resets the retry window and attempt counter.
+     *
+     * @returns An object containing a promise that resolves on the next state change.
+     */
+    error(reason: ZeroError): {
+        nextStatePromise: Promise<ConnectionManagerState>;
+    };
+    /**
+     * Transition to closed state.
+     * This is terminal - no further transitions are allowed.
+     */
+    closed(): void;
+    cleanup: () => void;
+}
+/**
+ * Used to trigger the catch block when a terminal state is reached.
+ *
+ * @param state - The current connection state.
+ */
+export declare const throwIfConnectionError: (state: ConnectionManagerState) => void;
+export {};
+//# sourceMappingURL=connection-manager.d.ts.map

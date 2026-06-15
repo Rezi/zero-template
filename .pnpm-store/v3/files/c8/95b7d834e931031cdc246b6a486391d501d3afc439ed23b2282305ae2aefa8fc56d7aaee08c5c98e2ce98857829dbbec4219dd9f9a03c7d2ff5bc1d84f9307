@@ -1,0 +1,27 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { AnalyzeQueryResult } from '../../../zero-protocol/src/analyze-query-result.ts';
+import type { AST } from '../../../zero-protocol/src/ast.ts';
+import type { ClientSchema } from '../../../zero-protocol/src/client-schema.ts';
+import type { PermissionsConfig } from '../../../zero-schema/src/compiled-permissions.ts';
+import type { NameMapper } from '../../../zero-schema/src/name-mapper.ts';
+import { type BuilderDelegate } from '../../../zql/src/builder/builder.ts';
+import type { ConnectionCostModel } from '../../../zql/src/planner/planner-connection.ts';
+import type { PlanDebugger } from '../../../zql/src/planner/planner-debug.ts';
+import type { Database } from '../../../zqlite/src/db.ts';
+import type { JWTAuth } from '../auth/auth.ts';
+import type { LiteAndZqlSpec } from '../db/specs.ts';
+export type RunAstOptions = {
+    applyPermissions?: boolean | undefined;
+    auth?: JWTAuth | undefined;
+    clientToServerMapper?: NameMapper | undefined;
+    costModel?: ConnectionCostModel | undefined;
+    db: Database;
+    host: BuilderDelegate;
+    permissions?: PermissionsConfig | undefined;
+    planDebugger?: PlanDebugger | undefined;
+    syncedRows?: boolean | undefined;
+    tableSpecs: Map<string, LiteAndZqlSpec>;
+    vendedRows?: boolean | undefined;
+};
+export declare function runAst(lc: LogContext, clientSchema: ClientSchema, ast: AST, isTransformed: boolean, options: RunAstOptions, yieldProcess: () => Promise<void>): Promise<AnalyzeQueryResult>;
+//# sourceMappingURL=run-ast.d.ts.map

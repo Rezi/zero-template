@@ -1,0 +1,81 @@
+import type { ReadonlyJSONValue } from '../../../shared/src/json.ts';
+import type { Read, Store, Write } from './store.ts';
+import { WriteImplBase } from './write-impl-base.ts';
+/**
+ * A SQLite prepared statement.
+ */
+export interface PreparedStatement {
+    exec(params: string[]): Promise<void>;
+    all(params: string[]): Promise<unknown[][]>;
+}
+export interface SQLiteDatabase {
+    /**
+     * Close the database connection.
+     */
+    close(): void;
+    /**
+     * Destroy or delete the database (e.g. delete file).
+     */
+    destroy(): void;
+    /**
+     * Prepare a SQL string, returning a statement you can execute.
+     * E.g. `const stmt = db.prepare("SELECT * FROM todos WHERE id=?");`
+     */
+    prepare(sql: string): PreparedStatement;
+    execSync(sql: string): void;
+}
+export type CreateSQLiteDatabase = (filename: string, opts?: SQLiteStoreOptions) => SQLiteDatabase;
+/**
+ * SQLite-based implementation of the Store interface using a configurable delegate.
+ * Supports shared connections between multiple store instances with the same name,
+ * providing efficient resource utilization and proper transaction isolation.
+ * Uses parameterized queries for safety and performance.
+ */
+export declare class SQLiteStore implements Store {
+    #private;
+    constructor(name: string, create: CreateSQLiteDatabase, opts?: SQLiteStoreOptions);
+    read(): Promise<Read>;
+    write(): Promise<Write>;
+    close(): Promise<void>;
+    get closed(): boolean;
+}
+export declare function safeFilename(name: string): string;
+export type PreparedStatements = {
+    has: PreparedStatement;
+    get: PreparedStatement;
+    hasMany: PreparedStatement;
+    getMany: PreparedStatement;
+    put: PreparedStatement;
+    del: PreparedStatement;
+};
+export interface SQLiteStoreOptions {
+    busyTimeout?: number;
+    journalMode?: 'WAL' | 'DELETE';
+    synchronous?: 'NORMAL' | 'FULL';
+    readUncommitted?: boolean;
+    /** Directory in which to create the SQLite file. Defaults to the process CWD. */
+    directory?: string | undefined;
+}
+/**
+ * Common database setup logic shared between expo-sqlite and op-sqlite implementations.
+ * Configures SQLite pragmas, creates the entry table, and prepares common statements.
+ */
+export declare function setupDatabase(delegate: SQLiteDatabase, opts?: SQLiteStoreOptions): PreparedStatements;
+export declare class SQLiteStoreRead implements Read {
+    #private;
+    constructor(release: () => void, preparedStatements: PreparedStatements);
+    has(key: string): Promise<boolean>;
+    get(key: string): Promise<ReadonlyJSONValue | undefined>;
+    release(): void;
+    get closed(): boolean;
+}
+export declare class SQLiteWrite extends WriteImplBase implements Write {
+    #private;
+    constructor(release: () => void, dbDelegate: SQLiteDatabase, preparedStatements: PreparedStatements);
+    commit(): Promise<void>;
+    release(): void;
+    get closed(): boolean;
+}
+export declare function clearAllNamedStoresForTesting(): void;
+export declare function dropStore(name: string, createDelegate: (filename: string, opts?: SQLiteStoreOptions) => SQLiteDatabase, opts?: SQLiteStoreOptions): Promise<void>;
+//# sourceMappingURL=sqlite-store.d.ts.map

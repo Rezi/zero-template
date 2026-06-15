@@ -1,0 +1,10 @@
+import { valita_exports } from "../../shared/src/valita.js";
+//#region ../zero-protocol/src/mutation-id.ts
+var mutationIDSchema = valita_exports.object({
+	id: valita_exports.number(),
+	clientID: valita_exports.string()
+});
+//#endregion
+export { mutationIDSchema };
+
+//# sourceMappingURL=mutation-id.js.map

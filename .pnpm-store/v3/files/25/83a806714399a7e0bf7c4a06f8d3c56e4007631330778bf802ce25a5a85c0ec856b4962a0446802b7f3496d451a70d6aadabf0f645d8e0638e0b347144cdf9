@@ -1,0 +1,124 @@
+import type { Condition, Ordering } from '../../../zero-protocol/src/ast.ts';
+import { type PlannerConstraint } from './planner-constraint.ts';
+import type { PlanDebugger } from './planner-debug.ts';
+import type { CostEstimate, JoinOrConnection, PlannerNode } from './planner-node.ts';
+/**
+ * Represents a connection to a source (table scan).
+ *
+ * # Dual State Pattern
+ * Like all planner nodes, PlannerConnection separates:
+ * 1. immutable structure: Ordering, filters, cost model (set at construction)
+ * 2. mutable state: Pinned status, constraints (mutated during planning)
+ *
+ * # Cost Estimation
+ * The ordering and filters determine the initial cost. As planning progresses,
+ * constraints from parent joins refine the cost estimate.
+ *
+ * # Constraint Flow
+ * When a connection is pinned as the outer loop, it reveals constraints for
+ * connected joins. These constraints propagate through the graph, allowing
+ * other connections to update their cost estimates.
+ *
+ * Example:
+ *
+ * ```ts
+ * builder.issue.whereExists('assignee', a => a.where('name', 'Alice'))
+ * ```
+ *
+ * ```
+ * [issue]  [assignee]
+ *   |         |
+ *   |         +-- where name = 'Alice'
+ *    \        /
+ *     \      /
+ *      [join]
+ *        |
+ * ```
+ *
+ * - Initial state: Both connections have no constraints, costs are unconstrained
+ * - If `issue` chosen first: Reveals constraint `assignee_id` for assignee connection
+ * - If `assignee` chosen first: Reveals constraint `assignee_id` for issue connection
+ * - Updated costs guide the next selection
+ *
+ * # Lifecycle
+ * 1. Construct with immutable structure (ordering, filters, cost model)
+ * 2. Wire to output node during graph construction
+ * 3. Planning mutates pinned status and accumulates constraints
+ * 4. reset() clears mutable state for replanning
+ */
+export declare class PlannerConnection {
+    #private;
+    readonly kind: "connection";
+    readonly table: string;
+    readonly name: string;
+    readonly selectivity: number;
+    /**
+     * Current limit during planning. Can be cleared (set to undefined) when a
+     * parent join is flipped, indicating this connection is now in an outer loop
+     * and should not be limited by EXISTS semantics.
+     */
+    limit: number | undefined;
+    constructor(table: string, model: ConnectionCostModel, sort: Ordering, filters: Condition | undefined, isRoot: boolean, baseConstraints?: PlannerConstraint, limit?: number, name?: string);
+    setOutput(node: PlannerNode): void;
+    get output(): PlannerNode;
+    closestJoinOrSource(): JoinOrConnection;
+    /**
+     * Constraints are uniquely identified by their path through the
+     * graph.
+     *
+     * FO represents all sub-joins as a single path.
+     * UFO represents each sub-join as a separate path.
+     * The first branch in a UFO will match the path of FO so no re-set needs to happen
+     * when swapping from FO to UFO.
+     *
+     * FO swaps to UFO when a join inside FO-FI gets flipped.
+     *
+     * The max of the last element of the paths is the number of
+     * root branches.
+     */
+    propagateConstraints(path: number[], c: PlannerConstraint | undefined, from?: PlannerNode, planDebugger?: PlanDebugger): void;
+    estimateCost(downstreamChildSelectivity: number, branchPattern: number[], planDebugger?: PlanDebugger): CostEstimate;
+    /**
+     * Remove the limit from this connection.
+     * Called when a parent join is flipped, making this connection part of an
+     * outer loop that should produce all rows rather than stopping at the limit.
+     */
+    unlimit(): void;
+    /**
+     * Propagate unlimiting when a parent join is flipped.
+     * For connections, we simply remove the limit.
+     */
+    propagateUnlimitFromFlippedJoin(): void;
+    reset(): void;
+    /**
+     * Capture constraint state for snapshotting.
+     * Used by PlannerGraph to save/restore planning state.
+     */
+    captureConstraints(): Map<string, PlannerConstraint | undefined>;
+    /**
+     * Restore constraint state from a snapshot.
+     * Used by PlannerGraph to restore planning state.
+     */
+    restoreConstraints(constraints: Map<string, PlannerConstraint | undefined>): void;
+    /** Get current constraints for debugging. */
+    getConstraintsForDebug(): Record<string, PlannerConstraint | undefined>;
+    /** Get filters for debugging. */
+    getFiltersForDebug(): Condition | undefined;
+    /** Get sort/ordering for debugging. */
+    getSortForDebug(): Ordering;
+    /** Get estimated cost for each constraint branch. */
+    getConstraintCostsForDebug(): Record<string, CostEstimate>;
+}
+type FanoutEst = {
+    fanout: number;
+    confidence: 'high' | 'med' | 'none';
+};
+export type FanoutCostModel = (columns: string[]) => FanoutEst;
+export type CostModelCost = {
+    startupCost: number;
+    rows: number;
+    fanout: FanoutCostModel;
+};
+export type ConnectionCostModel = (table: string, sort: Ordering, filters: Condition | undefined, constraint: PlannerConstraint | undefined) => CostModelCost;
+export {};
+//# sourceMappingURL=planner-connection.d.ts.map

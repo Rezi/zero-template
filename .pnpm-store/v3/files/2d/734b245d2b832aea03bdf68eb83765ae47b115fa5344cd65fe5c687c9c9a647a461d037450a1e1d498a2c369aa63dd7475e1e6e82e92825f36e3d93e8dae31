@@ -1,0 +1,29 @@
+import { assert } from "../../shared/src/asserts.js";
+//#region ../replicache/src/error-responses.ts
+function isError(obj, type) {
+	return typeof obj === "object" && obj !== null && obj.error === type;
+}
+function isErrorResponse(obj) {
+	return typeof obj.error === "string";
+}
+function isClientStateNotFoundResponse(v) {
+	return isError(v, "ClientStateNotFound");
+}
+function isVersionNotSupportedResponse(v) {
+	if (!isError(v, "VersionNotSupported")) return false;
+	const { versionType } = v;
+	switch (versionType) {
+		case void 0:
+		case "pull":
+		case "push":
+		case "schema": return true;
+	}
+	return false;
+}
+function assertVersionNotSupportedResponse(v) {
+	assert(isVersionNotSupportedResponse(v), "Expected a VersionNotSupportedResponse");
+}
+//#endregion
+export { assertVersionNotSupportedResponse, isClientStateNotFoundResponse, isErrorResponse, isVersionNotSupportedResponse };
+
+//# sourceMappingURL=error-responses.js.map

@@ -1,0 +1,12 @@
+//#region ../replicache/src/lazy.ts
+function lazy(factory) {
+	let value;
+	return () => {
+		if (value === void 0) value = factory();
+		return value;
+	};
+}
+//#endregion
+export { lazy };
+
+//# sourceMappingURL=lazy.js.map

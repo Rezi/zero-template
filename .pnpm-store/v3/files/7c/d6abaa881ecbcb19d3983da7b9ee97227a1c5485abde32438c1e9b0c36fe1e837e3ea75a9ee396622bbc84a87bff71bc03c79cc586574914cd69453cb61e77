@@ -1,0 +1,140 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { Enum } from '../../shared/src/enum.ts';
+import type { Diff, IndexDiff, InternalDiffOperation, NoIndexDiff } from './btree/node.ts';
+import type { ScanOptions } from './db/scan.ts';
+import * as InvokeKind from './invoke-kind-enum.ts';
+import type { DiffComputationConfig, DiffsMap } from './sync/diff.ts';
+import { type ReadTransaction } from './transactions.ts';
+import type { QueryInternal } from './types.ts';
+type InvokeKind = Enum<typeof InvokeKind>;
+export interface Subscription<R> {
+    hasIndexSubscription(indexName: string): boolean;
+    invoke(tx: ReadTransaction, kind: InvokeKind, diffs: DiffsMap | undefined): Promise<R>;
+    matches(diffs: DiffsMap): boolean;
+    updateDeps(keys: ReadonlySet<string>, scans: ReadonlyArray<Readonly<ScanSubscriptionInfo>>): void;
+    readonly onData: (result: R) => void;
+    readonly onError: ((error: unknown) => void) | undefined;
+    readonly onDone: (() => void) | undefined;
+}
+export declare class SubscriptionImpl<R> implements Subscription<R> {
+    #private;
+    readonly onError: ((error: unknown) => void) | undefined;
+    readonly onDone: (() => void) | undefined;
+    constructor(body: (tx: ReadTransaction) => Promise<R>, onData: (result: R) => void, onError: ((error: unknown) => void) | undefined, onDone: (() => void) | undefined, isEqual?: (a: R, b: R) => boolean);
+    hasIndexSubscription(indexName: string): boolean;
+    invoke(tx: ReadTransaction, _kind: InvokeKind, _diffs: DiffsMap | undefined): Promise<R>;
+    matches(diffs: DiffsMap): boolean;
+    updateDeps(keys: ReadonlySet<string>, scans: readonly Readonly<ScanSubscriptionInfo>[]): void;
+    onData(result: R): void;
+}
+export { SubscriptionImpl as SubscriptionImplForTesting };
+/**
+ * Function that gets passed into {@link Replicache.experimentalWatch} and gets
+ * called when the data in Replicache changes.
+ *
+ * @experimental This type is experimental and may change in the future.
+ */
+export type WatchNoIndexCallback = (diff: NoIndexDiff) => void;
+export type WatchCallbackForOptions<Options extends WatchOptions> = Options extends WatchIndexOptions ? WatchIndexCallback : WatchNoIndexCallback;
+/**
+ * Function that gets passed into {@link Replicache.experimentalWatch} when doing a
+ * watch on a secondary index map and gets called when the data in Replicache
+ * changes.
+ *
+ * @experimental This type is experimental and may change in the future.
+ */
+export type WatchIndexCallback = (diff: IndexDiff) => void;
+/**
+ * Options for {@link Replicache.experimentalWatch}.
+ *
+ * @experimental This interface is experimental and may change in the future.
+ */
+export type WatchOptions = WatchIndexOptions | WatchNoIndexOptions;
+/**
+ * Options object passed to {@link Replicache.experimentalWatch}. This is for an
+ * index watch.
+ */
+export type WatchIndexOptions = WatchNoIndexOptions & {
+    /**
+     * When provided, the `watch` is limited to the changes that apply to the index map.
+     */
+    indexName: string;
+};
+/**
+ * Options object passed to {@link Replicache.experimentalWatch}. This is for a non
+ * index watch.
+ */
+export type WatchNoIndexOptions = {
+    /**
+     * When provided, the `watch` is limited to changes where the `key` starts
+     * with `prefix`.
+     */
+    prefix?: string | undefined;
+    /**
+     * When this is set to `true` (default is `false`), the `watch` callback will
+     * be called once asynchronously when watch is called. The arguments in that
+     * case is a diff where we consider all the existing values in Replicache as
+     * being added.
+     */
+    initialValuesInFirstDiff?: boolean | undefined;
+};
+export type WatchCallback = (diff: Diff) => void;
+export declare class WatchSubscription implements Subscription<Diff | undefined> {
+    #private;
+    readonly onError: ((error: unknown) => void) | undefined;
+    readonly onDone: (() => void) | undefined;
+    constructor(callback: WatchCallback, options?: WatchOptions);
+    hasIndexSubscription(indexName: string): boolean;
+    onData(result: Diff | undefined): void;
+    invoke(tx: ReadTransaction, kind: InvokeKind, diffs: DiffsMap | undefined): Promise<Diff | undefined>;
+    matches(diffs: DiffsMap): boolean;
+    updateDeps(_keys: ReadonlySet<string>, _scans: readonly Readonly<ScanSubscriptionInfo>[]): void;
+}
+/**
+ * The options passed to {@link Replicache.subscribe}.
+ */
+export interface SubscribeOptions<R> {
+    /**
+     * Called when the return value of the body function changes.
+     */
+    onData: (result: R) => void;
+    /**
+     * If present, called when an error occurs.
+     */
+    onError?: ((error: unknown) => void) | undefined;
+    /**
+     * If present, called when the subscription is removed/done.
+     */
+    onDone?: (() => void) | undefined;
+    /**
+     * If present this function is used to determine if the value returned by the
+     * body function has changed. If not provided a JSON deep equality check is
+     * used.
+     */
+    isEqual?: ((a: R, b: R) => boolean) | undefined;
+}
+export type UnknownSubscription = Subscription<unknown>;
+export interface SubscriptionsManager extends DiffComputationConfig {
+    clear(): void;
+    fire(diffs: DiffsMap): Promise<void>;
+    hasPendingSubscriptionRuns: boolean;
+    add<R>(subscription: Subscription<R>): () => void;
+}
+export declare class SubscriptionsManagerImpl implements SubscriptionsManager {
+    #private;
+    hasPendingSubscriptionRuns: boolean;
+    constructor(queryInternal: QueryInternal, lc: LogContext, signal: AbortSignal);
+    add<R>(subscription: Subscription<R>): () => void;
+    clear(): void;
+    fire(diffs: DiffsMap): Promise<void>;
+    callCallbacks(subs: readonly Subscription<unknown>[], results: PromiseSettledResult<unknown>[]): void;
+    shouldComputeDiffs(): boolean;
+    shouldComputeDiffsForIndex(indexName: string): boolean;
+}
+export type ScanSubscriptionInfo = {
+    options: ScanOptions;
+    inclusiveLimitKey?: string | undefined;
+};
+export declare function scanInfoMatchesKey(scanInfo: ScanSubscriptionInfo, changeIndexName: string, changedKey: string): boolean;
+export declare function diffBinarySearch<Key, Value>(diff: readonly InternalDiffOperation<Key, Value>[], prefix: string, compareKey: (diff: InternalDiffOperation<Key, Value>) => string): number;
+//# sourceMappingURL=subscriptions.d.ts.map

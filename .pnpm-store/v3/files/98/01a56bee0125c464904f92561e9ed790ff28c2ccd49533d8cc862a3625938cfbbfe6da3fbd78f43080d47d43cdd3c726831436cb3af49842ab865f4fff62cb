@@ -1,0 +1,94 @@
+import "./data.js";
+//#region ../zql/src/ivm/filter-operators.ts
+/**
+* An implementation of FilterOutput that throws if push or filter is called.
+* It is used as the initial value for for an operator's output before it is
+* set.
+*/
+var throwFilterOutput = {
+	*push(_change) {
+		throw new Error("Output not set");
+	},
+	*filter(_node) {
+		throw new Error("Output not set");
+	},
+	beginFilter() {},
+	endFilter() {}
+};
+var FilterStart = class {
+	#input;
+	#output = throwFilterOutput;
+	constructor(input) {
+		this.#input = input;
+		input.setOutput(this);
+	}
+	setFilterOutput(output) {
+		this.#output = output;
+	}
+	destroy() {
+		this.#input.destroy();
+	}
+	getSchema() {
+		return this.#input.getSchema();
+	}
+	*push(change) {
+		yield* this.#output.push(change, this);
+	}
+	*fetch(req) {
+		this.#output.beginFilter();
+		try {
+			for (const node of this.#input.fetch(req)) {
+				if (node === "yield") {
+					yield node;
+					continue;
+				}
+				if (yield* this.#output.filter(node)) yield node;
+			}
+		} finally {
+			this.#output.endFilter();
+		}
+	}
+};
+var FilterEnd = class {
+	#start;
+	#input;
+	#output = throwFilterOutput;
+	constructor(start, input) {
+		this.#start = start;
+		this.#input = input;
+		input.setFilterOutput(this);
+	}
+	*fetch(req) {
+		for (const node of this.#start.fetch(req)) yield node;
+	}
+	beginFilter() {}
+	endFilter() {}
+	*filter(_node) {
+		return true;
+	}
+	setOutput(output) {
+		this.#output = output;
+	}
+	destroy() {
+		this.#input.destroy();
+	}
+	getSchema() {
+		return this.#input.getSchema();
+	}
+	*push(change) {
+		yield* this.#output.push(change, this);
+	}
+};
+function buildFilterPipeline(input, delegate, pipeline) {
+	const filterStart = new FilterStart(input);
+	delegate.addEdge(input, filterStart);
+	const middle = pipeline(filterStart);
+	delegate.addEdge(filterStart, middle);
+	const filterEnd = new FilterEnd(filterStart, middle);
+	delegate.addEdge(middle, filterEnd);
+	return filterEnd;
+}
+//#endregion
+export { buildFilterPipeline, throwFilterOutput };
+
+//# sourceMappingURL=filter-operators.js.map

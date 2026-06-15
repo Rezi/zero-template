@@ -1,0 +1,6 @@
+//#region ../shared/src/has-own.ts
+var { hasOwn } = Object;
+//#endregion
+export { hasOwn };
+
+//# sourceMappingURL=has-own.js.map

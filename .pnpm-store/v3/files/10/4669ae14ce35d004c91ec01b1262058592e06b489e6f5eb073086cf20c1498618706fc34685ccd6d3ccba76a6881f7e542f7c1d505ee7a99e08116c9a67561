@@ -1,0 +1,30 @@
+import { context } from "@opentelemetry/api";
+//#region ../otel/src/span.ts
+function startSpan(tracer, name, cb) {
+	return tracer.startActiveSpan(name, (span) => {
+		try {
+			return cb(span);
+		} finally {
+			span.end();
+		}
+	});
+}
+function startAsyncSpan(tracer, name, cb) {
+	return tracer.startActiveSpan(name, async (span) => {
+		try {
+			return await cb(span);
+		} finally {
+			span.end();
+		}
+	});
+}
+function manualSpan(tracer, name, durationMs, attributes) {
+	const startTime = Date.now() - durationMs;
+	const span = tracer.startSpan(name, { startTime }, context.active());
+	if (attributes) span.setAttributes(attributes);
+	span.end(startTime + durationMs);
+}
+//#endregion
+export { manualSpan, startAsyncSpan, startSpan };
+
+//# sourceMappingURL=span.js.map

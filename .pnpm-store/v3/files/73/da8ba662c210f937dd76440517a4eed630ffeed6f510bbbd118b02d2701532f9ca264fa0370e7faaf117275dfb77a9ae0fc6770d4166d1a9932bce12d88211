@@ -1,0 +1,1 @@
+{"version":3,"file":"make-idb-name.d.ts","sourceRoot":"","sources":["../../../../replicache/src/make-idb-name.ts"],"names":[],"mappings":"AAEA;;;;;GAKG;AAEH,wBAAgB,WAAW,CAAC,IAAI,EAAE,MAAM,EAAE,aAAa,CAAC,EAAE,MAAM,GAAG,MAAM,CAExE;AAED,iBAAS,mBAAmB,CAC1B,IAAI,EAAE,MAAM,EACZ,aAAa,EAAE,MAAM,GAAG,SAAS,EACjC,aAAa,EAAE,MAAM,GACpB,MAAM,CAGR;AAED,OAAO,EAAC,mBAAmB,IAAI,qBAAqB,EAAC,CAAC"}

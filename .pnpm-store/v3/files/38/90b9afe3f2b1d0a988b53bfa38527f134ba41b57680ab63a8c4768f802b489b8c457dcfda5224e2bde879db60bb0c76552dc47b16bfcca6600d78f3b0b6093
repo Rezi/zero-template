@@ -1,0 +1,14 @@
+import { rmSync } from "node:fs";
+//#region ../zero-cache/src/db/delete-lite-db.ts
+function deleteLiteDB(dbFile) {
+	for (const suffix of [
+		"",
+		"-wal",
+		"-wal2",
+		"-shm"
+	]) rmSync(`${dbFile}${suffix}`, { force: true });
+}
+//#endregion
+export { deleteLiteDB };
+
+//# sourceMappingURL=delete-lite-db.js.map

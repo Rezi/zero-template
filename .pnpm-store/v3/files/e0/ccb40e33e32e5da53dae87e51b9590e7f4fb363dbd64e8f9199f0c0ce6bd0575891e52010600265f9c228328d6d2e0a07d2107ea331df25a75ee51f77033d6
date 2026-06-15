@@ -1,0 +1,86 @@
+import type { LogContext } from '@rocicorp/logger';
+import type postgres from 'postgres';
+import { type JSONObject, type JSONValue } from '../../../../../shared/src/bigint-json.ts';
+import type { ReadonlyJSONValue } from '../../../../../shared/src/json.ts';
+import type { ClientSchema } from '../../../../../zero-protocol/src/client-schema.ts';
+import { type ShardID } from '../../../types/shards.ts';
+import type { TTLClock } from '../ttl-clock.ts';
+import { type RowID, type RowRecord } from './types.ts';
+export type InstancesRow = {
+    clientGroupID: string;
+    version: string;
+    lastActive: number;
+    ttlClock: TTLClock;
+    replicaVersion: string | null;
+    owner: string | null;
+    grantedAt: number | null;
+    clientSchema: ClientSchema | null;
+    profileID: string | null;
+};
+export declare function compareInstancesRows(a: InstancesRow, b: InstancesRow): number;
+export type ClientsRow = {
+    clientGroupID: string;
+    clientID: string;
+};
+export declare function compareClientsRows(a: ClientsRow, b: ClientsRow): number;
+export type QueriesRow = {
+    clientGroupID: string;
+    queryHash: string;
+    clientAST: JSONValue | null;
+    queryName: string | null;
+    queryArgs: readonly ReadonlyJSONValue[] | null;
+    patchVersion: string | null;
+    transformationHash: string | null;
+    transformationVersion: string | null;
+    internal: boolean | null;
+    deleted: boolean | null;
+    rowSetSignature?: string | null;
+};
+export declare function compareQueriesRows(a: QueriesRow, b: QueriesRow): number;
+export type DesiresRow = {
+    clientGroupID: string;
+    clientID: string;
+    queryHash: string;
+    patchVersion: string;
+    deleted: boolean | null;
+    ttl: number | null;
+    inactivatedAt: TTLClock | null;
+};
+export declare function compareDesiresRows(a: DesiresRow, b: DesiresRow): number;
+export type RowsRow = {
+    clientGroupID: string;
+    schema: string;
+    table: string;
+    rowKey: JSONObject;
+    rowVersion: string;
+    patchVersion: string;
+    refCounts: {
+        [queryHash: string]: number;
+    } | null;
+};
+export declare function rowsRowToRowID(rowsRow: RowsRow): RowID;
+export declare function rowsRowToRowRecord(rowsRow: RowsRow): RowRecord;
+export declare function rowRecordToRowsRow(clientGroupID: string, rowRecord: RowRecord): RowsRow;
+export declare function compareRowsRows(a: RowsRow, b: RowsRow): number;
+/**
+ * The version of the data in the `cvr.rows` table. This may lag
+ * `version` in `cvr.instances` but eventually catches up, modulo
+ * exceptional circumstances like a server crash.
+ *
+ * The `rowsVersion` is tracked in a separate table (as opposed to
+ * a column in the `cvr.instances` table) so that general `cvr` updates
+ * and `row` updates can be executed independently without serialization
+ * conflicts.
+ *
+ * Note: Although `clientGroupID` logically references the same column in
+ * `cvr.instances`, a FOREIGN KEY constraint must not be declared as the
+ * `cvr.rows` TABLE needs to be updated without affecting the
+ * `SELECT ... FOR UPDATE` lock when `cvr.instances` is updated.
+ */
+export declare function createRowsVersionTable(shard: ShardID): string;
+export type RowsVersionRow = {
+    clientGroupID: string;
+    version: string;
+};
+export declare function setupCVRTables(lc: LogContext, db: postgres.TransactionSql, shard: ShardID): Promise<void>;
+//# sourceMappingURL=cvr.d.ts.map

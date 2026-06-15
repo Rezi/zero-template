@@ -1,0 +1,57 @@
+import { SQLiteStore, dropStore } from "../sqlite-store.js";
+import { deleteDatabaseSync, openDatabaseSync } from "expo-sqlite";
+//#region ../replicache/src/kv/expo-sqlite/store.ts
+function dropExpoSQLiteStore(name, opts) {
+	return dropStore(name, (filename) => new ExpoSQLiteDatabase(filename), opts);
+}
+/**
+* Creates a StoreProvider for SQLite-based stores using expo-sqlite.
+* Supports shared connections between multiple store instances with the same name,
+* providing efficient resource utilization and proper transaction isolation.
+*/
+function expoSQLiteStoreProvider(opts) {
+	return {
+		create: (name) => new SQLiteStore(name, (name) => new ExpoSQLiteDatabase(name), opts),
+		drop: (name) => dropExpoSQLiteStore(name, opts)
+	};
+}
+var ExpoSQLitePreparedStatement = class {
+	#statement;
+	constructor(statement) {
+		this.#statement = statement;
+	}
+	async exec(params) {
+		await this.#statement.executeForRawResultAsync(params);
+	}
+	async all(params) {
+		return (await this.#statement.executeForRawResultAsync(params)).getAllAsync();
+	}
+};
+var ExpoSQLiteDatabase = class {
+	#db;
+	#filename;
+	#statements = /* @__PURE__ */ new Set();
+	constructor(filename) {
+		this.#filename = filename;
+		this.#db = openDatabaseSync(filename);
+	}
+	close() {
+		for (const stmt of this.#statements) stmt.finalizeSync();
+		this.#db.closeSync();
+	}
+	destroy() {
+		deleteDatabaseSync(this.#filename);
+	}
+	prepare(sql) {
+		const statement = this.#db.prepareSync(sql);
+		this.#statements.add(statement);
+		return new ExpoSQLitePreparedStatement(statement);
+	}
+	execSync(sql) {
+		this.#db.execSync(sql);
+	}
+};
+//#endregion
+export { expoSQLiteStoreProvider };
+
+//# sourceMappingURL=store.js.map

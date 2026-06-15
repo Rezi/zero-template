@@ -1,0 +1,32 @@
+import { type JSX } from 'solid-js';
+import { Zero, type BaseDefaultContext, type BaseDefaultSchema, type CustomMutatorDefs, type DefaultContext, type DefaultSchema, type ZeroOptions } from './zero.ts';
+/**
+ * @deprecated Use {@linkcode ZeroProvider} instead of managing your own Zero instance.
+ */
+export declare function createZero<S extends BaseDefaultSchema = DefaultSchema, MD extends CustomMutatorDefs | undefined = undefined, Context extends BaseDefaultContext = DefaultContext>(options: ZeroOptions<S, MD, Context>): Zero<S, MD, Context>;
+export declare function useZero<S extends BaseDefaultSchema = DefaultSchema, MD extends CustomMutatorDefs | undefined = undefined, Context extends BaseDefaultContext = DefaultContext>(): () => Zero<S, MD, Context>;
+/**
+ * @deprecated Use {@linkcode useZero} instead, alongside default types defined with:
+ *
+ * ```ts
+ * declare module '@rocicorp/zero' {
+ *   interface DefaultTypes {
+ *     schema: typeof schema;
+ *     context: Context;
+ *   }
+ * }
+ */
+export declare function createUseZero<S extends BaseDefaultSchema = DefaultSchema, MD extends CustomMutatorDefs | undefined = undefined, Context extends BaseDefaultContext = DefaultContext>(): () => () => Zero<S, MD, Context>;
+export declare function ZeroProvider<S extends BaseDefaultSchema = DefaultSchema, MD extends CustomMutatorDefs | undefined = undefined, Context extends BaseDefaultContext = DefaultContext>(props: {
+    children: JSX.Element;
+    /**
+     * Called after ZeroProvider constructs a new Zero instance.
+     *
+     * This runs only when the provider creates Zero from options, and is not
+     * called when an existing instance is passed with `zero`.
+     */
+    init?: (zero: Zero<S, MD, Context>) => void;
+} & ({
+    zero: Zero<S, MD, Context>;
+} | ZeroOptions<S, MD, Context>)): JSX.Element;
+//# sourceMappingURL=use-zero.d.ts.map

@@ -1,0 +1,19 @@
+import { normalizeAST } from "./ast.js";
+import { h64 } from "../../shared/src/hash.js";
+//#region ../zero-protocol/src/query-hash.ts
+var hashCache = /* @__PURE__ */ new WeakMap();
+function hashOfAST(ast) {
+	const normalized = normalizeAST(ast);
+	const cached = hashCache.get(normalized);
+	if (cached) return cached;
+	const hash = h64(JSON.stringify(normalized)).toString(36);
+	hashCache.set(normalized, hash);
+	return hash;
+}
+function hashOfNameAndArgs(name, args) {
+	return h64(`${name}:${JSON.stringify(args)}`).toString(36);
+}
+//#endregion
+export { hashOfAST, hashOfNameAndArgs };
+
+//# sourceMappingURL=query-hash.js.map

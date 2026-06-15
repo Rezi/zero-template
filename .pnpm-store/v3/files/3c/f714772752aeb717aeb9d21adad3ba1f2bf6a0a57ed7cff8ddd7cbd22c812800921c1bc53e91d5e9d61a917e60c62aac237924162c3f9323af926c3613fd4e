@@ -1,0 +1,46 @@
+import { type JSONValue } from '../../../shared/src/bigint-json.ts';
+export type ColumnType = {
+    readonly typeOid: number;
+};
+export type RowKeyType = Readonly<Record<string, ColumnType>>;
+export type RowKey = Readonly<Record<string, JSONValue>>;
+export type RowID = Readonly<{
+    schema: string;
+    table: string;
+    rowKey: RowKey;
+}>;
+export type RowType = RowKeyType;
+export type RowValue = RowKey;
+/**
+ * Returns the `RowKey` such that key iteration produces a sorted sequence. If the
+ * keys are already sorted, the input is returned as is.
+ *
+ * Note that the value type is parameterized as `V` so that this method can be used
+ * for both (pg) RowKeys and LiteRowKeys.
+ */
+export declare function normalizedKeyOrder<V>(rowKey: Readonly<Record<string, V>>): Readonly<Record<string, V>>;
+/**
+ * Returns a normalized string suitable for representing a row key in a form
+ * that can be used as a Map key.
+ */
+export declare function rowKeyString(key: RowKey): string;
+/**
+ * A normalized string representation of a {@link RowID} suitable to use
+ * as a Map key. Use {@link rowIDHash} if you need string keys of bounded
+ * length.
+ */
+export declare function rowIDString(id: RowID): string;
+/**
+ * A RowIDHash is a 128-bit column-order-agnostic hash of the schema, table name, and
+ * column name / value tuples of a row key. It serves as a compact identifier for
+ * a row in the database that:
+ *
+ * * is guaranteed to fit within the constraints of the CVR store (Durable Object
+ *   storage keys cannot exceed 2KiB)
+ * * can be used to compactly encode (and lookup) the rows of query results for CVR
+ *   bookkeeping.
+ *
+ * The hash is encoded in `base36`, with the maximum 128-bit value being 25 characters long.
+ */
+export declare function rowIDHash(id: RowID): string;
+//# sourceMappingURL=row-key.d.ts.map

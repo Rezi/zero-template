@@ -1,0 +1,53 @@
+//#region ../shared/src/iterables.ts
+function* joinIterables(...iters) {
+	for (const iter of iters) yield* iter;
+}
+function* filterIter(iter, p) {
+	let index = 0;
+	for (const t of iter) if (p(t, index++)) yield t;
+}
+function* mapIter(iter, f) {
+	let index = 0;
+	for (const t of iter) yield f(t, index++);
+}
+function* once(stream) {
+	const it = stream[Symbol.iterator]();
+	const { value } = it.next();
+	if (value !== void 0) yield value;
+	it.return?.();
+}
+var iteratorFrom = globalThis.Iterator?.from ?? ((e) => new IterWrapper(e));
+var IterWrapper = class IterWrapper {
+	#iterator;
+	constructor(iterable) {
+		this.#iterator = iterable[Symbol.iterator]();
+	}
+	next() {
+		return this.#iterator.next();
+	}
+	[Symbol.iterator]() {
+		return this;
+	}
+	map(f) {
+		return new IterWrapper(mapIter(this, f));
+	}
+	filter(p) {
+		return new IterWrapper(filterIter(this, p));
+	}
+};
+function wrapIterable(iter) {
+	return iteratorFrom(iter);
+}
+/**
+* This will make a new array where the elements are the same as the iterable
+* but sorted according to the compare function. If the compare function is not
+* provided, it will sort the elements in JS standard way which is string
+* compare.
+*/
+function toSorted(iter, compare) {
+	return [...iter].sort(compare);
+}
+//#endregion
+export { joinIterables, once, toSorted, wrapIterable };
+
+//# sourceMappingURL=iterables.js.map

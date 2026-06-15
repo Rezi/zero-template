@@ -1,0 +1,12 @@
+import { LogContext } from "@rocicorp/logger";
+//#region ../shared/src/logging-test-utils.ts
+var SilentLogSink = class {
+	log(_l, _c, ..._args) {}
+};
+function createSilentLogContext() {
+	return new LogContext("error", void 0, new SilentLogSink());
+}
+//#endregion
+export { createSilentLogContext };
+
+//# sourceMappingURL=logging-test-utils.js.map

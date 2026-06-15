@@ -1,0 +1,77 @@
+import { must } from "../../../../shared/src/must.js";
+import { inspectAnalyzeQueryDownSchema } from "../../../../zero-protocol/src/inspect-down.js";
+import { normalizeTTL } from "../../../../zql/src/query/ttl.js";
+import { astToZQL } from "../../../../ast-to-zql/src/ast-to-zql.js";
+import { mergeMetrics, rpc } from "./lazy-inspector.js";
+//#region ../zero-client/src/client/inspector/query.ts
+var Query = class {
+	#socket;
+	name;
+	args;
+	got;
+	ttl;
+	inactivatedAt;
+	rowCount;
+	deleted;
+	id;
+	clientID;
+	metrics;
+	clientZQL;
+	serverZQL;
+	#serverAST;
+	hydrateClient;
+	hydrateServer;
+	hydrateTotal;
+	updateClientP50;
+	updateClientP95;
+	updateServerP50;
+	updateServerP95;
+	constructor(row, delegate, socket) {
+		this.#socket = socket;
+		const { ast, queryID, inactivatedAt } = row;
+		this.clientID = row.clientID;
+		this.id = queryID;
+		this.inactivatedAt = inactivatedAt === null ? null : new Date(inactivatedAt);
+		this.ttl = normalizeTTL(row.ttl);
+		this.name = row.name;
+		this.args = row.args;
+		this.got = row.got;
+		this.rowCount = row.rowCount;
+		this.deleted = row.deleted;
+		this.#serverAST = ast;
+		this.serverZQL = ast ? ast.table + astToZQL(ast) : null;
+		const clientAST = delegate.getAST(queryID);
+		this.clientZQL = clientAST ? clientAST.table + astToZQL(clientAST) : null;
+		const clientMetrics = delegate.getQueryMetrics(queryID);
+		const serverMetrics = row.metrics;
+		const merged = mergeMetrics(clientMetrics, serverMetrics);
+		this.metrics = merged;
+		const percentile = (name, percentile) => {
+			if (!merged?.[name]) return null;
+			const n = merged[name].quantile(percentile);
+			return Number.isNaN(n) ? null : n;
+		};
+		this.hydrateClient = clientMetrics?.["query-materialization-client"] ?? null;
+		this.hydrateServer = serverMetrics?.["query-hydration-server-ms"] ?? null;
+		this.hydrateTotal = clientMetrics?.["query-materialization-end-to-end"] ?? null;
+		this.updateClientP50 = percentile("query-update-client", .5);
+		this.updateClientP95 = percentile("query-update-client", .95);
+		this.updateServerP50 = percentile("query-update-server", .5);
+		this.updateServerP95 = percentile("query-update-server", .95);
+	}
+	async analyze(options) {
+		const details = this.name && this.args ? {
+			name: this.name,
+			args: this.args
+		} : { value: must(this.#serverAST, "AST is required for unnamed queries") };
+		return rpc(await this.#socket(), {
+			op: "analyze-query",
+			...details,
+			options
+		}, inspectAnalyzeQueryDownSchema);
+	}
+};
+//#endregion
+export { Query };
+
+//# sourceMappingURL=query.js.map

@@ -1,0 +1,37 @@
+import { throwOutput } from "../ivm/operator.js";
+//#region ../zql/src/query/measure-push-operator.ts
+var MeasurePushOperator = class {
+	#input;
+	#queryID;
+	#metricsDelegate;
+	#output = throwOutput;
+	#metricName;
+	constructor(input, queryID, metricsDelegate, metricName) {
+		this.#input = input;
+		this.#queryID = queryID;
+		this.#metricsDelegate = metricsDelegate;
+		this.#metricName = metricName;
+		input.setOutput(this);
+	}
+	setOutput(output) {
+		this.#output = output;
+	}
+	fetch(req) {
+		return this.#input.fetch(req);
+	}
+	getSchema() {
+		return this.#input.getSchema();
+	}
+	destroy() {
+		this.#input.destroy();
+	}
+	*push(change) {
+		const startTime = performance.now();
+		yield* this.#output.push(change, this);
+		this.#metricsDelegate.addMetric(this.#metricName, performance.now() - startTime, this.#queryID);
+	}
+};
+//#endregion
+export { MeasurePushOperator };
+
+//# sourceMappingURL=measure-push-operator.js.map

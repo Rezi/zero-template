@@ -1,0 +1,29 @@
+import { parse } from "../../../shared/src/valita.js";
+import { h128 } from "../../../shared/src/hash.js";
+import { primaryKeyValueSchema } from "../../../zero-protocol/src/primary-key.js";
+function toDesiredQueriesKey(clientID, hash) {
+	return "d/" + clientID + "/" + hash;
+}
+function desiredQueriesPrefixForClient(clientID) {
+	return "d/" + clientID + "/";
+}
+function toGotQueriesKey(hash) {
+	return "g/" + hash;
+}
+function toMutationResponseKey(mid) {
+	return "m/" + mid.clientID + "/" + mid.id;
+}
+function toPrimaryKeyString(tableName, primaryKey, value) {
+	if (primaryKey.length === 1) return "e/" + tableName + "/" + parse(value[primaryKey[0]], primaryKeyValueSchema);
+	const values = primaryKey.map((k) => parse(value[k], primaryKeyValueSchema));
+	const idSegment = h128(JSON.stringify(values));
+	return "e/" + tableName + "/" + idSegment;
+}
+function sourceNameFromKey(key) {
+	const slash = key.indexOf("/", 2);
+	return key.slice(2, slash);
+}
+//#endregion
+export { desiredQueriesPrefixForClient, sourceNameFromKey, toDesiredQueriesKey, toGotQueriesKey, toMutationResponseKey, toPrimaryKeyString };
+
+//# sourceMappingURL=keys.js.map

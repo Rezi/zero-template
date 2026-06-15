@@ -1,0 +1,176 @@
+import { literalUnion, readonly, valita_exports } from "../../../../../shared/src/valita.js";
+import { jsonSchema } from "../../../../../shared/src/json-schema.js";
+import { astSchema } from "../../../../../zero-protocol/src/ast.js";
+import { jsonValueSchema } from "../../../../../shared/src/bigint-json.js";
+import { versionFromLexi, versionToLexi } from "../../../types/lexi-version.js";
+import { majorVersionToString, stateVersionFromString } from "../../../types/state-version.js";
+import { ttlClockSchema } from "../ttl-clock.js";
+//#region ../zero-cache/src/services/view-syncer/schema/types.ts
+var cvrVersionSchema = valita_exports.object({
+	stateVersion: valita_exports.string(),
+	configVersion: valita_exports.number().optional()
+});
+var EMPTY_CVR_VERSION = { stateVersion: majorVersionToString(0) };
+function oneAfter(v) {
+	return v === null ? { stateVersion: majorVersionToString(0) } : {
+		stateVersion: v.stateVersion,
+		configVersion: (v.configVersion ?? 0) + 1
+	};
+}
+function cmpVersions(a, b) {
+	return a === null && b === null ? 0 : a === null ? -1 : b === null ? 1 : a.stateVersion < b.stateVersion ? -1 : a.stateVersion > b.stateVersion ? 1 : (a.configVersion ?? 0) - (b.configVersion ?? 0);
+}
+function maxVersion(a, b) {
+	return !b ? a : cmpVersions(b, a) > 0 ? b : a;
+}
+function versionToCookie(v) {
+	return versionString(v);
+}
+function versionToNullableCookie(v) {
+	return v === null ? null : versionToCookie(v);
+}
+function cookieToVersion(cookie) {
+	if (cookie === null) return null;
+	return versionFromString(cookie);
+}
+valita_exports.object({ id: valita_exports.string() });
+var cvrRecordSchema = valita_exports.object({ patchVersion: cvrVersionSchema });
+valita_exports.object({
+	id: valita_exports.string(),
+	desiredQueryIDs: valita_exports.array(valita_exports.string())
+});
+var baseQueryRecordSchema = valita_exports.object({
+	id: valita_exports.string(),
+	transformationHash: valita_exports.string().optional(),
+	transformationVersion: cvrVersionSchema.optional(),
+	rowSetSignature: valita_exports.string().optional()
+});
+/**
+* Internal queries track rows in the database for internal use, such as the
+* `lastMutationID`s in the `zero.clients` table. They participate in the standard
+* invalidation / update logic for row contents, but not in the desired/got or
+* size-based quota logic for client-requested queries.
+*/
+var internalQueryRecordSchema = baseQueryRecordSchema.extend({
+	type: valita_exports.literal("internal"),
+	ast: astSchema
+});
+var clientStateSchema = valita_exports.object({
+	inactivatedAt: ttlClockSchema.optional(),
+	ttl: valita_exports.number(),
+	version: cvrVersionSchema
+});
+var externalQueryRecordSchema = baseQueryRecordSchema.extend({
+	clientState: valita_exports.record(clientStateSchema),
+	patchVersion: cvrVersionSchema.optional()
+});
+var clientQueryRecordSchema = externalQueryRecordSchema.extend({
+	type: valita_exports.literal("client"),
+	ast: astSchema
+});
+var customQueryRecordSchema = externalQueryRecordSchema.extend({
+	type: valita_exports.literal("custom"),
+	name: valita_exports.string(),
+	args: readonly(valita_exports.array(jsonSchema))
+});
+valita_exports.union(clientQueryRecordSchema, customQueryRecordSchema, internalQueryRecordSchema);
+var rowIDSchema = valita_exports.object({
+	schema: valita_exports.string(),
+	table: valita_exports.string(),
+	rowKey: valita_exports.record(jsonValueSchema)
+});
+cvrRecordSchema.extend({
+	id: rowIDSchema,
+	rowVersion: valita_exports.string(),
+	refCounts: valita_exports.record(valita_exports.number()).nullable()
+});
+var patchSchema = valita_exports.object({
+	type: literalUnion("row", "query"),
+	op: literalUnion("put", "del")
+});
+var putRowPatchSchema = patchSchema.extend({
+	type: valita_exports.literal("row"),
+	op: valita_exports.literal("put"),
+	id: rowIDSchema,
+	rowVersion: valita_exports.string()
+});
+var delRowPatchSchema = patchSchema.extend({
+	type: valita_exports.literal("row"),
+	op: valita_exports.literal("del"),
+	id: rowIDSchema
+});
+valita_exports.union(putRowPatchSchema, delRowPatchSchema);
+patchSchema.extend({
+	type: valita_exports.literal("query"),
+	id: valita_exports.string(),
+	clientID: valita_exports.string().optional()
+});
+function versionString(v) {
+	return v.configVersion ? `${v.stateVersion}:${versionToLexi(v.configVersion)}` : v.stateVersion;
+}
+function versionFromString(str) {
+	const parts = str.split(":");
+	const stateVersion = parts[0];
+	switch (parts.length) {
+		case 1:
+			stateVersionFromString(stateVersion);
+			return { stateVersion };
+		case 2: {
+			const configVersion = versionFromLexi(parts[1]);
+			if (configVersion > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error(`minorVersion ${parts[1]} exceeds max safe integer`);
+			return {
+				stateVersion,
+				configVersion: Number(configVersion)
+			};
+		}
+		default: throw new TypeError(`Invalid version string ${str}`);
+	}
+}
+function queryRecordToQueryRow(clientGroupID, query) {
+	switch (query.type) {
+		case "internal": return {
+			clientGroupID,
+			queryHash: query.id,
+			clientAST: query.ast,
+			queryName: null,
+			queryArgs: null,
+			patchVersion: null,
+			transformationHash: query.transformationHash ?? null,
+			transformationVersion: maybeVersionString(query.transformationVersion),
+			internal: true,
+			deleted: false,
+			rowSetSignature: query.rowSetSignature ?? null
+		};
+		case "client": return {
+			clientGroupID,
+			queryHash: query.id,
+			clientAST: query.ast,
+			queryName: null,
+			queryArgs: null,
+			patchVersion: maybeVersionString(query.patchVersion),
+			transformationHash: query.transformationHash ?? null,
+			transformationVersion: maybeVersionString(query.transformationVersion),
+			internal: null,
+			deleted: false,
+			rowSetSignature: query.rowSetSignature ?? null
+		};
+		case "custom": return {
+			clientGroupID,
+			queryHash: query.id,
+			clientAST: null,
+			queryName: query.name,
+			queryArgs: query.args,
+			patchVersion: maybeVersionString(query.patchVersion),
+			transformationHash: query.transformationHash ?? null,
+			transformationVersion: maybeVersionString(query.transformationVersion),
+			internal: null,
+			deleted: false,
+			rowSetSignature: query.rowSetSignature ?? null
+		};
+	}
+}
+var maybeVersionString = (v) => v ? versionString(v) : null;
+//#endregion
+export { EMPTY_CVR_VERSION, cmpVersions, cookieToVersion, maxVersion, oneAfter, queryRecordToQueryRow, versionFromString, versionString, versionToCookie, versionToNullableCookie };
+
+//# sourceMappingURL=types.js.map

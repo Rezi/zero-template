@@ -1,0 +1,19 @@
+import type { Change } from '../protocol/current/data.ts';
+/**
+ * Parsing and conversion utilities for the pg_lsn Type, which represents
+ * the "Log Sequence Number" used as a monotonic progress marker for logical
+ * replication from a PostgresSQL database.
+ *
+ * The LSN is a 64-bit integer represented in logical replication as two
+ * hexadecimal numbers (up to 8 digits each) separated by a slash. This is
+ * converted to a LexiVersion and used as DB-agnostic version in change log,
+ * invalidation index, and row version in the tables of the sync replica.
+ */
+export type LSN = string;
+export type RecordType = Change['tag'];
+export declare function toBigInt(lsn: LSN): bigint;
+export declare function toStateVersionString(lsn: LSN): string;
+/** The LSN is tracked by the `major` component of the StateVersion. */
+export declare function fromStateVersionString(ver: string): LSN;
+export declare function fromBigInt(val: bigint): LSN;
+//# sourceMappingURL=lsn.d.ts.map

@@ -1,0 +1,23 @@
+import { isAdminPasswordValid } from "../config/zero-config.js";
+import fs from "fs";
+import v8 from "v8";
+import auth from "basic-auth";
+//#region ../zero-cache/src/services/heapz.ts
+function handleHeapzRequest(lc, config, req, res) {
+	if (!isAdminPasswordValid(lc, config, auth(req)?.pass)) {
+		res.code(401).header("WWW-Authenticate", "Basic realm=\"Heapz Protected Area\"").send("Unauthorized");
+		return;
+	}
+	const filename = v8.writeHeapSnapshot();
+	const stream = fs.createReadStream(filename);
+	res.header("Content-Type", "application/octet-stream").header("Content-Disposition", `attachment; filename=${filename}`).send(stream);
+	stream.on("end", () => {
+		fs.unlink(filename, (err) => {
+			if (err) lc.error?.("Error deleting heap snapshot:", err);
+		});
+	});
+}
+//#endregion
+export { handleHeapzRequest };
+
+//# sourceMappingURL=heapz.js.map

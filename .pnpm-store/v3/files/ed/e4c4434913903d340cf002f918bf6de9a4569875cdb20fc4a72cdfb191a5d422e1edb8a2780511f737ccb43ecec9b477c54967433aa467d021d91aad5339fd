@@ -1,0 +1,90 @@
+import { joinIterables, wrapIterable } from "../../../../shared/src/iterables.js";
+import { Broadcast } from "./broadcast.js";
+//#region ../zero-cache/src/services/change-streamer/forwarder.ts
+var Forwarder = class {
+	#lc;
+	#progressMonitorOptions;
+	#active = /* @__PURE__ */ new Set();
+	#queued = /* @__PURE__ */ new Set();
+	#inTransaction = false;
+	#currentBroadcast;
+	#progressMonitor;
+	constructor(lc, opts = { flowControlConsensusPaddingSeconds: 1 }) {
+		this.#lc = lc.withContext("component", "progress-monitor");
+		this.#progressMonitorOptions = opts;
+	}
+	startProgressMonitor() {
+		clearInterval(this.#progressMonitor);
+		this.#progressMonitor = setInterval(this.#trackProgress, 1e3);
+	}
+	#trackProgress = () => {
+		const now = performance.now();
+		for (const sub of this.#active) sub.sampleProcessRate(now);
+		const { flowControlConsensusPaddingSeconds } = this.#progressMonitorOptions;
+		if (flowControlConsensusPaddingSeconds >= 0) this.#currentBroadcast?.checkProgress(this.#lc, flowControlConsensusPaddingSeconds * 1e3, now);
+	};
+	stopProgressMonitor() {
+		clearInterval(this.#progressMonitor);
+	}
+	/**
+	* `add()` is called in lock step with `Storer.catchup()` so that the
+	* two components have an equivalent interpretation of whether a Transaction is
+	* currently being streamed.
+	*/
+	add(sub) {
+		if (this.#inTransaction) this.#queued.add(sub);
+		else this.#active.add(sub);
+	}
+	remove(sub) {
+		this.#active.delete(sub);
+		this.#queued.delete(sub);
+		sub.close();
+	}
+	/**
+	* `forward()` is called in lockstep with `Storer.store()` so that the
+	* two components have an equivalent interpretation of whether a Transaction is
+	* currently being streamed.
+	*
+	* This version of forward is fire-and-forget, with no flow control. The
+	* change-streamer should call and await {@link forwardWithFlowControl()}
+	* occasionally to avoid memory blowup.
+	*/
+	forward(entry) {
+		Broadcast.withoutTracking(this.#active.values(), entry);
+		this.#updateActiveSubscribers(entry[1]);
+	}
+	sendStatus(status) {
+		for (const sub of this.#active.values()) sub.sendStatus(status);
+	}
+	/**
+	* The flow-control-aware equivalent of {@link forward()}, returning a
+	* Promise that resolves when replication should continue.
+	*/
+	async forwardWithFlowControl(entry) {
+		const broadcast = new Broadcast(this.#active.values(), entry);
+		this.#updateActiveSubscribers(entry[1]);
+		this.#currentBroadcast = broadcast;
+		await broadcast.done;
+		if (this.#currentBroadcast === broadcast) this.#currentBroadcast = void 0;
+	}
+	#updateActiveSubscribers(tag) {
+		switch (tag) {
+			case "begin":
+				this.#inTransaction = true;
+				break;
+			case "commit":
+			case "rollback":
+				this.#inTransaction = false;
+				for (const sub of this.#queued.values()) this.#active.add(sub);
+				this.#queued.clear();
+				break;
+		}
+	}
+	getAcks() {
+		return new Set(joinIterables(wrapIterable(this.#active).map((s) => s.acked), wrapIterable(this.#queued).map((s) => s.acked)));
+	}
+};
+//#endregion
+export { Forwarder };
+
+//# sourceMappingURL=forwarder.js.map

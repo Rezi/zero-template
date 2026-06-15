@@ -1,0 +1,19 @@
+/**
+ * Gives a size of a value. The size is modelled after the size used by
+ * Chromium/V8's structuredClone algorithm. It does not match exactly so the
+ * size is just an approximation.
+ * https://source.chromium.org/chromium/chromium/src/+/main:v8/src/objects/value-serializer.cc;l=102;drc=f0b6f7d12ea47ad7c08fb554f678c1e73801ca36;bpv=1;bpt=1
+ * For example we follow JSC/Mozilla for ints and skip the varint encoding.
+ *
+ * Mozilla does things similarly. Main difference is that there is no varint
+ * encoding and every value uses multiples of 64bits
+ * https://searchfox.org/mozilla-central/source/js/src/vm/StructuredClone.cpp#94
+ *
+ * And JSC:
+ * https://github.com/WebKit/WebKit/blob/main/Source/WebCore/bindings/js/SerializedScriptValue.cpp#L356
+ * - Use 1 byte tag
+ * - Numbers are either stored as Int32 or Float64
+ */
+export declare function getSizeOfValue(value: unknown): number;
+export declare function getSizeOfEntry<K, V>(key: K, value: V): number;
+//# sourceMappingURL=size-of-value.d.ts.map

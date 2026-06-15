@@ -1,0 +1,1 @@
+{"version":3,"file":"config.js","names":[],"sources":["../../../../shared/src/config.ts"],"sourcesContent":["declare const process: {\n  env: {\n    NODE_ENV?: string;\n  };\n};\n\nexport const isProd = process.env.NODE_ENV === 'production';\n\nexport {isProd as skipAssertJSONValue};\n"],"mappings":";AAMA,IAAa,SAAA,QAAA,IAAA,aAAkC"}

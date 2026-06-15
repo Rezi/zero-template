@@ -1,0 +1,3 @@
+import { type Worker } from '../types/processes.ts';
+export default function runWorker(parent: Worker, env: NodeJS.ProcessEnv, ...argv: string[]): Promise<void>;
+//# sourceMappingURL=reaper.d.ts.map

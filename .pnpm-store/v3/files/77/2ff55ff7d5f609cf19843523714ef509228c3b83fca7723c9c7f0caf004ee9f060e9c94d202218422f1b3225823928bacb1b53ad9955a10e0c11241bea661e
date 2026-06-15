@@ -1,0 +1,24 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { Storage } from '../../zql/src/ivm/operator.ts';
+import { Database } from './db.ts';
+export interface ClientGroupStorage {
+    /** Creates a {@link Storage} instance for a single operator. */
+    createStorage(): Storage;
+    /** Deletes all storage for the client group. */
+    destroy(): void;
+}
+export declare const CREATE_STORAGE_TABLE = "\n  CREATE TABLE storage (\n    clientGroupID TEXT,\n    op NUMBER,\n    key TEXT,\n    val TEXT,\n    PRIMARY KEY(clientGroupID, op, key)\n  )\n  ";
+export declare class DatabaseStorage {
+    #private;
+    static create(lc: LogContext, path: string, options?: {
+        commitInterval: number;
+        compactionThresholdBytes: number;
+    }): DatabaseStorage;
+    constructor(db: Database, options?: {
+        commitInterval: number;
+        compactionThresholdBytes: number;
+    });
+    close(): void;
+    createClientGroupStorage(cgID: string): ClientGroupStorage;
+}
+//# sourceMappingURL=database-storage.d.ts.map

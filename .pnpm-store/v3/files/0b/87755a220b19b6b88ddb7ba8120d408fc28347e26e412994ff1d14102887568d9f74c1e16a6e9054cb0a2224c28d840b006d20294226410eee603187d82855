@@ -1,0 +1,1 @@
+{"version":3,"file":"logging.d.ts","sourceRoot":"","sources":["../../../../../zero-cache/src/server/logging.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAC,UAAU,EAAC,MAAM,kBAAkB,CAAC;AAGjD,OAAO,EAGL,KAAK,SAAS,EACf,MAAM,gCAAgC,CAAC;AAIxC,wBAAgB,gBAAgB,CAC9B,EAAC,GAAG,EAAC,EAAE;IAAC,GAAG,EAAE,SAAS,CAAA;CAAC,EACvB,MAAM,EAAE,MAAM,EACd,WAAW,SAAI,EACf,WAAW,UAAO,GACjB,UAAU,CASZ"}

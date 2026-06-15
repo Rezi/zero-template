@@ -1,0 +1,10 @@
+import type { ClientGroupID, ClientID } from './sync/ids.ts';
+export type PersistInfo = {
+    clientGroupID: ClientGroupID;
+    clientID: ClientID;
+};
+export type OnPersist = (persistInfo: PersistInfo) => void;
+type HandlePersist = OnPersist;
+export declare function initOnPersistChannel(replicacheName: string, signal: AbortSignal, handlePersist: HandlePersist): OnPersist;
+export {};
+//# sourceMappingURL=on-persist-channel.d.ts.map

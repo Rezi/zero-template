@@ -1,0 +1,11 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { Database } from '../../../../../zqlite/src/db.ts';
+import { type IncrementalMigrationMap } from '../../../db/migration-lite.ts';
+export declare function initReplica(log: LogContext, debugName: string, dbPath: string, initialSync: (lc: LogContext, tx: Database) => Promise<void>): Promise<void>;
+export declare function upgradeReplica(log: LogContext, debugName: string, dbPath: string): Promise<void>;
+export declare const CREATE_V6_COLUMN_METADATA_TABLE = "\n  CREATE TABLE \"_zero.column_metadata\" (\n    table_name TEXT NOT NULL,\n    column_name TEXT NOT NULL,\n    upstream_type TEXT NOT NULL,\n    is_not_null INTEGER NOT NULL,\n    is_enum INTEGER NOT NULL,\n    is_array INTEGER NOT NULL,\n    character_max_length INTEGER,\n    PRIMARY KEY (table_name, column_name)\n  );\n";
+export declare const CREATE_V7_CHANGE_LOG = "\n  CREATE TABLE \"_zero.changeLog2\" (\n    \"stateVersion\"              TEXT NOT NULL,\n    \"pos\"                       INT  NOT NULL,\n    \"table\"                     TEXT NOT NULL,\n    \"rowKey\"                    TEXT NOT NULL,\n    \"op\"                        TEXT NOT NULL,\n    PRIMARY KEY(\"stateVersion\", \"pos\"),\n    UNIQUE(\"table\", \"rowKey\")\n  );\n";
+export declare const CREATE_V9_TABLE_METADATA_TABLE = "\n  CREATE TABLE \"_zero.tableMetadata\" (\n    \"schema\"    TEXT NOT NULL,\n    \"table\"     TEXT NOT NULL,\n    \"metadata\"  TEXT NOT NULL,\n    PRIMARY KEY (\"schema\", \"table\")\n  );\n";
+export declare const schemaVersionMigrationMap: IncrementalMigrationMap;
+export declare const CURRENT_SCHEMA_VERSION: number;
+//# sourceMappingURL=replica-schema.d.ts.map

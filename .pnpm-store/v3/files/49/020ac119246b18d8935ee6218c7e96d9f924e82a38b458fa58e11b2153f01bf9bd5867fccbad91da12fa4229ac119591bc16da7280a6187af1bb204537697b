@@ -1,0 +1,42 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { MaybePromise } from '../../shared/src/types.ts';
+import type { Store } from './dag/store.ts';
+import type { HTTPRequestInfo } from './http-request-info.ts';
+import type { CreateStore } from './kv/store.ts';
+import type { IDBDatabasesStore, IndexedDBDatabase } from './persist/idb-databases-store.ts';
+import type { Puller } from './puller.ts';
+import type { Pusher } from './pusher.ts';
+import type { ClientGroupID, ClientID } from './sync/ids.ts';
+interface ReplicacheDelegate {
+    clientID: ClientID;
+    closed: boolean;
+    idbName: string;
+    name: string;
+    online: boolean;
+    profileID: Promise<string>;
+    puller: Puller;
+    pusher: Pusher;
+}
+interface MutationRecoveryOptions {
+    delegate: ReplicacheDelegate;
+    readonly wrapInOnlineCheck: (f: () => Promise<boolean>, name: string) => Promise<boolean>;
+    readonly wrapInReauthRetries: <R>(f: (requestID: string, requestLc: LogContext) => Promise<{
+        httpRequestInfo: HTTPRequestInfo | undefined;
+        result: R;
+    }>, verb: string, lc: LogContext, preAuth?: () => MaybePromise<void>, postAuth?: () => MaybePromise<void>) => Promise<{
+        result: R;
+        authFailure: boolean;
+    }>;
+    readonly isPushDisabled: () => boolean;
+    readonly isPullDisabled: () => boolean;
+    readonly lc: LogContext;
+    readonly enableMutationRecovery: boolean;
+    readonly clientGroupIDPromise: Promise<ClientGroupID | undefined>;
+}
+export declare class MutationRecovery {
+    #private;
+    constructor(options: MutationRecoveryOptions);
+    recoverMutations(ready: Promise<unknown>, perdag: Store, idbDatabase: IndexedDBDatabase, idbDatabases: IDBDatabasesStore, createStore: CreateStore): Promise<boolean>;
+}
+export {};
+//# sourceMappingURL=mutation-recovery.d.ts.map

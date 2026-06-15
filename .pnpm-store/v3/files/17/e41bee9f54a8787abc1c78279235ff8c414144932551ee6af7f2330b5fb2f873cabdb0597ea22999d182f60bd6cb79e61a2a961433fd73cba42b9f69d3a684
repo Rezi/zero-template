@@ -1,0 +1,158 @@
+import { Lock } from "@rocicorp/lock";
+//#region ../datadog/src/datadog-log-sink.ts
+var DD_BASE_URL = new URL("https://http-intake.logs.datadoghq.com/api/v2/logs");
+var MAX_ENTRY_BYTES = 5 * 1024 * 1024;
+var MAX_MESSAGE_RETRIES = 2;
+MAX_ENTRY_BYTES / 4;
+var DatadogLogSink = class {
+	#messages = [];
+	#apiKey;
+	#source;
+	#service;
+	#host;
+	#version;
+	#interval;
+	#baseURL;
+	#timerID = 0;
+	#flushLock = new Lock();
+	constructor(options) {
+		const { apiKey, source, service, host, version, interval = 5e3, baseURL: baseUrl = DD_BASE_URL } = options;
+		this.#apiKey = apiKey;
+		this.#source = source;
+		this.#service = service;
+		this.#host = host;
+		this.#version = version;
+		this.#interval = interval;
+		this.#baseURL = baseUrl.toString();
+	}
+	log(level, context, ...args) {
+		this.#messages.push(makeMessage(args, context, level));
+		if (level === "error" || this.#messages.length === 250) this.flush();
+		else this.#startTimer();
+	}
+	#startTimer() {
+		if (this.#timerID) return;
+		this.#timerID = setTimeout(() => {
+			this.#timerID = 0;
+			this.flush();
+		}, this.#interval);
+	}
+	flush() {
+		return this.#flushLock.withLock(async () => {
+			const { length } = this.#messages;
+			if (length === 0) return;
+			do {
+				const flushTime = Date.now();
+				const stringified = [];
+				let totalBytes = 0;
+				for (const m of this.#messages) {
+					m.flushDelayMs = flushTime - m.date;
+					let str = JSON.stringify(m);
+					if (str.length > 1310720) {
+						m.message = `[Dropped message of length ${str.length}]`;
+						str = JSON.stringify(m);
+					}
+					if (str.length + totalBytes + stringified.length > 1310720) break;
+					totalBytes += str.length;
+					stringified.push(str);
+					if (stringified.length === 1e3) break;
+				}
+				const body = stringified.join("\n");
+				const url = new URL(this.#baseURL);
+				if (this.#apiKey !== void 0) url.searchParams.set("dd-api-key", this.#apiKey);
+				if (this.#source) {
+					url.searchParams.set("ddsource", this.#source);
+					url.searchParams.set("dd-evp-origin", this.#source);
+				}
+				if (this.#service) url.searchParams.set("service", this.#service);
+				if (this.#host) url.searchParams.set("host", this.#host);
+				if (this.#version) url.searchParams.set("ddtags", `version:${this.#version}`);
+				let ok = false;
+				try {
+					const response = await fetch(url.toString(), {
+						method: "POST",
+						body,
+						keepalive: true
+					});
+					ok = response.ok;
+					if (!ok) console.error("response", response.status, response.statusText, await response.text);
+				} catch (e) {
+					console.error("Log flush to datadog failed", e);
+				}
+				if (ok) this.#messages.splice(0, stringified.length);
+				else {
+					let numWithTooManyRetries = 0;
+					for (let i = 0; i < stringified.length; i++) {
+						const m = this.#messages[i];
+						m.flushRetryCount = (m.flushRetryCount ?? 0) + 1;
+						if (m.flushRetryCount > MAX_MESSAGE_RETRIES) numWithTooManyRetries++;
+					}
+					if (numWithTooManyRetries > 0) {
+						console.error(`Dropping ${numWithTooManyRetries} datadog log messages which failed to send ${MAX_MESSAGE_RETRIES + 1} times.`);
+						this.#messages.splice(0, numWithTooManyRetries);
+					}
+				}
+			} while (this.#messages.length >= 250);
+			if (this.#messages.length) this.#startTimer();
+		});
+	}
+};
+function flattenMessage(message) {
+	if (Array.isArray(message) && message.length === 1) return flattenMessage(message[0]);
+	return message;
+}
+function convertError(e) {
+	return {
+		name: e.name,
+		message: e.message,
+		stack: e.stack
+	};
+}
+function convertErrors(message) {
+	if (message instanceof Error) return convertError(message);
+	if (message instanceof Array) {
+		const convertedMessage = [];
+		for (const item of message) if (item instanceof Error) convertedMessage.push(convertError(item));
+		else convertedMessage.push(item);
+		return convertedMessage;
+	}
+	return message;
+}
+var LOG_SINK_FLUSH_RETRY_COUNT = "flushRetryCount";
+var LOG_SINK_FLUSH_DELAY_ATTRIBUTE = "flushDelayMs";
+var RESERVED_KEY_PREFIX = "@DATADOG_RESERVED_";
+var RESERVED_KEYS = [
+	"host",
+	"source",
+	"status",
+	"service",
+	"version",
+	"trace_id",
+	"message",
+	"msg",
+	"date",
+	LOG_SINK_FLUSH_DELAY_ATTRIBUTE,
+	LOG_SINK_FLUSH_RETRY_COUNT
+];
+function makeMessage(message, context, logLevel) {
+	let safeContext = void 0;
+	if (context !== void 0) {
+		for (const reservedKey of RESERVED_KEYS) if (Object.hasOwn(context, reservedKey)) {
+			if (safeContext === void 0) safeContext = { ...context };
+			safeContext[RESERVED_KEY_PREFIX + reservedKey] = safeContext[reservedKey];
+			delete safeContext[reservedKey];
+		}
+	}
+	const msg = {
+		...safeContext ?? context,
+		date: Date.now(),
+		message: convertErrors(flattenMessage(message)),
+		status: logLevel
+	};
+	if (logLevel === "error") msg.error = { origin: "logger" };
+	return msg;
+}
+//#endregion
+export { DatadogLogSink };
+
+//# sourceMappingURL=datadog-log-sink.js.map

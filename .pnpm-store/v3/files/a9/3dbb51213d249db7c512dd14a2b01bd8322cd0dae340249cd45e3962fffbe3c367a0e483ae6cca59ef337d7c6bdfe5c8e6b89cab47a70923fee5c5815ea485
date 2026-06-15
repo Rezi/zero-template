@@ -1,0 +1,351 @@
+import { assert } from "../../shared/src/asserts.js";
+import { promiseVoid } from "../../shared/src/resolved-promises.js";
+import { parse, test } from "../../shared/src/valita.js";
+import { getErrorDetails, getErrorMessage } from "../../shared/src/error.js";
+import { isApplicationError, wrapWithApplicationError } from "../../zero-protocol/src/application-error.js";
+import { PushFailed } from "../../zero-protocol/src/error-kind-enum.js";
+import { Server } from "../../zero-protocol/src/error-origin-enum.js";
+import { Database, Internal, OutOfOrderMutation as OutOfOrderMutation$1, Parse, UnsupportedPushVersion } from "../../zero-protocol/src/error-reason-enum.js";
+import { isMutator } from "../../zql/src/mutate/mutator.js";
+import { cleanupResultsArgSchema } from "../../zero-protocol/src/mutation.js";
+import { pushBodySchema } from "../../zero-protocol/src/push.js";
+import { MutationAlreadyProcessedError } from "../../zero-cache/src/services/mutagen/error.js";
+import { mutateParamsSchema } from "../../zero-protocol/src/mutate-server.js";
+import { createLogContext } from "./logging.js";
+import { separatorRe } from "./push-processor.js";
+//#region ../zero-server/src/process-mutations.ts
+var applicationErrorWrapper = async (fn) => {
+	try {
+		return await fn();
+	} catch (error) {
+		if (error instanceof DatabaseTransactionError || error instanceof OutOfOrderMutation || error instanceof MutationAlreadyProcessedError || isApplicationError(error)) throw error;
+		throw wrapWithApplicationError(error);
+	}
+};
+/**
+* @deprecated Use {@linkcode handleMutateRequest} instead.
+*/
+var handleMutationRequest = handleMutateRequest;
+async function handleMutateRequest(inputOrDbProvider, maybeHandler, requestOrQuery, bodyOrLogLevel, logLevel) {
+	const normalized = typeof inputOrDbProvider === "object" && "handler" in inputOrDbProvider ? normalizeMutateRequestInput(inputOrDbProvider) : normalizeLegacyMutateRequestArgs(inputOrDbProvider, maybeHandler, requestOrQuery, bodyOrLogLevel, logLevel);
+	const lc = createLogContext(normalized.logLevel).withContext("PushProcessor");
+	let jsonBody;
+	if (normalized.type === "request") try {
+		jsonBody = await normalized.request.json();
+	} catch (error) {
+		lc.error?.("Failed to parse push body", error);
+		const message = `Failed to parse push body: ${getErrorMessage(error)}`;
+		const details = getErrorDetails(error);
+		return {
+			kind: PushFailed,
+			origin: Server,
+			reason: Parse,
+			message,
+			mutationIDs: [],
+			...details ? { details } : {}
+		};
+	}
+	else jsonBody = normalized.jsonBody;
+	let mutationIDs = [];
+	let pushBody;
+	try {
+		pushBody = parse(jsonBody, pushBodySchema, "passthrough");
+		mutationIDs = pushBody.mutations.map((m) => ({
+			id: m.id,
+			clientID: m.clientID
+		}));
+	} catch (error) {
+		lc.error?.("Failed to parse push body", error);
+		const message = `Failed to parse push body: ${getErrorMessage(error)}`;
+		const details = getErrorDetails(error);
+		return {
+			kind: PushFailed,
+			origin: Server,
+			reason: Parse,
+			message,
+			mutationIDs,
+			...details ? { details } : {}
+		};
+	}
+	let parsedQueryParams;
+	try {
+		parsedQueryParams = parse(normalized.type === "request" ? Object.fromEntries(new URL(normalized.request.url).searchParams) : normalized.queryParams, mutateParamsSchema, "passthrough");
+	} catch (error) {
+		lc.error?.("Failed to parse push query parameters", error);
+		const message = `Failed to parse push query parameters: ${getErrorMessage(error)}`;
+		const details = getErrorDetails(error);
+		return {
+			kind: PushFailed,
+			origin: Server,
+			reason: Parse,
+			message,
+			mutationIDs,
+			...details ? { details } : {}
+		};
+	}
+	if (pushBody.pushVersion !== 1) return {
+		kind: PushFailed,
+		origin: Server,
+		reason: UnsupportedPushVersion,
+		mutationIDs,
+		message: `Unsupported push version: ${pushBody.pushVersion}`
+	};
+	const responses = [];
+	let processedCount = 0;
+	try {
+		const transactor = new Transactor(normalized.dbProvider, pushBody, parsedQueryParams, lc);
+		for (const m of pushBody.mutations) {
+			if (m.type === "custom" && m.name === "_zero_cleanupResults") {
+				lc.debug?.(`Processing internal mutation '${m.name}' (clientID=${m.clientID})`);
+				try {
+					await processCleanupResultsMutation(normalized.dbProvider, m, parsedQueryParams, lc);
+					processedCount++;
+				} catch (error) {
+					lc.warn?.(`Failed to process cleanup mutation for client ${m.clientID}`, error);
+					processedCount++;
+				}
+				continue;
+			}
+			assert(m.type === "custom", "Expected custom mutation");
+			lc.debug?.(`Processing mutation '${m.name}' (id=${m.id}, clientID=${m.clientID})`);
+			let mutationPhase = "preTransaction";
+			const transactProxy = async (innerCb) => {
+				mutationPhase = "transactionPending";
+				const result = await transactor.transact(m, innerCb);
+				mutationPhase = "postCommit";
+				return result;
+			};
+			try {
+				const res = await applicationErrorWrapper(() => normalized.handler(transactProxy, m));
+				responses.push(res);
+				lc.debug?.(`Mutation '${m.name}' (id=${m.id}) completed successfully`);
+				processedCount++;
+			} catch (error) {
+				if (!isApplicationError(error)) throw error;
+				if (mutationPhase === "preTransaction") await transactor.persistPreTransactionFailure(m, error);
+				else if (mutationPhase === "postCommit") lc.error?.(`Post-commit mutation handler failed for mutation ${m.id} for client ${m.clientID}`, error);
+				lc.warn?.(`Application error processing mutation ${m.id} for client ${m.clientID}`, error);
+				responses.push(makeAppErrorResponse(m, error));
+				processedCount++;
+			}
+		}
+		return {
+			kind: "MutateResponse",
+			mutations: responses,
+			...typeof normalized.userID !== "undefined" ? { userID: normalized.userID } : {}
+		};
+	} catch (error) {
+		lc.error?.("Failed to process push request", error);
+		const unprocessedMutationIDs = mutationIDs.slice(processedCount);
+		const message = getErrorMessage(error);
+		const details = getErrorDetails(error);
+		return {
+			kind: PushFailed,
+			origin: Server,
+			reason: error instanceof OutOfOrderMutation ? OutOfOrderMutation$1 : error instanceof DatabaseTransactionError ? Database : Internal,
+			message,
+			mutationIDs: unprocessedMutationIDs,
+			...details ? { details } : {}
+		};
+	}
+}
+function normalizeMutateRequestInput(input) {
+	if ("request" in input) return {
+		type: "request",
+		dbProvider: input.dbProvider,
+		handler: input.handler,
+		request: input.request,
+		userID: input.userID ?? null,
+		logLevel: input.logLevel ?? "info"
+	};
+	return {
+		type: "body",
+		dbProvider: input.dbProvider,
+		handler: input.handler,
+		jsonBody: input.body,
+		userID: input.userID ?? null,
+		queryParams: input.query instanceof URLSearchParams ? Object.fromEntries(input.query) : input.query,
+		logLevel: input.logLevel ?? "info"
+	};
+}
+function normalizeLegacyMutateRequestArgs(dbProvider, handler, requestOrQuery, bodyOrLogLevel, logLevel) {
+	assert(typeof handler === "function", "Handler function is required");
+	assert(typeof requestOrQuery !== "undefined", "Request or query parameters are required");
+	if (requestOrQuery instanceof Request) return {
+		type: "request",
+		dbProvider,
+		handler,
+		request: requestOrQuery,
+		userID: void 0,
+		logLevel: bodyOrLogLevel ?? "info"
+	};
+	assert(typeof bodyOrLogLevel !== "undefined", "JSON body cannot be undefined");
+	return {
+		type: "body",
+		dbProvider,
+		handler,
+		jsonBody: bodyOrLogLevel,
+		userID: void 0,
+		queryParams: requestOrQuery instanceof URLSearchParams ? Object.fromEntries(requestOrQuery) : requestOrQuery,
+		logLevel: logLevel ?? "info"
+	};
+}
+var Transactor = class {
+	#dbProvider;
+	#req;
+	#params;
+	#lc;
+	constructor(dbProvider, req, params, lc) {
+		this.#dbProvider = dbProvider;
+		this.#req = req;
+		this.#params = params;
+		this.#lc = lc;
+	}
+	transact = async (mutation, cb) => {
+		let appError = void 0;
+		for (;;) try {
+			const ret = await this.#transactImpl(mutation, cb, appError);
+			if (appError !== void 0) {
+				this.#lc.warn?.(`Mutation ${mutation.id} for client ${mutation.clientID} was retried after an error`, appError);
+				return makeAppErrorResponse(mutation, appError);
+			}
+			return ret;
+		} catch (error) {
+			if (error instanceof OutOfOrderMutation) {
+				this.#lc.error?.(error);
+				throw error;
+			}
+			if (error instanceof MutationAlreadyProcessedError) {
+				this.#lc.warn?.(error);
+				return {
+					id: {
+						clientID: mutation.clientID,
+						id: mutation.id
+					},
+					result: {
+						error: "alreadyProcessed",
+						details: error.message
+					}
+				};
+			}
+			if (appError !== void 0) {
+				this.#lc.error?.(`Retry also failed for mutation ${mutation.id} for client ${mutation.clientID}`, error);
+				throw error;
+			}
+			appError = wrapWithApplicationError(error instanceof DatabaseTransactionError ? error.cause ?? error : error);
+			this.#lc.warn?.(`Error processing mutation ${mutation.id} for client ${mutation.clientID}, retrying without mutator`, appError);
+			continue;
+		}
+	};
+	async persistPreTransactionFailure(mutation, appError) {
+		return await this.#transactImpl(mutation, () => promiseVoid, appError);
+	}
+	async #transactImpl(mutation, cb, appError) {
+		let transactionPhase = "open";
+		try {
+			return await this.#dbProvider.transaction(async (dbTx, transactionHooks) => {
+				transactionPhase = "execute";
+				await this.#checkAndIncrementLastMutationID(transactionHooks, mutation.clientID, mutation.id);
+				if (appError === void 0) {
+					this.#lc.debug?.(`Executing mutator '${mutation.name}' (id=${mutation.id})`);
+					await cb(dbTx, mutation.name, mutation.args[0]);
+				} else {
+					const mutationResult = makeAppErrorResponse(mutation, appError);
+					await transactionHooks.writeMutationResult(mutationResult);
+				}
+				return {
+					id: {
+						clientID: mutation.clientID,
+						id: mutation.id
+					},
+					result: {}
+				};
+			}, this.#getTransactionInput(mutation));
+		} catch (error) {
+			if (isApplicationError(error) || error instanceof OutOfOrderMutation || error instanceof MutationAlreadyProcessedError) throw error;
+			throw new DatabaseTransactionError(transactionPhase, { cause: error });
+		}
+	}
+	#getTransactionInput(mutation) {
+		return {
+			upstreamSchema: this.#params.schema,
+			clientGroupID: this.#req.clientGroupID,
+			clientID: mutation.clientID,
+			mutationID: mutation.id
+		};
+	}
+	async #checkAndIncrementLastMutationID(transactionHooks, clientID, receivedMutationID) {
+		const { lastMutationID } = await transactionHooks.updateClientMutationID();
+		if (receivedMutationID < lastMutationID) throw new MutationAlreadyProcessedError(clientID, receivedMutationID, lastMutationID);
+		else if (receivedMutationID > lastMutationID) throw new OutOfOrderMutation(clientID, receivedMutationID, lastMutationID);
+	}
+};
+var OutOfOrderMutation = class extends Error {
+	constructor(clientID, receivedMutationID, lastMutationID) {
+		super(`Client ${clientID} sent mutation ID ${receivedMutationID} but expected ${lastMutationID}`);
+	}
+};
+function makeAppErrorResponse(m, error) {
+	return {
+		id: {
+			clientID: m.clientID,
+			id: m.id
+		},
+		result: {
+			error: "app",
+			message: error.message,
+			...error.details ? { details: error.details } : {}
+		}
+	};
+}
+/** @deprecated Use getMutator instead */
+function getMutation(mutators, name) {
+	const mutator = getObjectAtPath(mutators, name.split(separatorRe));
+	assert(typeof mutator === "function", `could not find mutator ${name}`);
+	if (isMutator(mutator)) return (tx, args, ctx) => mutator.fn({
+		args,
+		ctx,
+		tx
+	});
+	return mutator;
+}
+function getObjectAtPath(obj, path) {
+	let current = obj;
+	for (const part of path) {
+		if (typeof current !== "object" || current === null || !(part in current)) return;
+		current = current[part];
+	}
+	return current;
+}
+/**
+* Processes internal cleanup mutation that deletes acknowledged mutation results
+* from the upstream database. This runs without LMID tracking since it's an
+* internal operation.
+*/
+async function processCleanupResultsMutation(dbProvider, mutation, queryParams, lc) {
+	const parseResult = test(mutation.args[0], cleanupResultsArgSchema);
+	if (!parseResult.ok) {
+		lc.warn?.("Cleanup mutation has invalid args", parseResult.error);
+		return;
+	}
+	const args = parseResult.value;
+	const clientID = "type" in args && args.type === "bulk" ? args.clientIDs[0] : args.clientID;
+	await dbProvider.transaction(async (_, hooks) => {
+		await hooks.deleteMutationResults(args);
+	}, {
+		upstreamSchema: queryParams.schema,
+		clientGroupID: args.clientGroupID,
+		clientID,
+		mutationID: 0
+	});
+}
+var DatabaseTransactionError = class extends Error {
+	constructor(phase, options) {
+		super(phase === "open" ? `Failed to open database transaction: ${getErrorMessage(options?.cause)}` : `Database transaction failed after opening: ${getErrorMessage(options?.cause)}`, options);
+		this.name = "DatabaseTransactionError";
+	}
+};
+//#endregion
+export { OutOfOrderMutation, getMutation, handleMutateRequest, handleMutationRequest };
+
+//# sourceMappingURL=process-mutations.js.map

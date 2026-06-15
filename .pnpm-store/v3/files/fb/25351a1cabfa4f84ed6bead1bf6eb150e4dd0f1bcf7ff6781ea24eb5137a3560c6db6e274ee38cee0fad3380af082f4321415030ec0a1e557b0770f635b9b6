@@ -1,0 +1,17 @@
+//#region ../zql/src/planner/planner-constraint.ts
+/**
+* Multiple flipped joins will contribute extra constraints to a parent join.
+* These need to be merged.
+*/
+function mergeConstraints(a, b) {
+	if (!a) return b;
+	if (!b) return a;
+	return {
+		...a,
+		...b
+	};
+}
+//#endregion
+export { mergeConstraints };
+
+//# sourceMappingURL=planner-constraint.js.map

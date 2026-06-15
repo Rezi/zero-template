@@ -1,0 +1,3 @@
+import { type Worker } from '../types/processes.ts';
+export default function runWorker(parent: Worker, env: NodeJS.ProcessEnv, ...args: string[]): Promise<void>;
+//# sourceMappingURL=syncer.d.ts.map

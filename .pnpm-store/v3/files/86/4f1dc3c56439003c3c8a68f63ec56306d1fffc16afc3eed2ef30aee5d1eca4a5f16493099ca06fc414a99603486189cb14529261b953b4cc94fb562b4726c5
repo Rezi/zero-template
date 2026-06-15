@@ -1,0 +1,3 @@
+import type { LogContext } from '@rocicorp/logger';
+export declare function timeSampled<T>(lc: LogContext, numerator: number, denominator: number, cb: () => T, threshold?: number, prefix?: () => string): T;
+//# sourceMappingURL=maybe-time.d.ts.map

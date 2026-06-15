@@ -1,0 +1,11 @@
+import type { Condition, Ordering } from '../../../zero-protocol/src/ast.ts';
+import { PlannerConnection, type ConnectionCostModel } from './planner-connection.ts';
+import type { PlannerConstraint } from './planner-constraint.ts';
+export type { ConnectionCostModel };
+export declare class PlannerSource {
+    #private;
+    readonly name: string;
+    constructor(name: string, model: ConnectionCostModel);
+    connect(sort: Ordering, filters: Condition | undefined, isRoot: boolean, baseConstraints?: PlannerConstraint, limit?: number): PlannerConnection;
+}
+//# sourceMappingURL=planner-source.d.ts.map

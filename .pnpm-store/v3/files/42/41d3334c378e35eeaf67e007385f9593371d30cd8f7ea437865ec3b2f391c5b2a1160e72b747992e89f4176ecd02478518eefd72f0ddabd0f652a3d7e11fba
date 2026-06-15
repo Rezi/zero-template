@@ -1,0 +1,47 @@
+import type { Ordering } from '../../../zero-protocol/src/ast.ts';
+import type { Row, Value } from '../../../zero-protocol/src/data.ts';
+import type { Stream } from './stream.ts';
+/**
+ * A row flowing through the pipeline, plus its relationships.
+ * Relationships are generated lazily as read.
+ */
+export type Node = {
+    row: Row;
+    /**
+     * Relationships are generated lazily as read.
+     * The stream may contain 'yield' to indicate the operator has yielded control.
+     * See {@linkcode Operator.fetch} for more details about yields.
+     */
+    relationships: Record<string, () => Stream<Node | 'yield'>>;
+};
+/**
+ * Compare two values. The values must be of the same type. This function
+ * throws at runtime if the types differ.
+ *
+ * Note, this function considers `null === null` and
+ * `undefined === undefined`. This is different than SQL. In join code,
+ * null must be treated separately.
+ *
+ * See: https://github.com/rocicorp/mono/pull/2116/files#r1704811479
+ *
+ * @returns < 0 if a < b, 0 if a === b, > 0 if a > b
+ */
+export declare function compareValues(a: Value, b: Value): number;
+export type NormalizedValue = Exclude<Value, undefined>;
+/**
+ * We allow undefined to be passed for the convenience of developers, but we
+ * treat it equivalently to null. It's better for perf to not create an copy
+ * of input values, so we just normalize at use when necessary.
+ */
+export declare function normalizeUndefined(v: Value): NormalizedValue;
+export type Comparator = (r1: Row, r2: Row) => number;
+export declare function makeComparator(order: Ordering, reverse?: boolean): Comparator;
+/**
+ * Determine if two values are equal. Note that unlike compareValues() above,
+ * this function treats `null` as unequal to itself (and same for `undefined`).
+ * This is required to make joins work correctly, but may not be the right
+ * semantic for your application.
+ */
+export declare function valuesEqual(a: Value, b: Value): boolean;
+export declare function drainStreams(node: Node | 'yield'): void;
+//# sourceMappingURL=data.d.ts.map

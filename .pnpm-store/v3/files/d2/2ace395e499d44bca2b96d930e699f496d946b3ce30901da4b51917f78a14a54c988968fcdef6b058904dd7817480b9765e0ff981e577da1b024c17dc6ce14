@@ -1,0 +1,33 @@
+import type { ChangeType } from './change-type.ts';
+import { type Change } from './change.ts';
+import { type Node } from './data.ts';
+import type { FanOut } from './fan-out.ts';
+import { type FilterInput, type FilterOperator, type FilterOutput } from './filter-operators.ts';
+import type { SourceSchema } from './schema.ts';
+/**
+ * The FanIn operator merges multiple streams into one.
+ * It eliminates duplicates and must be paired with a fan-out operator
+ * somewhere upstream of the fan-in.
+ *
+ *  issue
+ *    |
+ * fan-out
+ * /      \
+ * a      b
+ *  \    /
+ * fan-in
+ *   |
+ */
+export declare class FanIn implements FilterOperator {
+    #private;
+    constructor(fanOut: FanOut, inputs: FilterInput[]);
+    setFilterOutput(output: FilterOutput): void;
+    destroy(): void;
+    getSchema(): SourceSchema;
+    beginFilter(): void;
+    endFilter(): void;
+    filter(node: Node): Generator<'yield', boolean>;
+    push(change: Change): readonly never[];
+    fanOutDonePushingToAllBranches(fanOutChangeType: ChangeType): Generator<"yield", void, any>;
+}
+//# sourceMappingURL=fan-in.d.ts.map

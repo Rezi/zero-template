@@ -1,0 +1,1 @@
+{"version":3,"file":"sync-head-name.js","names":[],"sources":["../../../../../replicache/src/sync/sync-head-name.ts"],"sourcesContent":["export const SYNC_HEAD_NAME = 'sync';\n"],"mappings":";AAAA,IAAa,iBAAiB"}

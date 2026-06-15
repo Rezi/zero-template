@@ -1,0 +1,270 @@
+import { assert, unreachable } from "../../../../shared/src/asserts.js";
+import { assertJSONValue } from "../../../../shared/src/json.js";
+import { promiseVoid } from "../../../../shared/src/resolved-promises.js";
+import { parse, valita_exports } from "../../../../shared/src/valita.js";
+import { rowSchema } from "../../../../zero-protocol/src/data.js";
+import { ProtocolError } from "../../../../zero-protocol/src/error.js";
+import { primaryKeyValueRecordSchema } from "../../../../zero-protocol/src/primary-key.js";
+import { mutationResultSchema } from "../../../../zero-protocol/src/mutation.js";
+import { upstreamSchema } from "../../types/shards.js";
+import { getOrCreateCounter, getOrCreateLatencyHistogram } from "../../observability/metrics.js";
+import { cmpVersions, cookieToVersion, versionToCookie, versionToNullableCookie } from "./schema/types.js";
+import { getLogLevel, wrapWithProtocolError } from "../../types/error-with-level.js";
+//#region ../zero-cache/src/services/view-syncer/client-handler.ts
+var NOOP = {
+	addPatch: () => promiseVoid,
+	cancel: () => promiseVoid,
+	end: () => promiseVoid
+};
+/** Wraps PokeHandlers for multiple clients in a single PokeHandler. */
+function startPoke(clients, tentativeVersion) {
+	const pokers = clients.map((c) => c.startPoke(tentativeVersion));
+	return {
+		addPatch: async (patch) => {
+			await Promise.allSettled(pokers.map((poker) => poker.addPatch(patch)));
+		},
+		cancel: async () => {
+			await Promise.allSettled(pokers.map((poker) => poker.cancel()));
+		},
+		end: async (finalVersion) => {
+			await Promise.allSettled(pokers.map((poker) => poker.end(finalVersion)));
+		}
+	};
+}
+var PART_COUNT_FLUSH_THRESHOLD = 100;
+/**
+* Handles a single `ViewSyncer` connection.
+*/
+var ClientHandler = class {
+	#clientGroupID;
+	clientID;
+	wsID;
+	#zeroClientsTable;
+	#zeroMutationsTable;
+	#lc;
+	#downstream;
+	#baseVersion;
+	#pokeTime = getOrCreateLatencyHistogram("sync", "poke.time", "Time elapsed for each poke transaction. Canceled / noop pokes are excluded.");
+	#pokeTransactions = getOrCreateCounter("sync", "poke.transactions", "Count of poke transactions.");
+	#pokedRows = getOrCreateCounter("sync", "poke.rows", "Count of poked rows.");
+	constructor(lc, clientGroupID, clientID, wsID, shard, baseCookie, downstream) {
+		lc.debug?.("new client handler");
+		this.#clientGroupID = clientGroupID;
+		this.clientID = clientID;
+		this.wsID = wsID;
+		this.#zeroClientsTable = `${upstreamSchema(shard)}.clients`;
+		this.#zeroMutationsTable = `${upstreamSchema(shard)}.mutations`;
+		this.#lc = lc;
+		this.#downstream = downstream;
+		this.#baseVersion = cookieToVersion(baseCookie);
+	}
+	version() {
+		return this.#baseVersion;
+	}
+	async #push(msg) {
+		const { result } = this.#downstream.push(msg);
+		await result;
+	}
+	fail(e) {
+		this.#lc[getLogLevel(e)]?.(`view-syncer closing connection with error: ${String(e)}`, e);
+		this.#downstream.fail(wrapWithProtocolError(e));
+	}
+	close(reason) {
+		this.#lc.debug?.(`view-syncer closing connection: ${reason}`);
+		this.#downstream.cancel();
+	}
+	startPoke(tentativeVersion) {
+		const pokeID = versionToCookie(tentativeVersion);
+		const lc = this.#lc.withContext("pokeID", pokeID);
+		if (cmpVersions(this.#baseVersion, tentativeVersion) >= 0) {
+			lc.info?.(`already caught up, not sending poke.`);
+			return NOOP;
+		}
+		const baseCookie = versionToNullableCookie(this.#baseVersion);
+		const cookie = versionToCookie(tentativeVersion);
+		lc.debug?.(`starting poke from ${baseCookie} to ${cookie}`);
+		const start = performance.now();
+		const pokeStart = {
+			pokeID,
+			baseCookie
+		};
+		let pokeStarted = false;
+		let body;
+		let partCount = 0;
+		const ensureBody = async () => {
+			if (!pokeStarted) {
+				await this.#push(["pokeStart", pokeStart]);
+				pokeStarted = true;
+			}
+			return body ??= { pokeID };
+		};
+		const flushBody = async () => {
+			if (body) {
+				await this.#push(["pokePart", body]);
+				body = void 0;
+				partCount = 0;
+			}
+		};
+		const addPatch = async (patchToVersion) => {
+			const { patch, toVersion } = patchToVersion;
+			if (cmpVersions(toVersion, this.#baseVersion) <= 0) return;
+			const body = await ensureBody();
+			const { type, op } = patch;
+			switch (type) {
+				case "query": {
+					const patches = patch.clientID ? (body.desiredQueriesPatches ??= {})[patch.clientID] ??= [] : body.gotQueriesPatch ??= [];
+					if (op === "put") patches.push({
+						op,
+						hash: patch.id
+					});
+					else patches.push({
+						op,
+						hash: patch.id
+					});
+					break;
+				}
+				case "row":
+					if (patch.id.table === this.#zeroClientsTable) this.#updateLMIDs(body.lastMutationIDChanges ??= {}, patch);
+					else if (patch.id.table === this.#zeroMutationsTable) {
+						const patches = body.mutationsPatch ??= [];
+						if (op === "put") {
+							const row = parse(ensureSafeJSON(patch.contents), mutationRowSchema, "passthrough");
+							patches.push({
+								op: "put",
+								mutation: {
+									id: {
+										clientID: row.clientID,
+										id: row.mutationID
+									},
+									result: row.result
+								}
+							});
+						} else {
+							const { clientID, mutationID } = patch.id.rowKey;
+							assert(typeof clientID === "string", "client id must be a string");
+							const id = Number(mutationID);
+							assert(!Number.isNaN(id) && Number.isFinite(id) && id >= 0, "mutation id must be a finite number");
+							patches.push({
+								op: "del",
+								id: {
+									clientID,
+									id
+								}
+							});
+						}
+					} else (body.rowsPatch ??= []).push(makeRowPatch(patch));
+					break;
+				default: unreachable(patch);
+			}
+			if (++partCount >= PART_COUNT_FLUSH_THRESHOLD) await flushBody();
+		};
+		return {
+			addPatch: async (patchToVersion) => {
+				try {
+					await addPatch(patchToVersion);
+					if (patchToVersion.patch.type === "row") this.#pokedRows.add(1);
+				} catch (e) {
+					this.#downstream.fail(wrapWithProtocolError(e));
+				}
+			},
+			cancel: async () => {
+				if (pokeStarted) await this.#push(["pokeEnd", {
+					pokeID,
+					cookie: "",
+					cancel: true
+				}]);
+			},
+			end: async (finalVersion) => {
+				const cookie = versionToCookie(finalVersion);
+				if (!pokeStarted) {
+					if (cmpVersions(this.#baseVersion, finalVersion) === 0) return;
+					await this.#push(["pokeStart", pokeStart]);
+				} else if (cmpVersions(this.#baseVersion, finalVersion) >= 0) throw new Error(`Patches were sent but finalVersion ${finalVersion} is not greater than baseVersion ${this.#baseVersion}`);
+				await flushBody();
+				await this.#push(["pokeEnd", {
+					pokeID,
+					cookie
+				}]);
+				this.#baseVersion = finalVersion;
+				const elapsed = performance.now() - start;
+				this.#pokeTransactions.add(1);
+				this.#pokeTime.recordMs(elapsed);
+			}
+		};
+	}
+	async sendDeleteClients(lc, deletedClientIDs, deletedClientGroupIDs) {
+		const deleteClientsBody = {};
+		if (deletedClientIDs.length > 0) deleteClientsBody.clientIDs = deletedClientIDs;
+		if (deletedClientGroupIDs.length > 0) deleteClientsBody.clientGroupIDs = deletedClientGroupIDs;
+		lc.debug?.("sending deleteClients", deleteClientsBody);
+		await this.#push(["deleteClients", deleteClientsBody]);
+	}
+	sendQueryTransformApplicationErrors(errors) {
+		this.#push(["transformError", errors]);
+	}
+	sendQueryTransformFailedError(error) {
+		this.fail(new ProtocolError(error));
+	}
+	sendInspectResponse(lc, response) {
+		lc.debug?.("sending inspect response", response);
+		this.#downstream.push(["inspect", response]);
+	}
+	#updateLMIDs(lmids, patch) {
+		if (patch.op === "put") {
+			const { clientGroupID, clientID, lastMutationID } = parse(ensureSafeJSON(patch.contents), lmidRowSchema, "passthrough");
+			if (clientGroupID !== this.#clientGroupID) this.#lc.error?.(`Received clients row for wrong clientGroupID. Ignoring.`, clientGroupID);
+			else lmids[clientID] = lastMutationID;
+		} else patch.op;
+	}
+};
+var lmidRowSchema = valita_exports.object({
+	clientGroupID: valita_exports.string(),
+	clientID: valita_exports.string(),
+	lastMutationID: valita_exports.number()
+});
+var mutationRowSchema = valita_exports.object({
+	clientGroupID: valita_exports.string(),
+	clientID: valita_exports.string(),
+	mutationID: valita_exports.number(),
+	result: mutationResultSchema
+});
+function makeRowPatch(patch) {
+	const { op, id: { table: tableName, rowKey: id } } = patch;
+	switch (op) {
+		case "put": return {
+			op: "put",
+			tableName,
+			value: parse(ensureSafeJSON(patch.contents), rowSchema)
+		};
+		case "del": return {
+			op,
+			tableName,
+			id: parse(id, primaryKeyValueRecordSchema)
+		};
+		default: unreachable(op);
+	}
+}
+/**
+* Column values of type INT8 are returned as the `bigint` from the
+* Postgres library. These are converted to `number` if they are within
+* the safe Number range, allowing the protocol to support numbers larger
+* than 32-bits. Values outside of the safe number range (e.g. > 2^53) will
+* result in an Error.
+*/
+function ensureSafeJSON(row) {
+	const modified = Object.entries(row).filter(([k, v]) => {
+		if (typeof v === "bigint") {
+			if (v >= Number.MIN_SAFE_INTEGER && v <= Number.MAX_SAFE_INTEGER) return true;
+			throw new Error(`Value of "${k}" exceeds safe Number range (${v})`);
+		} else if (typeof v === "object") assertJSONValue(v);
+		return false;
+	}).map(([k, v]) => [k, Number(v)]);
+	return modified.length ? {
+		...row,
+		...Object.fromEntries(modified)
+	} : row;
+}
+//#endregion
+export { ClientHandler, startPoke };
+
+//# sourceMappingURL=client-handler.js.map

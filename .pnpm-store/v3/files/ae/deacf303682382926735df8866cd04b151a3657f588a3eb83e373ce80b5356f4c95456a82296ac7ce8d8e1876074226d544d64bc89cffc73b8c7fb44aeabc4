@@ -1,0 +1,323 @@
+import { assert, unreachable } from "../../shared/src/asserts.js";
+import { hasOwn } from "../../shared/src/has-own.js";
+import "../../shared/src/json.js";
+import { last, zip } from "../../shared/src/arrays.js";
+import { must } from "../../shared/src/must.js";
+import { clientToServer } from "../../zero-schema/src/name-mapper.js";
+import { completeOrdering } from "../../zql/src/query/complete-ordering.js";
+import { parse } from "../../shared/src/bigint-json.js";
+import { sql, sqlConvertColumnArg, sqlConvertPluralLiteralArg, sqlConvertSingularLiteralArg } from "./sql.js";
+//#region ../z2s/src/compiler.ts
+var ZQL_RESULT_KEY = "zql_result";
+var ZQL_RESULT_KEY_IDENT = sql.ident(ZQL_RESULT_KEY);
+var ZQL_RESULT_TABLE_KEY = "zql_root";
+var ZQL_RESULT_TABLE_IDENT = sql.ident(ZQL_RESULT_TABLE_KEY);
+function compile(serverSchema, zqlSchema, ast, format) {
+	ast = completeOrdering(ast, (tableName) => zqlSchema.tables[tableName].primaryKey);
+	const spec = {
+		aliasCount: 0,
+		server: {
+			schema: serverSchema,
+			mapper: clientToServer(zqlSchema.tables)
+		},
+		zql: zqlSchema.tables
+	};
+	return sql`SELECT 
+    ${toJSON(ZQL_RESULT_TABLE_KEY, format?.singular)}::text AS ${ZQL_RESULT_KEY_IDENT}
+    FROM (${select(spec, ast, format)}) ${ZQL_RESULT_TABLE_IDENT}`;
+}
+function select(spec, ast, format, correlate) {
+	const table = makeTable(spec, ast.table);
+	const selectionSet = related(spec, ast.related ?? [], format, table);
+	const tableSchema = spec.zql[ast.table];
+	const usedAliases = new Set(ast.related?.map((r) => r.subquery.alias ?? ""));
+	for (const column of Object.keys(tableSchema.columns)) if (!usedAliases.has(column)) selectionSet.push(selectIdent(spec.server, {
+		table,
+		zql: column
+	}));
+	let appliedWhere = false;
+	function maybeWhere(test) {
+		if (!test) return sql``;
+		const ret = appliedWhere ? sql`AND` : sql`WHERE`;
+		appliedWhere = true;
+		return ret;
+	}
+	return sql`SELECT ${sql.join(selectionSet, ",")}
+    FROM ${fromIdent(spec.server, table)}
+    ${maybeWhere(ast.where)} ${where(spec, ast.where, table)}
+    ${maybeWhere(correlate)} ${correlate ? correlate(table) : sql``}
+    ${orderBy(spec, ast.orderBy, table)}
+    ${limit(ast.limit, format?.singular)}`;
+}
+function limit(limit, singular) {
+	if (limit === 0) return sql`LIMIT 0`;
+	if (singular) return sql`LIMIT 1`;
+	if (limit === void 0) return sql``;
+	return sql`LIMIT ${sqlConvertSingularLiteralArg(limit)}`;
+}
+function makeTable(spec, zql, alias) {
+	alias = alias ?? zql + "_" + spec.aliasCount++;
+	return {
+		zql,
+		alias
+	};
+}
+function orderBy(spec, orderBy, table) {
+	if (!orderBy) return sql``;
+	return sql`ORDER BY ${sql.join(orderBy.map(([col, dir]) => dir === "asc" ? sql`${colIdent(spec.server, {
+		table,
+		zql: col
+	})} ASC NULLS FIRST` : sql`${colIdent(spec.server, {
+		table,
+		zql: col
+	})} DESC NULLS LAST`), ", ")}`;
+}
+function related(spec, relationships, format, parentTable) {
+	return relationships.map((relationship) => relationshipSubquery(spec, relationship, format?.relationships[must(relationship.subquery.alias)], parentTable));
+}
+function relationshipSubquery(spec, relationship, format, parentTable) {
+	const innerAlias = `inner_${relationship.subquery.alias}`;
+	if (relationship.hidden) {
+		const { join, participatingTables } = makeJunctionJoin(spec, relationship);
+		const lastTable = must(last(participatingTables)).table;
+		assert(relationship.subquery.related, "hidden relationship must be a junction");
+		const nestedAst = relationship.subquery.related[0].subquery;
+		const selectionSet = related(spec, nestedAst.related ?? [], format, lastTable);
+		const tableSchema = spec.zql[nestedAst.table];
+		for (const column of Object.keys(tableSchema.columns)) selectionSet.push(selectIdent(spec.server, {
+			table: lastTable,
+			zql: column
+		}));
+		return sql`(
+        SELECT ${toJSON(innerAlias, format?.singular)} FROM (SELECT ${sql.join(selectionSet, ",")} FROM ${join} WHERE (${makeCorrelator(spec, relationship.correlation.parentField.map((f) => ({
+			table: parentTable,
+			zql: f
+		})), relationship.correlation.childField)(participatingTables[0].table)}) ${nestedAst.where ? sql`AND ${where(spec, nestedAst.where, lastTable)}` : sql``} ${orderBy(spec, nestedAst.orderBy, lastTable)} ${limit(last(participatingTables)?.limit, format?.singular)} ) ${sql.ident(innerAlias)}
+      ) as ${sql.ident(relationship.subquery.alias)}`;
+	}
+	return sql`(
+      SELECT ${toJSON(innerAlias, format?.singular)} FROM (${select(spec, relationship.subquery, format, makeCorrelator(spec, relationship.correlation.parentField.map((f) => ({
+		table: parentTable,
+		zql: f
+	})), relationship.correlation.childField))}) ${sql.ident(innerAlias)}
+    ) as ${sql.ident(relationship.subquery.alias)}`;
+}
+function where(spec, condition, table) {
+	if (!condition) return sql``;
+	switch (condition.type) {
+		case "and": return sql`(${sql.join(condition.conditions.map((c) => where(spec, c, table)), " AND ")})`;
+		case "or": return sql`(${sql.join(condition.conditions.map((c) => where(spec, c, table)), " OR ")})`;
+		case "correlatedSubquery":
+			if (condition.scalar) return scalarSubquery(spec, condition, table);
+			return exists(spec, condition, table);
+		case "simple": return simple(spec, condition, table);
+	}
+}
+function exists(spec, condition, parentTable) {
+	switch (condition.op) {
+		case "EXISTS": return sql`EXISTS (${select(spec, condition.related.subquery, void 0, makeCorrelator(spec, condition.related.correlation.parentField.map((f) => ({
+			table: parentTable,
+			zql: f
+		})), condition.related.correlation.childField))})`;
+		case "NOT EXISTS": return sql`NOT EXISTS (${select(spec, condition.related.subquery, void 0, makeCorrelator(spec, condition.related.correlation.parentField.map((f) => ({
+			table: parentTable,
+			zql: f
+		})), condition.related.correlation.childField))})`;
+	}
+}
+function scalarSubquery(spec, condition, parentTable) {
+	const parentField = condition.related.correlation.parentField[0];
+	const childField = condition.related.correlation.childField[0];
+	const subqueryAST = condition.related.subquery;
+	const parentCol = colIdent(spec.server, {
+		table: parentTable,
+		zql: parentField
+	});
+	const subqueryTable = makeTable(spec, subqueryAST.table);
+	const childCol = colIdent(spec.server, {
+		table: subqueryTable,
+		zql: childField
+	});
+	const op = sql.__dangerous__rawValue(condition.op === "EXISTS" ? "=" : "IS NOT");
+	const subqueryWhere = subqueryAST.where ? sql`WHERE ${where(spec, subqueryAST.where, subqueryTable)}` : sql``;
+	const subqueryOrderBy = orderBy(spec, subqueryAST.orderBy, subqueryTable);
+	return sql`${parentCol} ${op} (SELECT ${childCol} FROM ${fromIdent(spec.server, subqueryTable)} ${subqueryWhere} ${subqueryOrderBy} LIMIT 1)`;
+}
+function makeCorrelator(spec, parentFields, childZqlFields) {
+	return (childTable) => {
+		const childFields = childZqlFields.map((zqlField) => ({
+			table: childTable,
+			zql: zqlField
+		}));
+		return sql.join(zip(parentFields, childFields).map(([parentColumn, childColumn]) => sql`${colIdent(spec.server, parentColumn)} = ${colIdent(spec.server, childColumn)}`), " AND ");
+	};
+}
+function simple(spec, condition, table) {
+	switch (condition.op) {
+		case "!=":
+		case "<":
+		case "<=":
+		case "=":
+		case ">":
+		case ">=":
+		case "ILIKE":
+		case "LIKE":
+		case "NOT ILIKE":
+		case "NOT LIKE": return sql`${valueComparison(spec, condition.left, table, condition.right, false)} ${sql.__dangerous__rawValue(condition.op)} ${valueComparison(spec, condition.right, table, condition.left, false)}`;
+		case "NOT IN":
+		case "IN": return any(spec, condition, table);
+		case "IS":
+		case "IS NOT": return distinctFrom(spec, condition, table);
+	}
+}
+function any(spec, condition, table) {
+	return sql`${condition.op === "NOT IN" ? sql`NOT` : sql``}
+    (
+      ${valueComparison(spec, condition.left, table, condition.right, false)} = ANY 
+      (${valueComparison(spec, condition.right, table, condition.left, true)})
+    )`;
+}
+function distinctFrom(spec, condition, table) {
+	return sql`${valueComparison(spec, condition.left, table, condition.right, false)} ${condition.op === "IS" ? sql`IS NOT DISTINCT FROM` : sql`IS DISTINCT FROM`} ${valueComparison(spec, condition.right, table, condition.left, false)}`;
+}
+function valueComparison(spec, valuePos, table, otherValuePos, plural) {
+	const valuePosType = valuePos.type;
+	switch (valuePosType) {
+		case "column": {
+			const qualified = {
+				table,
+				zql: valuePos.name
+			};
+			return colIdent(spec.server, qualified);
+		}
+		case "literal": return literalValueComparison(spec, valuePos, table, otherValuePos, plural);
+		case "static": throw new Error("Static parameters must be bound to a value before compiling to SQL");
+		default:
+			unreachable(valuePosType);
+			break;
+	}
+}
+function literalValueComparison(spec, valuePos, table, otherValuePos, plural) {
+	const otherType = otherValuePos.type;
+	switch (otherType) {
+		case "column": return sqlConvertColumnArg(getServerColumn(spec.server, table, otherValuePos.name), valuePos.value, plural, true);
+		case "literal":
+			assert(plural === Array.isArray(valuePos.value), "Expected plural flag to match whether value is an array");
+			if (Array.isArray(valuePos.value)) {
+				if (valuePos.value.length > 0) return sqlConvertPluralLiteralArg(typeof valuePos.value[0], valuePos.value);
+				if (otherValuePos.value !== null) return sqlConvertPluralLiteralArg(typeof otherValuePos.value, []);
+				return sqlConvertPluralLiteralArg("string", []);
+			}
+			if (typeof valuePos.value === "string" || typeof valuePos.value === "number" || typeof valuePos.value === "boolean") return sqlConvertSingularLiteralArg(valuePos.value);
+			throw new Error(`Literal of unexpected type. ${valuePos.value} of type ${typeof valuePos.value}`);
+		case "static": throw new Error("Static parameters must be bound to a value before compiling to SQL");
+		default: unreachable(otherType);
+	}
+}
+function makeJunctionJoin(spec, relationship) {
+	const participatingTables = pullTablesForJunction(spec, relationship);
+	const joins = [];
+	for (const { table } of participatingTables) {
+		if (joins.length === 0) {
+			joins.push(fromIdent(spec.server, table));
+			continue;
+		}
+		joins.push(sql` JOIN ${fromIdent(spec.server, table)} ON ${makeCorrelator(spec, participatingTables[joins.length].correlation.parentField.map((f) => ({
+			table: participatingTables[joins.length - 1].table,
+			zql: f
+		})), participatingTables[joins.length].correlation.childField)(participatingTables[joins.length].table)}`);
+	}
+	return {
+		join: sql`${sql.join(joins, "")}`,
+		participatingTables
+	};
+}
+function pullTablesForJunction(spec, relationship) {
+	assert(relationship.subquery.related?.length === 1, "Too many related tables for a junction edge");
+	const otherRelationship = relationship.subquery.related[0];
+	assert(!otherRelationship.hidden, "Expected junction edge relationship to not be hidden");
+	return [{
+		table: makeTable(spec, relationship.subquery.table),
+		correlation: relationship.correlation,
+		limit: relationship.subquery.limit
+	}, {
+		table: makeTable(spec, otherRelationship.subquery.table),
+		correlation: otherRelationship.correlation,
+		limit: otherRelationship.subquery.limit
+	}];
+}
+function toJSON(table, singular = false) {
+	return sql`${singular ? sql`` : sql`COALESCE(json_agg`}(row_to_json(${sql.ident(table)}))${singular ? sql`` : sql`, '[]'::json)`}`;
+}
+function selectIdent(server, column) {
+	const serverColumnSchema = server.schema[server.mapper.tableName(column.table.zql)][server.mapper.columnName(column.table.zql, column.zql)];
+	const serverType = serverColumnSchema.type;
+	if (!serverColumnSchema.isEnum) {
+		let needsNormalization = false;
+		switch (serverType) {
+			case "timestamptz":
+			case "timetz": needsNormalization = true;
+			case "date":
+			case "time":
+			case "time without time zone":
+			case "time with time zone":
+			case "timestamp":
+			case "timestamp without time zone":
+			case "timestamp with time zone": {
+				const toMs = (epochExpr) => needsNormalization ? sql`((${epochExpr})::bigint + 86400000) % 86400000` : epochExpr;
+				if (serverColumnSchema.isArray) {
+					const col = colIdent(server, column);
+					return sql`CASE WHEN ${col} IS NULL THEN NULL ELSE ARRAY(SELECT ${toMs(sql`EXTRACT(EPOCH FROM unnest(${col})) * 1000`)}) END as ${sql.ident(column.zql)}`;
+				}
+				return sql`${toMs(sql`EXTRACT(EPOCH FROM ${colIdent(server, column)}) * 1000`)} as ${sql.ident(column.zql)}`;
+			}
+		}
+	}
+	return sql`${colIdent(server, column)} as ${sql.ident(column.zql)}`;
+}
+function colIdent(server, column) {
+	return sql.ident(column.table.alias, server.mapper.columnName(column.table.zql, column.zql));
+}
+function fromIdent(server, table) {
+	return sql`${sql.ident(server.mapper.tableName(table.zql))} AS ${sql.ident(table.alias)}`;
+}
+function getServerColumn(spec, table, zqlColumn) {
+	return spec.schema[spec.mapper.tableName(table.zql)][spec.mapper.columnName(table.zql, zqlColumn)];
+}
+function extractZqlResult(pgResult) {
+	const bigIntJson = parse(pgResult[0][ZQL_RESULT_KEY]);
+	assertJSONValue(bigIntJson);
+	return bigIntJson;
+}
+function assertJSONValue(v) {
+	const path = findPathToBigInt(v);
+	if (path) throw new Error(`Value exceeds safe Number range. ${path}`);
+}
+function findPathToBigInt(v) {
+	switch (typeof v) {
+		case "bigint": return ` = ${v}`;
+		case "object": {
+			if (v === null) return;
+			if (Array.isArray(v)) {
+				for (let i = 0; i < v.length; i++) {
+					const path = findPathToBigInt(v[i]);
+					if (path) return `[${i}]${path}`;
+				}
+				return;
+			}
+			const o = v;
+			for (const k in o) if (hasOwn(o, k)) {
+				const path = findPathToBigInt(o[k]);
+				if (path) return `['${k}']${path}`;
+			}
+			return;
+		}
+		case "number": return;
+		case "boolean": return;
+		default: return;
+	}
+}
+//#endregion
+export { compile, extractZqlResult };
+
+//# sourceMappingURL=compiler.js.map

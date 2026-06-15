@@ -1,0 +1,38 @@
+import { type Hash } from '../hash.ts';
+import type { Read as KVRead, Store as KVStore, Write as KVWrite } from '../kv/store.ts';
+import { Chunk, type ChunkHasher, type Refs } from './chunk.ts';
+import { type RefCountUpdatesDelegate } from './gc.ts';
+import { type Read, type Store, type Write } from './store.ts';
+export declare class StoreImpl implements Store {
+    #private;
+    constructor(kv: KVStore, chunkHasher: ChunkHasher, assertValidHash: (hash: Hash) => void);
+    read(): Promise<Read>;
+    write(): Promise<Write>;
+    close(): Promise<void>;
+}
+export declare class ReadImpl implements Read {
+    protected readonly _tx: KVRead;
+    readonly assertValidHash: (hash: Hash) => void;
+    constructor(kv: KVRead, assertValidHash: (hash: Hash) => void);
+    hasChunk(hash: Hash): Promise<boolean>;
+    getChunk(hash: Hash): Promise<Chunk | undefined>;
+    mustGetChunk(hash: Hash): Promise<Chunk>;
+    getHead(name: string): Promise<Hash | undefined>;
+    release(): void;
+    get closed(): boolean;
+}
+export declare class WriteImpl extends ReadImpl implements Write, RefCountUpdatesDelegate {
+    #private;
+    protected readonly _tx: KVWrite;
+    constructor(kvw: KVWrite, chunkHasher: ChunkHasher, assertValidHash: (hash: Hash) => void);
+    createChunk: <V>(data: V, refs: Refs) => Chunk<V>;
+    get kvWrite(): KVWrite;
+    putChunk(c: Chunk): Promise<void>;
+    setHead(name: string, hash: Hash): Promise<void>;
+    removeHead(name: string): Promise<void>;
+    commit(): Promise<void>;
+    getRefCount(hash: Hash): Promise<number | undefined>;
+    getRefs(hash: Hash): Promise<readonly Hash[]>;
+    release(): void;
+}
+//# sourceMappingURL=store-impl.d.ts.map

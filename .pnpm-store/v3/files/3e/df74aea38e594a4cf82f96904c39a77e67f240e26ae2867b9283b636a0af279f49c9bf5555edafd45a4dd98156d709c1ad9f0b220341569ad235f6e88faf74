@@ -1,0 +1,16 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { Service } from '../service.ts';
+import type { ChangeStreamerService } from './change-streamer.ts';
+/**
+ * The single-node equivalent of the {@link BackupMonitor} polls the replica
+ * file every 30 seconds and schedules cleanup when the watermark
+ * (i.e. stateVersion) moves forward.
+ */
+export declare class ReplicaMonitor implements Service {
+    #private;
+    readonly id = "replica-monitor";
+    constructor(lc: LogContext, replicaFile: string, changeStreamer: ChangeStreamerService);
+    run(): Promise<void>;
+    stop(): Promise<void>;
+}
+//# sourceMappingURL=replica-monitor.d.ts.map

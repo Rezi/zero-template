@@ -1,0 +1,114 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { Enum } from '../../../shared/src/enum.ts';
+import * as valita from '../../../shared/src/valita.ts';
+import type { Read, Store, Write } from '../dag/store.ts';
+import type { Commit } from '../db/commit.ts';
+import { type SnapshotMetaDD31 } from '../db/commit.ts';
+import type { DeletedClients } from '../deleted-clients.ts';
+import type * as FormatVersion from '../format-version-enum.ts';
+import { type Hash } from '../hash.ts';
+import { type IndexDefinitions } from '../index-defs.ts';
+import { type ClientGroupID, type ClientID } from '../sync/ids.ts';
+import { type ClientGroup } from './client-groups.ts';
+type FormatVersion = Enum<typeof FormatVersion>;
+export type ClientMap = ReadonlyMap<ClientID, ClientV5 | ClientV6>;
+declare const clientV5Schema: valita.ObjectType<Readonly<{
+    heartbeatTimestampMs: valita.Type<number>;
+    headHash: valita.Type<Hash>;
+    /**
+     * The hash of a commit we are in the middle of refreshing into this client's
+     * memdag.
+     */
+    tempRefreshHash: valita.Type<Hash | null>;
+    /**
+     * ID of this client's perdag client group. This needs to be sent in pull
+     * request (to enable syncing all last mutation ids in the client group).
+     */
+    clientGroupID: valita.Type<string>;
+}>, undefined>;
+export type ClientV5 = valita.Infer<typeof clientV5Schema>;
+declare const clientV6Schema: valita.ObjectType<Readonly<{
+    heartbeatTimestampMs: valita.Type<number>;
+    /**
+     * A set of hashes, which contains:
+     * 1. The hash of the last commit this client refreshed from its client group
+     *    (this is the commit it bootstrapped from until it completes its first
+     *    refresh).
+     * 2. One or more hashes that were added to retain chunks of a commit while it
+     *    was being refreshed into this client's memdag. (This can be one or more
+     *    because refresh's cleanup step is a separate transaction and can fail).
+     * Upon refresh completing and successfully running its clean up step, this
+     * set will contain a single hash: the hash of the last commit this client
+     * refreshed.
+     */
+    refreshHashes: valita.Type<readonly Hash[]>;
+    /**
+     * The hash of the last snapshot commit persisted by this client to this
+     * client's client group, or null if has never persisted a snapshot.
+     */
+    persistHash: valita.Type<Hash | null>;
+    /**
+     * ID of this client's perdag client group. This needs to be sent in pull
+     * request (to enable syncing all last mutation ids in the client group).
+     */
+    clientGroupID: valita.Type<string>;
+}>, undefined>;
+export type ClientV6 = valita.Infer<typeof clientV6Schema>;
+export type Client = ClientV5 | ClientV6;
+export declare const CLIENTS_HEAD_NAME = "clients";
+export declare function assertClientV6(value: unknown): asserts value is ClientV6;
+export declare function getClients(dagRead: Read): Promise<ClientMap>;
+/**
+ * Used to signal that a client does not exist. Maybe it was garbage collected?
+ */
+export declare class ClientStateNotFoundError extends Error {
+    name: string;
+    readonly id: string;
+    constructor(id: ClientID);
+}
+/**
+ * Throws a `ClientStateNotFoundError` if the client does not exist.
+ */
+export declare function assertHasClientState(id: ClientID, dagRead: Read): Promise<void>;
+export declare function hasClientState(id: ClientID, dagRead: Read): Promise<boolean>;
+export declare function getClient(id: ClientID, dagRead: Read): Promise<Client | undefined>;
+export declare function mustGetClient(id: ClientID, dagRead: Read): Promise<Client>;
+type InitClientV6Result = [
+    client: ClientV6,
+    hash: Hash,
+    clientMap: ClientMap,
+    newClientGroup: boolean
+];
+export declare function initClientV6(newClientID: ClientID, lc: LogContext, perdag: Store, mutatorNames: string[], indexes: IndexDefinitions, formatVersion: FormatVersion, enableClientGroupForking: boolean): Promise<InitClientV6Result>;
+export declare const FIND_MATCHING_CLIENT_TYPE_NEW = 0;
+export declare const FIND_MATCHING_CLIENT_TYPE_FORK = 1;
+export declare const FIND_MATCHING_CLIENT_TYPE_HEAD = 2;
+export type FindMatchingClientResult = {
+    type: typeof FIND_MATCHING_CLIENT_TYPE_NEW;
+} | {
+    type: typeof FIND_MATCHING_CLIENT_TYPE_FORK;
+    snapshot: Commit<SnapshotMetaDD31>;
+} | {
+    type: typeof FIND_MATCHING_CLIENT_TYPE_HEAD;
+    clientGroupID: ClientGroupID;
+    headHash: Hash;
+};
+export declare function findMatchingClient(dagRead: Read, mutatorNames: string[], indexes: IndexDefinitions): Promise<FindMatchingClientResult>;
+export declare function getClientGroupForClient(clientID: ClientID, read: Read): Promise<ClientGroup | undefined>;
+export declare function getClientGroupIDForClient(clientID: ClientID, read: Read): Promise<ClientGroupID | undefined>;
+/**
+ * Adds a Client to the ClientMap and updates the 'clients' head to point at
+ * the updated clients.
+ */
+export declare function setClient(clientID: ClientID, client: Client, dagWrite: Write): Promise<Hash>;
+/**
+ * Sets the ClientMap and updates the 'clients' head top point at the new
+ * clients.
+ */
+export declare function setClients(clients: ClientMap, dagWrite: Write): Promise<Hash>;
+/**
+ * Callback function for when Replicache has deleted one or more clients.
+ */
+export type OnClientsDeleted = (deletedClients: DeletedClients) => Promise<void>;
+export {};
+//# sourceMappingURL=clients.d.ts.map

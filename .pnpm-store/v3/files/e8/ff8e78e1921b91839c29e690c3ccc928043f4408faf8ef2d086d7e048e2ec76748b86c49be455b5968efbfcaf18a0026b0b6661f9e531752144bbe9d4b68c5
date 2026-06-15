@@ -1,0 +1,57 @@
+import type { LogContext } from '@rocicorp/logger';
+import type postgres from 'postgres';
+import { type PostgresDB } from '../../../types/pg';
+import { type ShardID } from '../../../types/shards';
+export type ReplicationSlot = {
+    slot_name: string;
+    consistent_point: string;
+    snapshot_name: string;
+    output_plugin: string;
+};
+export type CreateSlotSpec = {
+    slotName: string;
+    failover?: boolean;
+    lockTimeout?: number;
+};
+export declare function createReplicationSlot(lc: LogContext, session: postgres.Sql, { slotName, failover, lockTimeout }: CreateSlotSpec): Promise<ReplicationSlot>;
+/**
+ * Replica and slot creation involves two sessions for proper coordination
+ * with other replica management logic:
+ *
+ * * A normal transaction is started and acquires an advisory lock for
+ *   replica slot management. This is the same lock that cleanup logic
+ *   acquires before cleaning up replication slots.
+ * * With the lock held, a new replication slot is created in a
+ *   replication session. The API of CREATE_REPLICATION_SLOT is such
+ *   that it cannot be done in a transaction, and cannot be followed by
+ *   any writes, or else its snapshot (which is needed for initial sync)
+ *   would be invalidated.
+ * * Once the slot is created, the slot and replica information are recorded
+ *   in the `replicas` table before releasing the lock.
+ *
+ * This locking ensures that:
+ * 1. multiple replication managers attempting to create a replication slot
+ *    will not use the same name for the replication slot (which is selected
+ *    from a pool of reused names).
+ * 2. Running replication managers (which use an earlier replica of a lower
+ *    rank) will not delete the new slot during their cleanup logic, since
+ *    the slot will belong to a replica of a higher rank.
+ */
+export declare function createReplicaAndSlot(lc: LogContext, sql: PostgresDB, replicationSession: postgres.Sql, shard: ShardID, replicaID: string, failover: boolean): Promise<ReplicationSlot>;
+/**
+ * Deletes "old" replicas (i.e. those with a lower rank than the current)
+ * and attempts to drop replication slots that are not associated with any
+ * replica.
+ *
+ * If a slot could not be dropped because there is still an active subscriber,
+ * it will be reflected in the `draining` count that is returned. When there
+ * are draining slots, the method should be retried until all orphaned slots
+ * have been dropped.
+ */
+export declare function dropOldReplicasAndSlots(lc: LogContext, sql: PostgresDB, shard: ShardID, beforeRank: bigint): Promise<{
+    dropped: number;
+    active: number;
+    draining: number;
+}>;
+export declare function slotPoolSuffix(n: number): string;
+//# sourceMappingURL=replication-slots.d.ts.map

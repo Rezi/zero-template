@@ -1,0 +1,64 @@
+import { readonlyArray, valita_exports } from "../../shared/src/valita.js";
+import { jsonSchema } from "../../shared/src/json-schema.js";
+import { astSchema } from "./ast.js";
+import { tdigestSchema } from "../../shared/src/tdigest-schema.js";
+import { analyzeQueryResultSchema } from "./analyze-query-result.js";
+//#region ../zero-protocol/src/inspect-down.ts
+var serverMetricsSchema = valita_exports.object({
+	"query-materialization-server": tdigestSchema,
+	"query-update-server": tdigestSchema
+});
+/**
+* Per-query server metrics sent with each query row in the inspector protocol.
+* `query-hydration-server-ms` is a plain number (milliseconds) since each
+* query is typically hydrated only once. `query-update-server` is a TDigest
+* histogram since queries receive many incremental updates.
+*/
+var queryServerMetricsSchema = valita_exports.object({
+	"query-hydration-server-ms": valita_exports.number().optional(),
+	"query-update-server": tdigestSchema
+});
+var inspectQueryRowSchema = valita_exports.object({
+	clientID: valita_exports.string(),
+	queryID: valita_exports.string(),
+	ast: astSchema.nullable(),
+	name: valita_exports.string().nullable(),
+	args: readonlyArray(jsonSchema).nullable(),
+	got: valita_exports.boolean(),
+	deleted: valita_exports.boolean(),
+	ttl: valita_exports.number(),
+	inactivatedAt: valita_exports.number().nullable(),
+	rowCount: valita_exports.number(),
+	metrics: queryServerMetricsSchema.nullable().optional()
+});
+var inspectBaseDownSchema = valita_exports.object({ id: valita_exports.string() });
+var inspectQueriesDownSchema = inspectBaseDownSchema.extend({
+	op: valita_exports.literal("queries"),
+	value: valita_exports.array(inspectQueryRowSchema)
+});
+var inspectMetricsDownSchema = inspectBaseDownSchema.extend({
+	op: valita_exports.literal("metrics"),
+	value: serverMetricsSchema
+});
+var inspectVersionDownSchema = inspectBaseDownSchema.extend({
+	op: valita_exports.literal("version"),
+	value: valita_exports.string()
+});
+var inspectAuthenticatedDownSchema = inspectBaseDownSchema.extend({
+	op: valita_exports.literal("authenticated"),
+	value: valita_exports.boolean()
+});
+var inspectAnalyzeQueryDownSchema = inspectBaseDownSchema.extend({
+	op: valita_exports.literal("analyze-query"),
+	value: analyzeQueryResultSchema
+});
+var inspectErrorDownSchema = inspectBaseDownSchema.extend({
+	op: valita_exports.literal("error"),
+	value: valita_exports.string()
+});
+var inspectDownBodySchema = valita_exports.union(inspectQueriesDownSchema, inspectMetricsDownSchema, inspectVersionDownSchema, inspectAuthenticatedDownSchema, inspectAnalyzeQueryDownSchema, inspectErrorDownSchema);
+var inspectDownMessageSchema = valita_exports.tuple([valita_exports.literal("inspect"), inspectDownBodySchema]);
+//#endregion
+export { inspectAnalyzeQueryDownSchema, inspectAuthenticatedDownSchema, inspectDownMessageSchema, inspectMetricsDownSchema, inspectQueriesDownSchema, inspectVersionDownSchema };
+
+//# sourceMappingURL=inspect-down.js.map

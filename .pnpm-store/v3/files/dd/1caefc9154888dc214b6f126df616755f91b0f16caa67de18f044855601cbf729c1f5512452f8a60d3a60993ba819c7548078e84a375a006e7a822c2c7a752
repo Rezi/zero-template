@@ -1,0 +1,87 @@
+import { assert, assertNumber, assertObject, assertString } from "../../../shared/src/asserts.js";
+import { getBrowserGlobal } from "../../../shared/src/browser-env.js";
+import { deepFreeze } from "../frozen-json.js";
+import { withRead, withWrite } from "../with-transactions.js";
+import { makeClientID } from "./make-client-id.js";
+import { getIDBDatabasesDBName } from "./idb-databases-store-db-name.js";
+//#region ../replicache/src/persist/idb-databases-store.ts
+var DBS_KEY = "dbs";
+var PROFILE_ID_KEY = "profileId";
+function assertIndexedDBDatabaseRecord(value) {
+	assertObject(value);
+	for (const [name, db] of Object.entries(value)) {
+		assertString(name);
+		assertIndexedDBDatabase(db);
+		assert(name === db.name, () => `Expected record key "${name}" to match db.name "${db.name}"`);
+	}
+}
+function assertIndexedDBDatabase(value) {
+	assertObject(value);
+	assertString(value.name);
+	assertString(value.replicacheName);
+	assertNumber(value.replicacheFormatVersion);
+	assertString(value.schemaVersion);
+	if (value.lastOpenedTimestampMS !== void 0) assertNumber(value.lastOpenedTimestampMS);
+}
+var IDBDatabasesStore = class {
+	#kvStore;
+	constructor(createKVStore) {
+		this.#kvStore = createKVStore(getIDBDatabasesDBName());
+	}
+	putDatabase(db) {
+		return this.#putDatabase(db);
+	}
+	putDatabaseForTesting(db) {
+		return this.#putDatabase(db);
+	}
+	#putDatabase(db) {
+		return withWrite(this.#kvStore, async (write) => {
+			const dbRecord = {
+				...await getDatabases(write),
+				[db.name]: db
+			};
+			await write.put(DBS_KEY, dbRecord);
+			return dbRecord;
+		});
+	}
+	clearDatabases() {
+		return withWrite(this.#kvStore, (write) => write.del(DBS_KEY));
+	}
+	deleteDatabases(names) {
+		return withWrite(this.#kvStore, async (write) => {
+			const dbRecord = { ...await getDatabases(write) };
+			for (const name of names) delete dbRecord[name];
+			await write.put(DBS_KEY, dbRecord);
+		});
+	}
+	getDatabases() {
+		return withRead(this.#kvStore, getDatabases);
+	}
+	close() {
+		return this.#kvStore.close();
+	}
+	getProfileID() {
+		return withWrite(this.#kvStore, async (write) => {
+			let profileId = await write.get(PROFILE_ID_KEY);
+			if (profileId === void 0) {
+				const maybeLocalStorage = getBrowserGlobal("localStorage");
+				if (maybeLocalStorage) profileId = maybeLocalStorage.getItem("profileId") ?? void 0;
+				if (profileId === void 0) profileId = `p${makeClientID()}`;
+				await write.put(PROFILE_ID_KEY, profileId);
+				if (maybeLocalStorage) maybeLocalStorage.setItem(PROFILE_ID_KEY, profileId);
+			}
+			assertString(profileId);
+			return profileId;
+		});
+	}
+};
+async function getDatabases(read) {
+	let dbRecord = await read.get(DBS_KEY);
+	if (!dbRecord) dbRecord = deepFreeze({});
+	assertIndexedDBDatabaseRecord(dbRecord);
+	return dbRecord;
+}
+//#endregion
+export { IDBDatabasesStore };
+
+//# sourceMappingURL=idb-databases-store.js.map

@@ -1,0 +1,21 @@
+import { MemStore, dropMemStore } from "./kv/mem-store.js";
+import { dropIDBStoreWithMemFallback, newIDBStoreWithMemFallback } from "./kv/idb-store-with-mem-fallback.js";
+//#region ../replicache/src/get-kv-store-provider.ts
+function getKVStoreProvider(lc, kvStore) {
+	switch (kvStore) {
+		case "idb":
+		case void 0: return {
+			create: (name) => newIDBStoreWithMemFallback(lc, name),
+			drop: dropIDBStoreWithMemFallback
+		};
+		case "mem": return {
+			create: (name) => new MemStore(name),
+			drop: (name) => dropMemStore(name)
+		};
+		default: return kvStore;
+	}
+}
+//#endregion
+export { getKVStoreProvider };
+
+//# sourceMappingURL=get-kv-store-provider.js.map

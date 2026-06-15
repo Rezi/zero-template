@@ -1,0 +1,17 @@
+import type { PlanDebugger } from './planner-debug.ts';
+import type { CostEstimate, JoinOrConnection, PlannerNode } from './planner-node.ts';
+export declare class PlannerTerminus {
+    #private;
+    readonly kind: "terminus";
+    constructor(input: Exclude<PlannerNode, PlannerTerminus>);
+    get pinned(): boolean;
+    closestJoinOrSource(): JoinOrConnection;
+    propagateConstraints(planDebugger?: PlanDebugger): void;
+    estimateCost(planDebugger?: PlanDebugger): CostEstimate;
+    /**
+     * Propagate unlimiting when a parent join is flipped.
+     * Terminus doesn't participate in unlimiting.
+     */
+    propagateUnlimitFromFlippedJoin(): void;
+}
+//# sourceMappingURL=planner-terminus.d.ts.map

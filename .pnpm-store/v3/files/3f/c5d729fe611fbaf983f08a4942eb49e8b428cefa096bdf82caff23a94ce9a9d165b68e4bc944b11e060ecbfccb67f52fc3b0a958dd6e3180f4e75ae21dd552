@@ -1,0 +1,14 @@
+//#region ../zql/src/ivm/stream.ts
+function first(stream) {
+	const it = stream[Symbol.iterator]();
+	const { value } = it.next();
+	it.return?.();
+	return value;
+}
+function consume(stream) {
+	for (const _ of stream);
+}
+//#endregion
+export { consume, first };
+
+//# sourceMappingURL=stream.js.map

@@ -1,0 +1,207 @@
+import { isArray, isEnum, liteTypeString, nullableUpstream, upstreamDataType } from "../../../types/lite.js";
+import { isArrayColumn, isEnumColumn } from "../../../db/pg-to-lite.js";
+//#region ../zero-cache/src/services/replicator/schema/column-metadata.ts
+var CREATE_COLUMN_METADATA_TABLE = `
+  CREATE TABLE "_zero.column_metadata" (
+    table_name TEXT NOT NULL,
+    column_name TEXT NOT NULL,
+    upstream_type TEXT NOT NULL,
+    is_not_null INTEGER NOT NULL,
+    is_enum INTEGER NOT NULL,
+    is_array INTEGER NOT NULL,
+    character_max_length INTEGER,
+    backfill TEXT,
+    PRIMARY KEY (table_name, column_name)
+  );
+`;
+/**
+* Efficient column metadata store that prepares all statements upfront.
+* Use this class to avoid re-preparing statements on every operation.
+*
+* Access via `ColumnMetadataStore.getInstance(db)`, which returns `undefined`
+* if the metadata table doesn't exist yet.
+*/
+var ColumnMetadataStore = class ColumnMetadataStore {
+	static #instances = /* @__PURE__ */ new WeakMap();
+	#insertStmt;
+	#updateStmt;
+	#clearBackfillStmt;
+	#deleteColumnStmt;
+	#deleteTableStmt;
+	#renameTableStmt;
+	#getColumnStmt;
+	#getTableStmt;
+	#hasTableStmt;
+	constructor(db) {
+		this.#insertStmt = db.prepare(`
+      INSERT INTO "_zero.column_metadata"
+        (table_name, column_name, upstream_type, is_not_null, is_enum, is_array, character_max_length, backfill)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+		this.#updateStmt = db.prepare(`
+      UPDATE "_zero.column_metadata"
+      SET column_name = ?,
+          upstream_type = ?,
+          is_not_null = ?,
+          is_enum = ?,
+          is_array = ?,
+          character_max_length = ?
+      WHERE table_name = ? AND column_name = ?
+    `);
+		this.#clearBackfillStmt = db.prepare(`
+      UPDATE "_zero.column_metadata"
+      SET backfill = NULL
+      WHERE table_name = ? AND column_name = ?
+    `);
+		this.#deleteColumnStmt = db.prepare(`
+      DELETE FROM "_zero.column_metadata"
+      WHERE table_name = ? AND column_name = ?
+    `);
+		this.#deleteTableStmt = db.prepare(`
+      DELETE FROM "_zero.column_metadata"
+      WHERE table_name = ?
+    `);
+		this.#renameTableStmt = db.prepare(`
+      UPDATE "_zero.column_metadata"
+      SET table_name = ?
+      WHERE table_name = ?
+    `);
+		this.#getColumnStmt = db.prepare(`
+      SELECT upstream_type, is_not_null, is_enum, is_array, character_max_length, backfill
+      FROM "_zero.column_metadata"
+      WHERE table_name = ? AND column_name = ?
+    `);
+		this.#getTableStmt = db.prepare(`
+      SELECT column_name, upstream_type, is_not_null, is_enum, is_array, character_max_length, backfill
+      FROM "_zero.column_metadata"
+      WHERE table_name = ?
+      ORDER BY column_name
+    `);
+		this.#hasTableStmt = db.prepare(`
+      SELECT 1 FROM sqlite_master
+      WHERE type = 'table' AND name = '_zero.column_metadata'
+    `);
+	}
+	/**
+	* Gets the singleton instance of ColumnMetadataStore for the given database.
+	* Returns `undefined` if the metadata table doesn't exist yet.
+	*/
+	static getInstance(db) {
+		if (!db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = '_zero.column_metadata'`).get()) return;
+		let instance = ColumnMetadataStore.#instances.get(db);
+		if (!instance) {
+			instance = new ColumnMetadataStore(db);
+			ColumnMetadataStore.#instances.set(db, instance);
+		}
+		return instance;
+	}
+	insert(tableName, columnName, spec, backfill) {
+		const metadata = pgColumnSpecToMetadata(spec);
+		this.#insertMetadata(tableName, columnName, metadata, backfill);
+	}
+	#insertMetadata(tableName, columnName, metadata, backfill) {
+		this.#insertStmt.run(tableName, columnName, metadata.upstreamType, metadata.isNotNull ? 1 : 0, metadata.isEnum ? 1 : 0, metadata.isArray ? 1 : 0, metadata.characterMaxLength ?? null, backfill ? JSON.stringify(backfill) : null);
+	}
+	update(tableName, oldColumnName, newColumnName, spec) {
+		const metadata = pgColumnSpecToMetadata(spec);
+		this.#updateStmt.run(newColumnName, metadata.upstreamType, metadata.isNotNull ? 1 : 0, metadata.isEnum ? 1 : 0, metadata.isArray ? 1 : 0, metadata.characterMaxLength ?? null, tableName, oldColumnName);
+	}
+	clearBackfilling(tableName, columnName) {
+		this.#clearBackfillStmt.run(tableName, columnName);
+	}
+	deleteColumn(tableName, columnName) {
+		this.#deleteColumnStmt.run(tableName, columnName);
+	}
+	deleteTable(tableName) {
+		this.#deleteTableStmt.run(tableName);
+	}
+	renameTable(oldTableName, newTableName) {
+		this.#renameTableStmt.run(newTableName, oldTableName);
+	}
+	getColumn(tableName, columnName) {
+		const row = this.#getColumnStmt.get(tableName, columnName);
+		if (!row) return;
+		return {
+			upstreamType: row.upstream_type,
+			isNotNull: row.is_not_null !== 0,
+			isEnum: row.is_enum !== 0,
+			isArray: row.is_array !== 0,
+			characterMaxLength: row.character_max_length,
+			isBackfilling: row.backfill !== null
+		};
+	}
+	getTable(tableName) {
+		const rows = this.#getTableStmt.all(tableName);
+		const metadata = /* @__PURE__ */ new Map();
+		for (const row of rows) metadata.set(row.column_name, {
+			upstreamType: row.upstream_type,
+			isNotNull: row.is_not_null !== 0,
+			isEnum: row.is_enum !== 0,
+			isArray: row.is_array !== 0,
+			characterMaxLength: row.character_max_length,
+			isBackfilling: row.backfill !== null
+		});
+		return metadata;
+	}
+	hasTable() {
+		return this.#hasTableStmt.get() !== void 0;
+	}
+};
+/**
+* Populates metadata table from existing tables that use pipe notation.
+* This is used during migration v8 to backfill the metadata table.
+*/
+function populateFromExistingTables(db, tables) {
+	const legacyInsertStmt = db.prepare(`
+      INSERT INTO "_zero.column_metadata"
+        (table_name, column_name, upstream_type, is_not_null, is_enum, is_array, character_max_length)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+	for (const table of tables) for (const [columnName, columnSpec] of Object.entries(table.columns)) {
+		const metadata = liteTypeStringToMetadata(columnSpec.dataType, columnSpec.characterMaximumLength);
+		legacyInsertStmt.run(table.name, columnName, metadata.upstreamType, metadata.isNotNull ? 1 : 0, metadata.isEnum ? 1 : 0, metadata.isArray ? 1 : 0, metadata.characterMaxLength ?? null);
+	}
+}
+/**
+* Converts pipe-delimited LiteTypeString to structured ColumnMetadata.
+* This is a compatibility helper for the migration period.
+*/
+function liteTypeStringToMetadata(liteTypeString, characterMaxLength) {
+	const baseType = upstreamDataType(liteTypeString);
+	const isArrayType = isArray(liteTypeString);
+	return {
+		upstreamType: isArrayType && !baseType.includes("[]") ? `${baseType}[]` : baseType,
+		isNotNull: !nullableUpstream(liteTypeString),
+		isEnum: isEnum(liteTypeString),
+		isArray: isArrayType,
+		characterMaxLength: characterMaxLength ?? null,
+		isBackfilling: false
+	};
+}
+/**
+* Converts structured ColumnMetadata back to pipe-delimited LiteTypeString.
+* This is a compatibility helper for the migration period.
+*/
+function metadataToLiteTypeString(metadata) {
+	return liteTypeString(metadata.upstreamType, metadata.isNotNull, metadata.isEnum, metadata.isArray);
+}
+/**
+* Converts PostgreSQL ColumnSpec to structured ColumnMetadata.
+* Used during replication to populate the metadata table from upstream schema.
+*
+* Uses the same logic as liteTypeString() and mapPostgresToLiteColumn() via shared helpers.
+*/
+function pgColumnSpecToMetadata(spec) {
+	return {
+		upstreamType: spec.dataType,
+		isNotNull: spec.notNull ?? false,
+		isEnum: isEnumColumn(spec),
+		isArray: isArrayColumn(spec),
+		characterMaxLength: spec.characterMaximumLength ?? null,
+		isBackfilling: false
+	};
+}
+//#endregion
+export { CREATE_COLUMN_METADATA_TABLE, ColumnMetadataStore, metadataToLiteTypeString, populateFromExistingTables };
+
+//# sourceMappingURL=column-metadata.js.map

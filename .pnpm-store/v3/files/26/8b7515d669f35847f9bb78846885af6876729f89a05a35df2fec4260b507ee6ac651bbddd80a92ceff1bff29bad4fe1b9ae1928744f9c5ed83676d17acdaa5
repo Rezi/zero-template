@@ -1,0 +1,12 @@
+import * as v from '../../shared/src/valita.ts';
+export declare const deleteClientsBodySchema: v.UnionType<[v.ObjectType<Readonly<{
+    clientIDs: v.Optional<readonly string[]>;
+    clientGroupIDs: v.Optional<readonly string[]>;
+}>, undefined>]>;
+export declare const deleteClientsMessageSchema: v.TupleType<[v.Type<"deleteClients">, v.UnionType<[v.ObjectType<Readonly<{
+    clientIDs: v.Optional<readonly string[]>;
+    clientGroupIDs: v.Optional<readonly string[]>;
+}>, undefined>]>]>;
+export type DeleteClientsBody = v.Infer<typeof deleteClientsBodySchema>;
+export type DeleteClientsMessage = v.Infer<typeof deleteClientsMessageSchema>;
+//# sourceMappingURL=delete-clients.d.ts.map

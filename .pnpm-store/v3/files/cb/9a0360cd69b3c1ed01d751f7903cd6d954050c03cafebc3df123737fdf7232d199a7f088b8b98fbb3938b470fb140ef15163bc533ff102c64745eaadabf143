@@ -1,0 +1,107 @@
+import { assert } from "../../../shared/src/asserts.js";
+import { mapValues } from "../../../shared/src/objects.js";
+import { hashOfNameAndArgs } from "../../../zero-protocol/src/query-hash.js";
+import { isServerMetric } from "../../../zql/src/query/metrics-delegate.js";
+import { TDigest } from "../../../shared/src/tdigest.js";
+import { isDevelopmentMode } from "../config/normalize.js";
+import { ProtocolErrorWithLevel } from "../types/error-with-level.js";
+//#region ../zero-cache/src/server/inspector-delegate.ts
+/**
+* Set of authenticated client group IDs. We keep this outside of the class to
+* share this state across all instances of the InspectorDelegate.
+*/
+var authenticatedClientGroupIDs = /* @__PURE__ */ new Set();
+var InspectorDelegate = class {
+	#globalMetrics = newMetrics();
+	#perQueryHydrateMs = /* @__PURE__ */ new Map();
+	#perQueryUpdateMetrics = /* @__PURE__ */ new Map();
+	#queryIDToAST = /* @__PURE__ */ new Map();
+	#customQueryTransformer;
+	constructor(customQueryTransformer) {
+		this.#customQueryTransformer = customQueryTransformer;
+	}
+	addMetric(metric, value, ...args) {
+		assert(isServerMetric(metric), `Invalid server metric: ${metric}`);
+		const queryID = args[0];
+		if (metric === "query-materialization-server") this.#perQueryHydrateMs.set(queryID, value);
+		else {
+			let digest = this.#perQueryUpdateMetrics.get(queryID);
+			if (!digest) {
+				digest = new TDigest();
+				this.#perQueryUpdateMetrics.set(queryID, digest);
+			}
+			digest.add(value);
+		}
+		this.#globalMetrics[metric].add(value);
+	}
+	getMetricsJSONForQuery(queryID) {
+		const hydrateMs = this.#perQueryHydrateMs.get(queryID);
+		const updateMetrics = this.#perQueryUpdateMetrics.get(queryID);
+		if (hydrateMs === void 0 && updateMetrics === void 0) return null;
+		return {
+			"query-hydration-server-ms": hydrateMs,
+			"query-update-server": (updateMetrics ?? new TDigest()).toJSON()
+		};
+	}
+	getMetricsJSON() {
+		return mapValues(this.#globalMetrics, (v) => v.toJSON());
+	}
+	getASTForQuery(queryID) {
+		return this.#queryIDToAST.get(queryID);
+	}
+	removeQuery(queryID) {
+		this.#perQueryHydrateMs.delete(queryID);
+		this.#perQueryUpdateMetrics.delete(queryID);
+		this.#queryIDToAST.delete(queryID);
+	}
+	addQuery(queryID, ast) {
+		this.#queryIDToAST.set(queryID, ast);
+	}
+	/**
+	* Check if the client is authenticated. We only require authentication once
+	* per "worker".
+	*/
+	isAuthenticated(clientGroupID) {
+		return isDevelopmentMode() || authenticatedClientGroupIDs.has(clientGroupID);
+	}
+	setAuthenticated(clientGroupID) {
+		authenticatedClientGroupIDs.add(clientGroupID);
+	}
+	clearAuthenticated(clientGroupID) {
+		authenticatedClientGroupIDs.delete(clientGroupID);
+	}
+	/**
+	* Transforms a single custom query by name and args using the configured
+	* CustomQueryTransformer. This is primarily used by the inspector to transform
+	* queries for analysis.
+	*/
+	async transformCustomQuery(name, args, ctx) {
+		assert(this.#customQueryTransformer, "Custom query transformation requested but no CustomQueryTransformer is configured");
+		const queries = [{
+			id: hashOfNameAndArgs(name, args),
+			type: "custom",
+			name,
+			args,
+			clientState: {}
+		}];
+		const results = await this.#customQueryTransformer.transform(ctx, queries);
+		if ("kind" in results.result) throw new ProtocolErrorWithLevel(results.result, "warn");
+		const result = results.result[0];
+		if (!result) throw new Error("No transformation result returned");
+		if ("error" in result) {
+			const message = result.message ?? "Unknown application error from custom query";
+			throw new Error(`Error transforming custom query ${name} (${result.error}): ${message} ${JSON.stringify(result.details)}`);
+		}
+		return result.transformedAst;
+	}
+};
+function newMetrics() {
+	return {
+		"query-materialization-server": new TDigest(),
+		"query-update-server": new TDigest()
+	};
+}
+//#endregion
+export { InspectorDelegate };
+
+//# sourceMappingURL=inspector-delegate.js.map

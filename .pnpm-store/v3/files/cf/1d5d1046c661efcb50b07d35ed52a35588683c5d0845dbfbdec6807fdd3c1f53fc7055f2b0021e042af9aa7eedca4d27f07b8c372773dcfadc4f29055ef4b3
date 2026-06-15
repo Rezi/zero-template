@@ -1,0 +1,20 @@
+import { ChangeType } from './change-type.ts';
+import type { Change } from './change.ts';
+import type { Node } from './data.ts';
+import { type FetchRequest, type Input, type InputBase, type Operator, type Output } from './operator.ts';
+import type { SourceSchema } from './schema.ts';
+import { type Stream } from './stream.ts';
+import type { UnionFanOut } from './union-fan-out.ts';
+export declare class UnionFanIn implements Operator {
+    #private;
+    constructor(fanOut: UnionFanOut, inputs: Input[]);
+    destroy(): void;
+    fetch(req: FetchRequest): Stream<Node | 'yield'>;
+    getSchema(): SourceSchema;
+    push(change: Change, pusher: InputBase): Stream<'yield'>;
+    fanOutStartedPushing(): void;
+    fanOutDonePushing(fanOutChangeType: ChangeType): Stream<'yield'>;
+    setOutput(output: Output): void;
+}
+export declare function mergeFetches(fetches: Iterable<Node | 'yield'>[], comparator: (l: Node, r: Node) => number): IterableIterator<Node | 'yield'>;
+//# sourceMappingURL=union-fan-in.d.ts.map

@@ -1,0 +1,5 @@
+import type { AST, Ordering } from '../../../zero-protocol/src/ast.ts';
+import type { PrimaryKey } from '../../../zero-protocol/src/primary-key.ts';
+export declare function completeOrdering(ast: AST, getPrimaryKey: (tableName: string) => PrimaryKey): AST;
+export declare function assertOrderingIncludesPK(ordering: Ordering, pk: PrimaryKey): void;
+//# sourceMappingURL=complete-ordering.d.ts.map

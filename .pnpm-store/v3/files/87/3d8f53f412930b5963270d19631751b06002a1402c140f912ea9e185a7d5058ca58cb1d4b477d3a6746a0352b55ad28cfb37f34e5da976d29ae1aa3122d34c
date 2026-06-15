@@ -1,0 +1,12 @@
+import type { Client } from './client.ts';
+import type { ExtendedInspectorDelegate } from './lazy-inspector.ts';
+import type { Query } from './query.ts';
+export declare class ClientGroup {
+    #private;
+    readonly id: Promise<string> | string;
+    constructor(delegate: ExtendedInspectorDelegate, clientGroupID: Promise<string> | string);
+    clients(): Promise<Client[]>;
+    clientsWithQueries(): Promise<Client[]>;
+    queries(): Promise<Query[]>;
+}
+//# sourceMappingURL=client-group.d.ts.map

@@ -1,0 +1,28 @@
+import type { Enum } from '../../../shared/src/enum.ts';
+import { BTreeRead } from '../btree/read.ts';
+import type { Read as DagRead } from '../dag/store.ts';
+import type * as FormatVersion from '../format-version-enum.ts';
+import type { FrozenJSONValue } from '../frozen-json.ts';
+import type { Hash } from '../hash.ts';
+import type { Commit } from './commit.ts';
+import { type Meta } from './commit.ts';
+import { IndexRead } from './index.ts';
+type FormatVersion = Enum<typeof FormatVersion>;
+export declare class Read {
+    #private;
+    map: BTreeRead;
+    readonly indexes: Map<string, IndexRead>;
+    constructor(dagRead: DagRead, map: BTreeRead, indexes: Map<string, IndexRead>);
+    has(key: string): Promise<boolean>;
+    get(key: string): Promise<FrozenJSONValue | undefined>;
+    isEmpty(): Promise<boolean>;
+    getMapForIndex(indexName: string): BTreeRead;
+    get closed(): boolean;
+    close(): void;
+}
+export declare function readFromDefaultHead(dagRead: DagRead, formatVersion: FormatVersion): Promise<Read>;
+export declare function readFromHead(name: string, dagRead: DagRead, formatVersion: FormatVersion): Promise<Read>;
+export declare function readFromHash(hash: Hash, dagRead: DagRead, formatVersion: FormatVersion): Promise<Read>;
+export declare function readIndexesForRead(commit: Commit<Meta>, dagRead: DagRead, formatVersion: FormatVersion): Map<string, IndexRead>;
+export {};
+//# sourceMappingURL=read.d.ts.map

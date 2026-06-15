@@ -1,0 +1,47 @@
+import type { LogContext } from '@rocicorp/logger';
+import { type JSONFormat } from '../../../types/lite.ts';
+import type { BackfillCompleted, BackfillRequest, ChangeStreamMessage, MessageBackfill } from '../protocol/current.ts';
+import type { Cancelable, ChangeStreamMultiplexer, Listener } from './change-stream-multiplexer.ts';
+type BackfillStreamer = (req: BackfillRequest) => AsyncGenerator<MessageBackfill | BackfillCompleted>;
+/**
+ * The BackfillManager initiates backfills for BackfillRequests from the
+ * change-streamer (i.e. unfinished backfills from previous sessions)
+ * or for new backfills signaled by `create-table` or `add-column` messages
+ * from the change-source.
+ *
+ * The BackfillManager registers itself as a change stream listener in order
+ * to track necessary backfills, and potentially invalidate the in-progress
+ * backfill (e.g. due to a schema change) so that it can be retried at a
+ * new snapshot.
+ *
+ * The manager also handles low priority streaming of the backfill messages
+ * using the {@link ChangeStreamMultiplexer}, implementing a policy of always
+ * releasing its reservation if another producer (i.e. the main change stream)
+ * has messages to stream.
+ */
+export declare class BackfillManager implements Cancelable, Listener {
+    #private;
+    constructor(lc: LogContext, changeStreamer: ChangeStreamMultiplexer, backfillStreamer: BackfillStreamer, jsonFormat?: JSONFormat, minBackoffMs?: number, maxBackoffMs?: number);
+    run(lastWatermark: string, initialRequests: BackfillRequest[]): void;
+    /**
+     * Implements {@link Listener.onChange()}, invoked by the
+     * {@link ChangeStreamMultiplexer}.
+     */
+    onChange(message: ChangeStreamMessage): void;
+    cancel(): void;
+}
+declare abstract class BackfillStreamError extends Error {
+    constructor(bf: BackfillRequest, msg: string, cause?: unknown);
+}
+/**
+ * Error type for backfill stream implementations to throw indicating that
+ * the backfill request failed due to a schema incompatibility error. This
+ * type of error does not need exponential backoff, as the retry happens
+ * naturally once the invalidating schema change is processed and committed.
+ */
+export declare class SchemaIncompatibilityError extends BackfillStreamError {
+    readonly name = "SchemaIncompatibilityError";
+    constructor(bf: BackfillRequest, msg: string, cause?: unknown);
+}
+export {};
+//# sourceMappingURL=backfill-manager.d.ts.map

@@ -1,0 +1,17 @@
+import { SQLiteStore as SQLiteStore$1, clearAllNamedStoresForTesting as clearAllNamedStoresForTesting$1, dropStore as dropStore$1 } from "../../replicache/src/kv/sqlite-store.js";
+import { expoSQLiteStoreProvider as expoSQLiteStoreProvider$1 } from "../../replicache/src/kv/expo-sqlite/store.js";
+import "./expo-sqlite.js";
+import "./sqlite.js";
+//#region src/react-native.ts
+/** @deprecated Use `expoSQLiteStoreProvider` from `@rocicorp/zero/expo-sqlite` instead. */
+var expoSQLiteStoreProvider = expoSQLiteStoreProvider$1;
+/** @deprecated Use `clearAllNamedStoresForTesting` from `@rocicorp/zero/expo-sqlite` instead. */
+var clearAllNamedStoresForTesting = clearAllNamedStoresForTesting$1;
+/** @deprecated Use `dropStore` from `@rocicorp/zero/expo-sqlite` instead. */
+var dropStore = dropStore$1;
+/** @deprecated Use `SQLiteStore` from `@rocicorp/zero/expo-sqlite` instead. */
+var SQLiteStore = SQLiteStore$1;
+//#endregion
+export { SQLiteStore, clearAllNamedStoresForTesting, dropStore, expoSQLiteStoreProvider };
+
+//# sourceMappingURL=react-native.js.map

@@ -1,0 +1,50 @@
+import { assert } from "../../../shared/src/asserts.js";
+import "../../../shared/src/hash.js";
+import { stringify } from "../../../shared/src/bigint-json.js";
+//#region ../zero-cache/src/types/row-key.ts
+/**
+* Returns the `RowKey` such that key iteration produces a sorted sequence. If the
+* keys are already sorted, the input is returned as is.
+*
+* Note that the value type is parameterized as `V` so that this method can be used
+* for both (pg) RowKeys and LiteRowKeys.
+*/
+function normalizedKeyOrder(rowKey) {
+	let last = "";
+	let empty = true;
+	for (const col in rowKey) {
+		empty = false;
+		if (last > col) {
+			const entries = Object.entries(rowKey).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
+			assert(entries.length > 0, "empty row key");
+			return Object.fromEntries(entries);
+		}
+		last = col;
+	}
+	assert(!empty, "empty row key");
+	return rowKey;
+}
+function tuples(key) {
+	return Object.entries(normalizedKeyOrder(key)).flat();
+}
+var rowIDStrings = /* @__PURE__ */ new WeakMap();
+/**
+* A normalized string representation of a {@link RowID} suitable to use
+* as a Map key. Use {@link rowIDHash} if you need string keys of bounded
+* length.
+*/
+function rowIDString(id) {
+	let val = rowIDStrings.get(id);
+	if (val) return val;
+	val = stringify([
+		id.schema,
+		id.table,
+		...tuples(id.rowKey)
+	]);
+	rowIDStrings.set(id, val);
+	return val;
+}
+//#endregion
+export { normalizedKeyOrder, rowIDString };
+
+//# sourceMappingURL=row-key.js.map

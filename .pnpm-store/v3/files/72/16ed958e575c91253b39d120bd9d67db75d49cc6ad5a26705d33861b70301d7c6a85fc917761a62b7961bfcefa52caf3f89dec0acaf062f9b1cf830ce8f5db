@@ -1,0 +1,1 @@
+{"version":3,"file":"tracer.js","names":[],"sources":["../../../../../../zero-cache/src/services/view-syncer/tracer.ts"],"sourcesContent":["import {trace} from '@opentelemetry/api';\nimport {version} from '../../../../otel/src/version.ts';\n\nexport const tracer = trace.getTracer('view-syncer', version);\n"],"mappings":";;;AAGA,IAAa,SAAS,MAAM,UAAU,eAAe,QAAQ"}

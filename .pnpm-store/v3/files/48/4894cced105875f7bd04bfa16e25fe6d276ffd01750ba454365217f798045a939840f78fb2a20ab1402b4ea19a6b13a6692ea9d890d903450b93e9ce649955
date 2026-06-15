@@ -1,0 +1,11 @@
+import '../../../../shared/src/dotenv.ts';
+import { type Worker } from '../../types/processes.ts';
+/**
+ * Top-level `runner` entry point to the zero-cache. This layer is responsible for:
+ * * runtime-based config normalization
+ * * lazy startup
+ * * serving /statsz
+ * * auto-reset restarts (TODO)
+ */
+export declare function runWorker(parent: Worker | null, env: NodeJS.ProcessEnv): Promise<void>;
+//# sourceMappingURL=run-worker.d.ts.map

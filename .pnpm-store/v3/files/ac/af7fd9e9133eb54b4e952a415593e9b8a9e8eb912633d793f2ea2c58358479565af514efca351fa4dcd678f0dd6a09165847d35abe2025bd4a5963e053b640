@@ -1,0 +1,16 @@
+/**
+ * Escapes the identifier with double quotes, as per:
+ *
+ * https://www.postgresql.org/docs/16/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS
+ */
+export declare function id(name: string): string;
+/**
+ * Escapes and comma-separates a list of identifiers.
+ */
+export declare function idList(names: Iterable<string>): string;
+/**
+ * Escapes a string literal with single quotes, as per:
+ * https://www.postgresql.org/docs/16/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS
+ */
+export declare function lit(value: string): string;
+//# sourceMappingURL=sql.d.ts.map

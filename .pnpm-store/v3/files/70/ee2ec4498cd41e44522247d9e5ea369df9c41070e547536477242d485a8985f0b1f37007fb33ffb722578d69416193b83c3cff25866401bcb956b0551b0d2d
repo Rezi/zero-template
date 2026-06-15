@@ -1,0 +1,61 @@
+import { compareUTF8 } from "compare-utf8";
+//#region ../zql/src/ivm/data.ts
+/**
+* Compare two values. The values must be of the same type. This function
+* throws at runtime if the types differ.
+*
+* Note, this function considers `null === null` and
+* `undefined === undefined`. This is different than SQL. In join code,
+* null must be treated separately.
+*
+* See: https://github.com/rocicorp/mono/pull/2116/files#r1704811479
+*
+* @returns < 0 if a < b, 0 if a === b, > 0 if a > b
+*/
+function compareValues(a, b) {
+	a = a ?? null;
+	b = b ?? null;
+	if (a === b) return 0;
+	if (typeof a === "string" && typeof b === "string") return compareUTF8(a, b);
+	if (typeof a === "number" && typeof b === "number") return a - b;
+	if (typeof a === "boolean" && typeof b === "boolean") return a ? 1 : -1;
+	if (a === null) return -1;
+	if (b === null) return 1;
+	if (typeof a !== typeof b) throw new Error(`Cannot compare values of different types: ${typeof a} and ${typeof b}`);
+	throw new Error(`Unsupported type: ${a}`);
+}
+/**
+* We allow undefined to be passed for the convenience of developers, but we
+* treat it equivalently to null. It's better for perf to not create an copy
+* of input values, so we just normalize at use when necessary.
+*/
+function normalizeUndefined(v) {
+	return v ?? null;
+}
+function makeComparator(order, reverse) {
+	return (a, b) => {
+		for (const ord of order) {
+			const field = ord[0];
+			const comp = compareValues(a[field], b[field]);
+			if (comp !== 0) {
+				const result = ord[1] === "asc" ? comp : -comp;
+				return reverse ? -result : result;
+			}
+		}
+		return 0;
+	};
+}
+/**
+* Determine if two values are equal. Note that unlike compareValues() above,
+* this function treats `null` as unequal to itself (and same for `undefined`).
+* This is required to make joins work correctly, but may not be the right
+* semantic for your application.
+*/
+function valuesEqual(a, b) {
+	if (a == null || b == null) return false;
+	return a === b;
+}
+//#endregion
+export { compareValues, makeComparator, normalizeUndefined, valuesEqual };
+
+//# sourceMappingURL=data.js.map

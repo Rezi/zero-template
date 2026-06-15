@@ -1,0 +1,4 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { PostgresDB } from '../../../types/pg.ts';
+export declare function decommissionShard(lc: LogContext, db: PostgresDB, appID: string, shardID: string | number): Promise<void>;
+//# sourceMappingURL=decommission.d.ts.map

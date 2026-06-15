@@ -1,0 +1,36 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { PatchOperationInternal, PokeInternal } from '../../../replicache/src/impl.ts';
+import type { ClientID } from '../../../replicache/src/sync/ids.ts';
+import type { MutationPatch } from '../../../zero-protocol/src/mutations-patch.ts';
+import type { PokeEndBody, PokePartBody, PokeStartBody } from '../../../zero-protocol/src/poke.ts';
+import { type NameMapper } from '../../../zero-schema/src/name-mapper.ts';
+import type { Schema } from '../../../zero-types/src/schema.ts';
+import type { MutationTracker } from './mutation-tracker.ts';
+type PokeAccumulator = {
+    readonly pokeStart: PokeStartBody;
+    readonly parts: PokePartBody[];
+    readonly pokeEnd: PokeEndBody;
+};
+/**
+ * Handles the multi-part format of zero pokes.
+ * As an optimization it also debounces pokes, only poking Replicache with a
+ * merged poke at most once per scheduled callback (using setTimeout).
+ * This debouncing avoids wastefully computing separate diffs and IVM updates
+ * for intermediate states. setTimeout is used instead of requestAnimationFrame
+ * to ensure pokes are delivered even when the tab is in the background,
+ * enabling notifications (sounds, favicon badges) to work correctly.
+ */
+export declare class PokeHandler {
+    #private;
+    constructor(replicachePoke: (poke: PokeInternal) => Promise<void>, onPokeError: (error: unknown) => void, clientID: ClientID, schema: Schema, lc: LogContext, mutationTracker: MutationTracker);
+    handlePokeStart(pokeStart: PokeStartBody): void;
+    handlePokePart(pokePart: PokePartBody): number | undefined;
+    handlePokeEnd(pokeEnd: PokeEndBody): void;
+    handleDisconnect(): void;
+}
+export declare function mergePokes(pokeBuffer: PokeAccumulator[], schema: Schema, serverToClient: NameMapper): (PokeInternal & {
+    mutationResults?: MutationPatch[] | undefined;
+}) | undefined;
+export declare function mutationPatchOpToReplicachePatchOp(op: MutationPatch): PatchOperationInternal;
+export {};
+//# sourceMappingURL=zero-poke-handler.d.ts.map

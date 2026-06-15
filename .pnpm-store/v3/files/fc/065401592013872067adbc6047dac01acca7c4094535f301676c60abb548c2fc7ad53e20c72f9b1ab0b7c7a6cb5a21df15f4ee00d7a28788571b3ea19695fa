@@ -1,0 +1,87 @@
+import { stringCompare } from "../../shared/src/string-compare.js";
+import { Zero } from "../../zero-client/src/client/zero.js";
+import "./zero.js";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { jsx } from "react/jsx-runtime";
+//#region ../zero-react/src/zero-provider.tsx
+var ZeroContext = createContext(void 0);
+function useZero() {
+	const zero = useContext(ZeroContext);
+	if (zero === void 0) throw new Error("useZero must be used within a ZeroProvider");
+	return zero;
+}
+/**
+* @deprecated Use {@linkcode useZero} instead, alongside default types defined with:
+*
+* ```ts
+* declare module '@rocicorp/zero' {
+*   interface DefaultTypes {
+*     schema: typeof schema;
+*     context: Context;
+*   }
+* }
+*/
+function createUseZero() {
+	return () => useZero();
+}
+function ZeroProvider({ children, init, ...props }) {
+	const isExternalZero = "zero" in props;
+	const [zero, setZero] = useState(isExternalZero ? props.zero : void 0);
+	const [rotationGeneration, setRotationGeneration] = useState(0);
+	const auth = "auth" in props ? props.auth : void 0;
+	const hasAuth = typeof auth === "string";
+	const prevAuthRef = useRef(auth);
+	const rotationPendingRef = useRef(false);
+	const scheduleRotation = () => {
+		if (rotationPendingRef.current) return;
+		rotationPendingRef.current = true;
+		setRotationGeneration((gen) => gen + 1);
+	};
+	useEffect(() => {
+		if (isExternalZero) {
+			rotationPendingRef.current = false;
+			setZero(props.zero);
+			return;
+		}
+		const z = new Zero({
+			...props,
+			onClientStateNotFound: () => {
+				if (rotationPendingRef.current) return;
+				if (props.onClientStateNotFound) try {
+					props.onClientStateNotFound();
+					return;
+				} catch {}
+				scheduleRotation();
+			}
+		});
+		prevAuthRef.current = auth;
+		init?.(z);
+		setZero(z);
+		rotationPendingRef.current = false;
+		return () => {
+			z.close();
+			setZero(void 0);
+		};
+	}, [
+		hasAuth,
+		init,
+		rotationGeneration,
+		...useMemo(() => Object.entries(props).filter(([key]) => key !== "auth").sort(([a], [b]) => stringCompare(a, b)).map(([_, value]) => value), [props])
+	]);
+	useEffect(() => {
+		if (!zero || isExternalZero) return;
+		const prevAuth = prevAuthRef.current;
+		if (auth !== prevAuth) {
+			prevAuthRef.current = auth;
+			if (typeof prevAuth === "string" && typeof auth === "string") zero.connection.connect({ auth });
+		}
+	}, [auth, zero]);
+	return zero && /* @__PURE__ */ jsx(ZeroContext.Provider, {
+		value: zero,
+		children
+	});
+}
+//#endregion
+export { ZeroContext, ZeroProvider, createUseZero, useZero };
+
+//# sourceMappingURL=zero-provider.js.map

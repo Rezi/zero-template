@@ -1,0 +1,102 @@
+import { parse, valita_exports } from "../../../../../shared/src/valita.js";
+import { jsonObjectSchema, stringify } from "../../../../../shared/src/bigint-json.js";
+import "./constants.js";
+import { CREATE_COLUMN_METADATA_TABLE } from "./column-metadata.js";
+import { CREATE_TABLE_METADATA_TABLE } from "./table-metadata.js";
+import { CREATE_CHANGELOG_SCHEMA } from "./change-log.js";
+//#region ../zero-cache/src/services/replicator/schema/replication-state.ts
+/**
+* Replication metadata, used for incremental view maintenance and catchup.
+*
+* These tables are created atomically in {@link setupReplicationTables}
+* after the logical replication handoff when initial data synchronization has completed.
+*/
+var CREATE_RUNTIME_EVENTS_TABLE = `
+  CREATE TABLE "_zero.runtimeEvents" (
+    event TEXT PRIMARY KEY ON CONFLICT REPLACE,
+    timestamp TEXT NOT NULL DEFAULT (current_timestamp)
+  );
+`;
+var CREATE_REPLICATION_STATE_SCHEMA = "\n  CREATE TABLE \"_zero.replicationConfig\" (\n    replicaVersion TEXT NOT NULL,\n    publications TEXT NOT NULL,\n    initialSyncContext TEXT DEFAULT '{}',\n    lock INTEGER PRIMARY KEY DEFAULT 1 CHECK (lock=1)\n  );\n  \n  CREATE TABLE \"_zero.replicationState\" (\n    stateVersion TEXT NOT NULL,\n    writeTimeMs INTEGER,\n    lock INTEGER PRIMARY KEY DEFAULT 1 CHECK (lock=1)\n  );\n  " + CREATE_CHANGELOG_SCHEMA + CREATE_RUNTIME_EVENTS_TABLE + CREATE_COLUMN_METADATA_TABLE + CREATE_TABLE_METADATA_TABLE;
+var stringArray = valita_exports.array(valita_exports.string());
+var subscriptionStateSchema = valita_exports.object({
+	replicaVersion: valita_exports.string(),
+	publications: valita_exports.string(),
+	watermark: valita_exports.string()
+}).map((s) => ({
+	...s,
+	publications: parse(JSON.parse(s.publications), stringArray)
+}));
+var subscriptionStateAndContextSchema = valita_exports.object({
+	replicaVersion: valita_exports.string(),
+	publications: valita_exports.string(),
+	initialSyncContext: valita_exports.string(),
+	watermark: valita_exports.string()
+}).map((s) => ({
+	...s,
+	publications: parse(JSON.parse(s.publications), stringArray),
+	initialSyncContext: parse(JSON.parse(s.initialSyncContext), jsonObjectSchema)
+}));
+var replicationStateSchema = valita_exports.object({ stateVersion: valita_exports.string() });
+function initReplicationState(db, publications, watermark, initialSyncContext = {}, createTables = true) {
+	if (createTables) createReplicationStateTables(db);
+	db.prepare(`
+    INSERT INTO "_zero.replicationConfig" 
+       (replicaVersion, publications, initialSyncContext) VALUES (?, ?, ?)
+    `).run(watermark, JSON.stringify(publications.sort()), stringify(initialSyncContext));
+	db.prepare(`
+    INSERT INTO "_zero.replicationState" (stateVersion, writeTimeMs) 
+      VALUES (?, unixepoch('subsec') * 1000)
+    `).run(watermark);
+	recordEvent(db, "sync");
+}
+/**
+* Exposed as a separate function for the custom change source,
+* which needs the tables to be created in order to construct
+* ChangeProcessor before it knows the initial watermark.
+*/
+function createReplicationStateTables(db) {
+	db.exec(CREATE_REPLICATION_STATE_SCHEMA);
+}
+function recordEvent(db, event) {
+	db.prepare(`
+    INSERT INTO "_zero.runtimeEvents" (event) VALUES (?) 
+    `).run(event);
+}
+function getAscendingEvents(db) {
+	return db.prepare(`SELECT event, timestamp FROM "_zero.runtimeEvents" 
+         ORDER BY timestamp ASC
+    `).all().map(({ event, timestamp }) => ({
+		event,
+		timestamp: /* @__PURE__ */ new Date(timestamp + "Z")
+	}));
+}
+function getSubscriptionState(db) {
+	return parse(db.get(`
+      SELECT c.replicaVersion, c.publications, s.stateVersion as watermark
+        FROM "_zero.replicationConfig" as c
+        JOIN "_zero.replicationState" as s
+        ON c.lock = s.lock
+    `), subscriptionStateSchema);
+}
+function getSubscriptionStateAndContext(db) {
+	return parse(db.get(`
+      SELECT c.replicaVersion, c.publications, c.initialSyncContext,
+        s.stateVersion as watermark
+        FROM "_zero.replicationConfig" as c
+        JOIN "_zero.replicationState" as s
+        ON c.lock = s.lock
+    `), subscriptionStateAndContextSchema);
+}
+function updateReplicationWatermark(db, watermark) {
+	db.run(`
+    UPDATE "_zero.replicationState" 
+      SET stateVersion=?, writeTimeMs=unixepoch('subsec') * 1000`, watermark);
+}
+function getReplicationState(db) {
+	return parse(db.get(`SELECT stateVersion FROM "_zero.replicationState"`), replicationStateSchema);
+}
+//#endregion
+export { CREATE_RUNTIME_EVENTS_TABLE, createReplicationStateTables, getAscendingEvents, getReplicationState, getSubscriptionState, getSubscriptionStateAndContext, initReplicationState, recordEvent, updateReplicationWatermark };
+
+//# sourceMappingURL=replication-state.js.map

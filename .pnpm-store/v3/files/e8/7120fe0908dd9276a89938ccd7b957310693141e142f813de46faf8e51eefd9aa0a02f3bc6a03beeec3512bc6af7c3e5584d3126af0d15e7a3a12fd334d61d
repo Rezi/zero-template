@@ -1,0 +1,83 @@
+import type { LogContext, LogLevel, LogSink } from '@rocicorp/logger';
+import type { Store } from '../dag/store.ts';
+import type { CreateStore, StoreProvider } from '../kv/store.ts';
+import type { OnClientsDeleted } from './clients.ts';
+import { IDBDatabasesStore } from './idb-databases-store.ts';
+/**
+ * How frequently to try to collect
+ */
+export declare const COLLECT_IDB_INTERVAL: number;
+/**
+ * We delay the initial collection to prevent doing it at startup.
+ */
+export declare const INITIAL_COLLECT_IDB_DELAY: number;
+export declare function initCollectIDBDatabases(idbDatabasesStore: IDBDatabasesStore, kvStoreProvider: StoreProvider, collectInterval: number, initialCollectDelay: number, maxAge: number, enableMutationRecovery: boolean, onClientsDeleted: OnClientsDeleted, lc: LogContext, signal: AbortSignal): void;
+/**
+ * Collects IDB databases that are no longer needed.
+ */
+export declare function collectIDBDatabases(idbDatabasesStore: IDBDatabasesStore, now: number, maxAge: number, kvStoreProvider: StoreProvider, enableMutationRecovery: boolean, onClientsDeleted: OnClientsDeleted, newDagStore?: typeof defaultNewDagStore): Promise<void>;
+declare function defaultNewDagStore(name: string, kvCreateStore: CreateStore): Store;
+/**
+ * Options for `dropDatabase` and `dropAllDatabases`.
+ */
+export type DropDatabaseOptions = {
+    /**
+     * Allows providing a custom implementation of the underlying storage layer.
+     * Default is `'idb'`.
+     */
+    kvStore?: 'idb' | 'mem' | StoreProvider | undefined;
+    /**
+     * Determines how much logging to do. When this is set to `'debug'`,
+     * Replicache will also log `'info'` and `'error'` messages. When set to
+     * `'info'` we log `'info'` and `'error'` but not `'debug'`. When set to
+     * `'error'` we only log `'error'` messages.
+     * Default is `'info'`.
+     */
+    logLevel?: LogLevel | undefined;
+    /**
+     * Enables custom handling of logs.
+     *
+     * By default logs are logged to the console.  If you would like logs to be
+     * sent elsewhere (e.g. to a cloud logging service like DataDog) you can
+     * provide an array of {@link LogSink}s.  Logs at or above
+     * {@link DropDatabaseOptions.logLevel} are sent to each of these {@link LogSink}s.
+     * If you would still like logs to go to the console, include
+     * `consoleLogSink` in the array.
+     *
+     * ```ts
+     * logSinks: [consoleLogSink, myCloudLogSink],
+     * ```
+     * Default is `[consoleLogSink]`.
+     */
+    logSinks?: LogSink[] | undefined;
+};
+/**
+ * Drops the specified database.
+ * @param dbName The name of the database to drop.
+ * @param opts Options for dropping the database.
+ */
+export declare function dropDatabase(dbName: string, opts?: DropDatabaseOptions): Promise<void>;
+/**
+ * Deletes all IndexedDB data associated with Replicache.
+ *
+ * Returns an object with the names of the successfully dropped databases
+ * and any errors encountered while dropping.
+ */
+export declare function dropAllDatabases(opts?: DropDatabaseOptions): Promise<{
+    dropped: string[];
+    errors: unknown[];
+}>;
+/**
+ * Deletes all IndexedDB data associated with Replicache.
+ *
+ * Returns an object with the names of the successfully dropped databases
+ * and any errors encountered while dropping.
+ *
+ * @deprecated Use `dropAllDatabases` instead.
+ */
+export declare function deleteAllReplicacheData(opts?: DropDatabaseOptions): Promise<{
+    dropped: string[];
+    errors: unknown[];
+}>;
+export {};
+//# sourceMappingURL=collect-idb-databases.d.ts.map

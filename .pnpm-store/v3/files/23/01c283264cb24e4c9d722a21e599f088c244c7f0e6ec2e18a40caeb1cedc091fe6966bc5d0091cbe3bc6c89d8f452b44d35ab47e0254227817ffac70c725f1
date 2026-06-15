@@ -1,0 +1,22 @@
+import type { LogContext } from '@rocicorp/logger';
+import { type PostgresDB } from '../../types/pg.ts';
+import { type ShardID } from '../../types/shards.ts';
+import type { Service } from '../service.ts';
+type Options = {
+    inactivityThresholdMs: number;
+    initialBatchSize: number;
+    initialIntervalMs: number;
+};
+export declare class CVRPurger implements Service {
+    #private;
+    readonly id = "reaper";
+    constructor(lc: LogContext, db: PostgresDB, shard: ShardID, { inactivityThresholdMs, initialBatchSize, initialIntervalMs }: Options, tombstonePurgeThreshold?: number);
+    run(): Promise<void>;
+    purgeInactiveCVRs(maxCVRs: number): Promise<{
+        purged: number;
+        remaining: number;
+    }>;
+    stop(): Promise<void>;
+}
+export {};
+//# sourceMappingURL=cvr-purger.d.ts.map

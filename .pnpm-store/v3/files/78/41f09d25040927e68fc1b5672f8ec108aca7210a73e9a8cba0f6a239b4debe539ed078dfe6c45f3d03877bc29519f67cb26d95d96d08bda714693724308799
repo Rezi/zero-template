@@ -1,0 +1,944 @@
+import { assert } from "../../../../../shared/src/asserts.js";
+import { deepEqual } from "../../../../../shared/src/json.js";
+import { AbortError } from "../../../../../shared/src/abort-error.js";
+import { parse, valita_exports } from "../../../../../shared/src/valita.js";
+import { must } from "../../../../../shared/src/must.js";
+import { mapValues } from "../../../../../shared/src/objects.js";
+import { equals, intersection, symmetricDifferences } from "../../../../../shared/src/set-utils.js";
+import { stringify } from "../../../../../shared/src/bigint-json.js";
+import { upstreamSchema } from "../../../types/shards.js";
+import { Database } from "../../../../../zqlite/src/db.js";
+import { UnsupportedColumnDefaultError, mapPostgresToLiteColumn } from "../../../db/pg-to-lite.js";
+import { getSubscriptionStateAndContext } from "../../replicator/schema/replication-state.js";
+import { StatementRunner } from "../../../db/statements.js";
+import { connectPgClient, isPostgresError, pgClient } from "../../../types/pg.js";
+import { majorVersionFromString, majorVersionToString } from "../../../types/state-version.js";
+import { fromBigInt, toBigInt, toStateVersionString } from "./lsn.js";
+import { getPublicationInfo } from "./schema/published.js";
+import { replicationEventSchema } from "./schema/ddl.js";
+import { validate } from "./schema/validation.js";
+import { dropShard, getInternalShardConfig, getReplicaAtVersion, internalPublicationPrefix, replicaIdentitiesForTablesWithoutPrimaryKeys, replicationSlotPrefix } from "./schema/shard.js";
+import { AutoResetSignal } from "../../change-streamer/schema/tables.js";
+import { initReplica } from "../common/replica-schema.js";
+import "../../../types/pg-versions.js";
+import { BackfillManager } from "../common/backfill-manager.js";
+import { ChangeStreamMultiplexer } from "../common/change-stream-multiplexer.js";
+import { dropOldReplicasAndSlots } from "./replication-slots.js";
+import { updateShardSchema } from "./schema/init.js";
+import { initialSync } from "./initial-sync.js";
+import { streamBackfill } from "./backfill-stream.js";
+import { subscribe } from "./logical-replication/stream.js";
+import { nanoid } from "nanoid";
+import postgres from "postgres";
+import { PG_ADMIN_SHUTDOWN, PG_INSUFFICIENT_PRIVILEGE } from "@drdgvhbh/postgres-error-codes";
+//#region ../zero-cache/src/services/change-source/pg/change-source.ts
+var REPLICA_SLOT_CLEANUP_INTERVAL_MS = 3e4;
+/**
+* Initializes a Postgres change source, including the initial sync of the
+* replica, before streaming changes from the corresponding logical replication
+* stream.
+*/
+async function initializePostgresChangeSource(lc, upstreamURI, shard, replicaDbFile, syncOptions, context, lagReportIntervalMs = 0) {
+	await initReplica(lc, `replica-${shard.appID}-${shard.shardNum}`, replicaDbFile, (log, tx) => initialSync(log, shard, tx, upstreamURI, syncOptions, context));
+	const replica = new Database(lc, replicaDbFile);
+	const subscriptionState = getSubscriptionStateAndContext(new StatementRunner(replica));
+	replica.close();
+	const db = await connectPgClient(lc, upstreamURI, "change-source-init");
+	try {
+		return {
+			subscriptionState,
+			changeSource: new PostgresChangeSource(lc, upstreamURI, shard, await checkAndUpdateUpstream(lc, db, shard, subscriptionState), context, lagReportIntervalMs, syncOptions.textCopy)
+		};
+	} finally {
+		await db.end();
+	}
+}
+async function checkAndUpdateUpstream(lc, sql, shard, { replicaVersion, publications: subscribed, initialSyncContext }) {
+	await updateShardSchema(lc, sql, shard, replicaVersion);
+	const upstreamReplica = await getReplicaAtVersion(lc, sql, shard, replicaVersion, initialSyncContext);
+	if (!upstreamReplica) throw new AutoResetSignal(`No replication slot for replica at version ${replicaVersion}`);
+	const requested = shard.publications.toSorted();
+	const replicated = upstreamReplica.publications.filter((p) => !p.startsWith(internalPublicationPrefix(shard))).sort();
+	if (!deepEqual(requested, replicated)) {
+		lc.warn?.(`Dropping shard to change publications to: [${requested}]`);
+		await sql.unsafe(dropShard(shard.appID, shard.shardNum));
+		throw new AutoResetSignal(`Requested publications [${requested}] do not match configured publications: [${replicated}]`);
+	}
+	if (!deepEqual(upstreamReplica.publications, subscribed)) throw new AutoResetSignal(`Upstream publications [${upstreamReplica.publications}] do not match subscribed publications [${subscribed}]`);
+	const exists = await sql`
+    SELECT pubname FROM pg_publication WHERE pubname IN ${sql(subscribed)};
+  `.values();
+	if (exists.length !== subscribed.length) throw new AutoResetSignal(`Upstream publications [${exists.flat()}] do not contain all subscribed publications [${subscribed}]`);
+	const { slot } = upstreamReplica;
+	const result = await sql`
+    SELECT restart_lsn as "restartLSN", wal_status as "walStatus" FROM pg_replication_slots
+      WHERE slot_name = ${slot}`;
+	if (result.length === 0) throw new AutoResetSignal(`replication slot ${slot} is missing`);
+	const [{ restartLSN, walStatus }] = result;
+	if (restartLSN === null || walStatus === "lost") throw new AutoResetSignal(`replication slot ${slot} has been invalidated for exceeding the max_slot_wal_keep_size`);
+	return upstreamReplica;
+}
+var MAX_LOW_PRIORITY_DELAY_MS = 1e3;
+/**
+* Postgres implementation of a {@link ChangeSource} backed by a logical
+* replication stream.
+*/
+var PostgresChangeSource = class {
+	#lc;
+	#db;
+	#upstreamUri;
+	#shard;
+	#replica;
+	#context;
+	#lagReporter;
+	#textCopy;
+	constructor(lc, upstreamUri, shard, replica, context, lagReportIntervalMs, textCopy) {
+		this.#lc = lc.withContext("component", "change-source");
+		this.#db = pgClient(lc, upstreamUri, "replication-monitor", {
+			max: 1,
+			["idle_timeout"]: 60
+		});
+		this.#upstreamUri = upstreamUri;
+		this.#shard = shard;
+		this.#replica = replica;
+		this.#context = context;
+		this.#textCopy = textCopy ?? false;
+		this.#lagReporter = lagReportIntervalMs > 0 ? new LagReporter(lc.withContext("component", "lag-reporter"), shard, this.#db, lagReportIntervalMs) : null;
+	}
+	async stop() {
+		this.#lagReporter?.stop();
+		clearTimeout(this.#cleanupTimer);
+		await this.#db.end();
+	}
+	async startLagReporter() {
+		if (this.#lagReporter) try {
+			return await this.#lagReporter.initiateLagReport(true);
+		} catch (e) {
+			if (isPostgresError(e, PG_INSUFFICIENT_PRIVILEGE)) {
+				const functionName = (this.#lagReporter.pgVersion ?? 0) >= 17e4 ? "pg_logical_emit_message(boolean, text, text, boolean)" : "pg_logical_emit_message(boolean, text, text)";
+				this.#lc.warn?.("\n\nUnable to initiate replication lag reports due to insufficient privileges.\nTo enable replication lag reporting, run:", `\n\tGRANT EXECUTE ON FUNCTION ${functionName} TO <your_db_user>;\n\n`, e);
+			} else this.#lc.error?.(`Unexpected error while initiating lag reports. Lag reports will be disabled.`, e);
+		}
+		return null;
+	}
+	async startStream(clientWatermark, backfillRequests = []) {
+		await this.#stopExistingReplicationSlotSubscriber();
+		const config = await getInternalShardConfig(this.#db, this.#shard);
+		const { slot } = this.#replica;
+		this.#lc.info?.(`starting replication stream@${slot}`);
+		return this.#startStream(slot, clientWatermark, config, backfillRequests);
+	}
+	async #startStream(slot, clientWatermark, shardConfig, backfillRequests) {
+		const clientStart = majorVersionFromString(clientWatermark) + 1n;
+		const { messages, acks } = await subscribe(this.#lc, this.#db, slot, [...shardConfig.publications], clientStart);
+		const acker = new Acker(acks);
+		const changes = new ChangeStreamMultiplexer(this.#lc, clientWatermark);
+		const backfillManager = new BackfillManager(this.#lc, changes, (req) => streamBackfill(this.#lc, this.#upstreamUri, this.#replica, req, { textCopy: this.#textCopy }));
+		changes.addProducers(messages, backfillManager).addListeners(backfillManager, acker);
+		backfillManager.run(clientWatermark, backfillRequests);
+		const changeMaker = new ChangeMaker(this.#shard, shardConfig, this.#db, this.#replica.initialSchema);
+		/**
+		* Determines if the incoming message is transactional, otherwise handling
+		* non-transactional messages with a downstream status message.
+		*/
+		const isTransactionalMessage = (lsn, msg) => {
+			if (msg.tag === "message" && msg.prefix === this.#lagReporter?.messagePrefix) {
+				changes.pushStatus(this.#lagReporter.processLagReportMessage(msg));
+				return false;
+			}
+			const status = this.#lagReporter?.checkCurrentLSN(lsn);
+			if (status) changes.pushStatus(status);
+			if (msg.tag === "keepalive") {
+				changes.pushStatus([
+					"status",
+					{ ack: msg.shouldRespond },
+					{ watermark: majorVersionToString(lsn) }
+				]);
+				return false;
+			}
+			return true;
+		};
+		(async () => {
+			try {
+				let reservation = null;
+				let inTransaction = false;
+				for await (const [lsn, msg] of messages) {
+					if (!isTransactionalMessage(lsn, msg)) {
+						if (!inTransaction && reservation?.lastWatermark) {
+							changes.release(reservation.lastWatermark);
+							reservation = null;
+						}
+						continue;
+					}
+					if (!reservation) {
+						const res = changes.reserve("replication");
+						typeof res === "string" || await res;
+						reservation = {};
+					}
+					let lastChange;
+					for (const change of await changeMaker.makeChanges(this.#lc.withContext("lsn", fromBigInt(lsn)), lsn, msg)) {
+						await changes.push(change);
+						lastChange = change;
+					}
+					switch (lastChange?.[0]) {
+						case "begin":
+							inTransaction = true;
+							break;
+						case "commit":
+							inTransaction = false;
+							reservation.lastWatermark = lastChange[2].watermark;
+							if (messages.queued === 0 || changes.waiterDelay() > MAX_LOW_PRIORITY_DELAY_MS) {
+								changes.release(reservation.lastWatermark);
+								reservation = null;
+							}
+							break;
+					}
+				}
+			} catch (e) {
+				const err = translateError(e);
+				if (err instanceof ShutdownSignal) await this.#logCurrentReplicaInfo();
+				changes.fail(err);
+			}
+		})();
+		this.#lc.info?.(`started replication stream@${slot} from ${clientWatermark} (replicaVersion: ${this.#replica.version})`);
+		return {
+			changes: changes.asSource(),
+			acks: { push: (status) => acker.ack(status[2].watermark) }
+		};
+	}
+	async #logCurrentReplicaInfo() {
+		try {
+			const replica = await getReplicaAtVersion(this.#lc, this.#db, this.#shard, this.#replica.version);
+			if (replica) this.#lc.info?.(`Shutdown signal from replica@${this.#replica.version}: ${stringify(replica.subscriberContext)}`);
+		} catch (e) {
+			this.#lc.warn?.(`error logging replica info`, e);
+		}
+	}
+	/**
+	* Stops replication slots associated with this shard, and asynchronously
+	* runs a cleanup task that drops older replicas and slots.
+	*/
+	async #stopExistingReplicationSlotSubscriber() {
+		const sql = this.#db;
+		const { id: replicaID, slot } = this.#replica;
+		const replicasTable = `${upstreamSchema(this.#shard)}.replicas`;
+		const result = await sql`
+      SELECT pg_terminate_backend(active_pid) as terminated, active_pid as pid
+        FROM pg_replication_slots
+        WHERE slot_name = ${slot}
+    `;
+		if (result.length === 0) {
+			const slotExpression = replicationSlotPrefix(this.#shard);
+			const replicas = await sql`
+        SELECT id, rank, slot, version, "initialSyncContext", "subscriberContext" 
+          FROM ${sql(replicasTable)} ORDER BY rank DESC`;
+			const slots = await sql`
+        SELECT slot_name as slot, active, active_pid as pid
+          FROM pg_replication_slots
+          WHERE slot_name LIKE ${slotExpression}
+          ORDER BY slot_name`;
+			this.#lc.warn?.(`slot ${slot} not found while cleaning subscribers`, {
+				slots,
+				replicas
+			});
+			throw new AbortError(`replication slot ${slot} is missing. A different replication-manager should now be running on a new replication slot.`);
+		}
+		this.#lc.info?.(`terminated replication slots: ${JSON.stringify(result)}`);
+		await sql`
+      UPDATE ${sql(replicasTable)} 
+        SET "subscriberContext" = ${this.#context}
+        WHERE id = ${replicaID}`;
+		this.#cleanUpOlderReplicasAndSlots();
+	}
+	#cleanupTimer;
+	async #cleanUpOlderReplicasAndSlots() {
+		clearTimeout(this.#cleanupTimer);
+		try {
+			const result = await dropOldReplicasAndSlots(this.#lc, this.#db, this.#shard, this.#replica.rank);
+			if (result.draining === 0) {
+				this.#lc.info?.(`finished cleaning up replicas and slots`, { result });
+				return;
+			}
+			this.#lc.info?.(`old slots still draining`, { result });
+		} catch (e) {
+			this.#lc.warn?.(`error dropping replication slots`, e);
+		}
+		this.#cleanupTimer = setTimeout(() => this.#cleanUpOlderReplicasAndSlots(), REPLICA_SLOT_CLEANUP_INTERVAL_MS);
+	}
+};
+var Acker = class {
+	#acks;
+	#waitingForDownstreamAck = null;
+	constructor(acks) {
+		this.#acks = acks;
+	}
+	onChange(change) {
+		switch (change[0]) {
+			case "status":
+				const { watermark } = change[2];
+				if (change[1].ack) this.#expectDownstreamAck(watermark);
+				else this.#ackIfDownstreamIsCaughtUp(watermark);
+				break;
+			case "begin":
+				if (!change[1].skipAck) this.#expectDownstreamAck(change[2].commitWatermark);
+				break;
+		}
+	}
+	#expectDownstreamAck(watermark) {
+		this.#waitingForDownstreamAck = watermark;
+	}
+	ack(watermark) {
+		if (this.#waitingForDownstreamAck && this.#waitingForDownstreamAck <= watermark) this.#waitingForDownstreamAck = null;
+		this.#sendAck(watermark);
+	}
+	#ackIfDownstreamIsCaughtUp(watermark) {
+		if (this.#waitingForDownstreamAck === null) this.#sendAck(watermark);
+	}
+	#sendAck(watermark) {
+		const lsn = majorVersionFromString(watermark);
+		this.#acks.push(lsn);
+	}
+};
+var lagReportSchema = valita_exports.object({
+	id: valita_exports.string(),
+	sendTimeMs: valita_exports.number(),
+	commitTimeMs: valita_exports.number()
+});
+var LagReporter = class LagReporter {
+	static MESSAGE_SUFFIX = "/lag-report/v1";
+	#lc;
+	messagePrefix;
+	#db;
+	#lagIntervalMs;
+	#pgVersion;
+	#expectingLagReport = null;
+	#timer;
+	constructor(lc, shard, db, lagIntervalMs) {
+		this.#lc = lc;
+		this.messagePrefix = `${shard.appID}/${shard.shardNum}${LagReporter.MESSAGE_SUFFIX}`;
+		this.#db = db;
+		this.#lagIntervalMs = lagIntervalMs;
+	}
+	async #getPgVersion() {
+		if (this.#pgVersion === void 0) {
+			const [{ pgVersion }] = await this.#db`
+        SELECT current_setting('server_version_num')::int as "pgVersion"`;
+			this.#pgVersion = pgVersion;
+		}
+		return this.#pgVersion;
+	}
+	get pgVersion() {
+		return this.#pgVersion;
+	}
+	async initiateLagReport(log = false) {
+		const pgVersion = this.#pgVersion ?? await this.#getPgVersion();
+		const now = Date.now();
+		const id = nanoid();
+		const lagReport = {
+			id,
+			sendTimeMs: now,
+			commitTimeMs: now,
+			lsn: 0n
+		};
+		this.#expectingLagReport = lagReport;
+		let commitTimeMs;
+		let lsn;
+		if (pgVersion >= 17e4) [{commitTimeMs, lsn}] = await this.#db`
+        WITH CTE AS (SELECT extract(epoch from now()) * 1000 AS "commitTimeMs")
+        SELECT "commitTimeMs", pg_logical_emit_message(
+          false,
+          ${this.messagePrefix},
+          json_build_object(
+            'id', ${id}::text,
+            'sendTimeMs', ${now}::int8,
+            'commitTimeMs', "commitTimeMs"
+          )::text,
+          true
+        ) as lsn FROM CTE;
+    `;
+		else [{commitTimeMs, lsn}] = await this.#db`
+        WITH CTE AS (SELECT extract(epoch from now()) * 1000 as "commitTimeMs")
+        SELECT "commitTimeMs", pg_logical_emit_message(
+          false,
+          ${this.messagePrefix},
+          json_build_object(
+            'id', ${id}::text,
+            'sendTimeMs', ${now}::int8,
+            'commitTimeMs', "commitTimeMs"
+          )::text
+        ) as lsn FROM CTE;
+    `;
+		lagReport.lsn = toBigInt(lsn);
+		lagReport.commitTimeMs = commitTimeMs;
+		if (log) this.#lc.info?.(`initiated lag report at lsn ${lsn}`, {
+			id,
+			lsn,
+			sendTimeMs: now,
+			commitTimeMs
+		});
+		return { nextSendTimeMs: now };
+	}
+	/**
+	* In Postgres < 17, the pg_logical_emit_message lacks an immediate "flush"
+	* option, which can cause messages to be missed when the replication stream
+	* starts up:
+	*
+	* ```
+	* * emit message → WAL write (buffered, not flushed)
+	* * walsender reads up to current flush LSN
+	* * emitted message's LSN is beyond flush LSN → not yet visible
+	* * stream feedback/acknowledgment advances slot
+	* * WAL eventually flushes → but slot has already moved past it
+	* ```
+	*
+	* This has been seen to happen for the initial `wal_writer_delay` interval
+	* of a replication session.
+	*
+	* To account for this, the last emitted lag report is considered "received"
+	* if the stream has advanced beyond the LSN of the report.
+	*/
+	checkCurrentLSN(lsn) {
+		if (this.#expectingLagReport?.lsn && lsn > this.#expectingLagReport.lsn) {
+			this.#lc.info?.(`LSN ${fromBigInt(lsn)} is passed expected lag report ${fromBigInt(this.#expectingLagReport.lsn)}. Processing it as received.`);
+			return this.#processLagReport(this.#expectingLagReport, majorVersionToString(lsn));
+		}
+	}
+	stop() {
+		clearTimeout(this.#timer);
+		this.#timer = void 0;
+	}
+	#scheduleNextReport(delayMs) {
+		this.#expectingLagReport = null;
+		clearTimeout(this.#timer);
+		this.#timer = setTimeout(async () => {
+			try {
+				await this.initiateLagReport();
+			} catch (e) {
+				this.#lc.warn?.(`error initiating lag report`, e);
+				this.#scheduleNextReport(this.#lagIntervalMs);
+			}
+		}, delayMs);
+	}
+	processLagReportMessage(msg) {
+		assert(msg.prefix === this.messagePrefix, `unexpected message prefix: ${msg.prefix}`);
+		const report = parseLogicalMessageContent(this.#lc, msg, lagReportSchema);
+		return this.#processLagReport(report, toStateVersionString(msg.messageLsn ?? "0/0"));
+	}
+	#processLagReport(report, watermark) {
+		const now = Date.now();
+		const nextSendTimeMs = Math.max(now, report.sendTimeMs + this.#lagIntervalMs);
+		if (report.id === this.#expectingLagReport?.id) this.#scheduleNextReport(nextSendTimeMs - now);
+		else this.#lc.debug?.(`received extraneous lag report`, { report });
+		const { sendTimeMs, commitTimeMs } = report;
+		return [
+			"status",
+			{
+				ack: false,
+				lagReport: {
+					lastTimings: {
+						sendTimeMs,
+						commitTimeMs,
+						receiveTimeMs: now
+					},
+					nextSendTimeMs
+				}
+			},
+			{ watermark }
+		];
+	}
+};
+var SET_REPLICA_IDENTITY_DELAY_MS = 50;
+var ChangeMaker = class {
+	#shardPrefix;
+	#shardConfig;
+	#initialSchema;
+	#db;
+	#replicaIdentityTimer;
+	#error;
+	constructor({ appID, shardNum }, shardConfig, db, initialSchema) {
+		this.#shardPrefix = `${appID}/${shardNum}`;
+		this.#shardConfig = shardConfig;
+		this.#initialSchema = initialSchema;
+		this.#db = db;
+	}
+	async makeChanges(lc, lsn, msg) {
+		if (this.#error) {
+			this.#logError(lc, this.#error);
+			return [];
+		}
+		try {
+			return await this.#makeChanges(lc, lsn, msg);
+		} catch (err) {
+			this.#error = {
+				lsn,
+				msg,
+				err,
+				lastLogTime: 0
+			};
+			this.#logError(lc, this.#error);
+			const message = `Unable to continue replication from LSN ${fromBigInt(lsn)}`;
+			const errorDetails = { error: message };
+			if (err instanceof UnsupportedSchemaChangeError) {
+				errorDetails.reason = err.description;
+				errorDetails.context = err.event.context;
+			} else errorDetails.reason = String(err);
+			return [["rollback", { tag: "rollback" }], ["control", {
+				tag: "reset-required",
+				message,
+				errorDetails
+			}]];
+		}
+	}
+	#logError(lc, error) {
+		const { lsn, msg, err, lastLogTime } = error;
+		const now = Date.now();
+		if (now - lastLogTime > 6e4) {
+			lc.error?.(`Unable to continue replication from LSN ${fromBigInt(lsn)}: ${String(err)}`, {
+				change: {
+					...msg,
+					content: void 0
+				},
+				...err instanceof UnsupportedSchemaChangeError && { context: err.event.context },
+				...err instanceof Error && {
+					errorMsg: err.message,
+					name: err.name,
+					stack: err.stack
+				}
+			});
+			error.lastLogTime = now;
+		}
+	}
+	async #makeChanges(lc, lsn, msg) {
+		switch (msg.tag) {
+			case "begin": return [[
+				"begin",
+				{
+					...msg,
+					json: "s"
+				},
+				{ commitWatermark: toStateVersionString(must(msg.commitLsn)) }
+			]];
+			case "delete":
+				if (!(msg.key ?? msg.old)) throw new Error(`Invalid DELETE msg (missing key): ${stringify(msg)}`);
+				return [["data", {
+					...msg,
+					relation: makeRelation(msg.relation),
+					key: must(msg.old ?? msg.key)
+				}]];
+			case "update": return [["data", {
+				...msg,
+				relation: makeRelation(msg.relation),
+				key: msg.old ?? msg.key
+			}]];
+			case "insert": return [["data", {
+				...msg,
+				relation: makeRelation(msg.relation)
+			}]];
+			case "truncate": return [["data", {
+				...msg,
+				relations: msg.relations.map(makeRelation)
+			}]];
+			case "message":
+				if (!msg.prefix.startsWith(this.#shardPrefix)) {
+					lc.debug?.("ignoring message for different shard", msg.prefix);
+					return [];
+				}
+				switch (msg.prefix.substring(this.#shardPrefix.length)) {
+					case "":
+					case "/ddl": return this.#handleDdlMessage(lc, lsn, msg);
+					default:
+						lc.debug?.("ignoring unknown message type", msg.prefix);
+						return [];
+				}
+			case "commit": return [[
+				"commit",
+				msg,
+				{ watermark: toStateVersionString(must(msg.commitLsn)) }
+			]];
+			case "relation": return await this.#handleRelation(msg);
+			case "type": return [];
+			case "origin": return [];
+			default: throw new Error(`Unexpected message type ${stringify(msg)}`);
+		}
+	}
+	#lastReplicationEvent;
+	#handleDdlMessage(lc, lsn, msg) {
+		const event = parseLogicalMessageContent(lc, msg, replicationEventSchema);
+		lc = lc.withContext("lsn", fromBigInt(lsn)).withContext("tag", event.event.tag).withContext("query", event.context.query);
+		clearTimeout(this.#replicaIdentityTimer);
+		const { type } = event;
+		switch (type) {
+			case "ddlStart":
+			case "schemaSnapshot":
+			case "ddlUpdate": break;
+			default:
+				lc.info?.(`ignoring unknown ddl message type: ${type}`);
+				return [];
+		}
+		const prevEvent = this.#lastReplicationEvent;
+		this.#lastReplicationEvent = event;
+		const prevSchema = event.previousSchema === void 0 ? prevEvent?.schema : event.previousSchema;
+		if (!prevSchema) {
+			lc.info?.(`received ${msg.prefix}/${type} event`, { event: summarizeReplicationEventForLog(event) });
+			return [];
+		}
+		const effectiveTag = prevEvent?.type === "ddlStart" ? prevEvent.event.tag : event.type === "ddlUpdate" ? event.event.tag : "UNKNOWN";
+		lc.info?.(`processing ${effectiveTag} command from ${msg.prefix}/${type}`, { event: summarizeReplicationEventForLog(event) });
+		const changes = this.#makeSchemaChanges(lc, prevSchema, event, effectiveTag).map((change) => ["data", change]);
+		lc.info?.(`${changes.length} schema change(s)`, { changes });
+		const replicaIdentities = replicaIdentitiesForTablesWithoutPrimaryKeys(event.schema);
+		if (replicaIdentities) this.#replicaIdentityTimer = setTimeout(async () => {
+			try {
+				await replicaIdentities.apply(lc, this.#db);
+			} catch (err) {
+				lc.warn?.(`error setting replica identities`, err);
+			}
+		}, SET_REPLICA_IDENTITY_DELAY_MS);
+		return changes;
+	}
+	/**
+	*  A note on operation order:
+	*
+	* Postgres will drop related indexes when columns are dropped,
+	* but SQLite will error instead (https://sqlite.org/forum/forumpost/2e62dba69f?t=c&hist).
+	* The current workaround is to drop indexes first.
+	*
+	* Also note that although it should not be possible to both rename and
+	* add/drop tables/columns in a single statement, the operations are
+	* ordered to handle that possibility, by always dropping old entities,
+	* then modifying kept entities, and then adding new entities.
+	*
+	* Thus, the order of replicating DDL updates is:
+	* - drop indexes
+	* - drop tables
+	* - alter tables
+	*   - drop columns
+	*   - alter columns
+	*   - add columns
+	* - create tables
+	* - create indexes
+	*
+	* In the future the replication logic should be improved to handle this
+	* behavior in SQLite by dropping dependent indexes manually before dropping
+	* columns. This, for example, would be needed to properly support changing
+	* the type of a column that's indexed.
+	*/
+	#makeSchemaChanges(lc, preSchema, event, tag) {
+		try {
+			const [prevTbl, prevIdx] = specsByID(preSchema);
+			const [nextTbl, nextIdx] = specsByID(event.schema);
+			const changes = [];
+			for (const table of nextTbl.values()) validate(lc, table);
+			const [droppedIdx, createdIdx] = symmetricDifferences(prevIdx, nextIdx);
+			const keptIdx = intersection(prevIdx, nextIdx);
+			for (const id of keptIdx) if (isIndexStructurallyChanged(must(prevIdx.get(id)), must(nextIdx.get(id)), prevTbl, nextTbl)) {
+				droppedIdx.add(id);
+				createdIdx.add(id);
+			}
+			for (const id of droppedIdx) {
+				const { schema, name } = must(prevIdx.get(id));
+				changes.push({
+					tag: "drop-index",
+					id: {
+						schema,
+						name
+					}
+				});
+			}
+			const [droppedTbl, createdTbl] = symmetricDifferences(prevTbl, nextTbl);
+			for (const id of droppedTbl) {
+				const { schema, name } = must(prevTbl.get(id));
+				changes.push({
+					tag: "drop-table",
+					id: {
+						schema,
+						name
+					}
+				});
+			}
+			const tables = intersection(prevTbl, nextTbl);
+			for (const id of tables) changes.push(...this.#getTableChanges(lc, must(prevTbl.get(id)), must(nextTbl.get(id)), tag));
+			for (const id of createdTbl) {
+				const spec = must(nextTbl.get(id));
+				const createTable = {
+					tag: "create-table",
+					spec,
+					metadata: getMetadata(spec)
+				};
+				if (!tag.startsWith("CREATE")) createTable.backfill = mapValues(spec.columns, ({ pos: attNum }) => ({ attNum }));
+				changes.push(createTable);
+			}
+			for (const id of createdIdx) {
+				const spec = must(nextIdx.get(id));
+				changes.push({
+					tag: "create-index",
+					spec
+				});
+			}
+			return changes;
+		} catch (e) {
+			throw new UnsupportedSchemaChangeError(String(e), event, { cause: e });
+		}
+	}
+	#getTableChanges(lc, oldTable, newTable, ddlTag) {
+		const changes = [];
+		if (oldTable.schema !== newTable.schema || oldTable.name !== newTable.name) changes.push({
+			tag: "rename-table",
+			old: {
+				schema: oldTable.schema,
+				name: oldTable.name
+			},
+			new: {
+				schema: newTable.schema,
+				name: newTable.name
+			}
+		});
+		const oldMetadata = getMetadata(oldTable);
+		const newMetadata = getMetadata(newTable);
+		if (!deepEqual(oldMetadata, newMetadata)) changes.push({
+			tag: "update-table-metadata",
+			table: {
+				schema: newTable.schema,
+				name: newTable.name
+			},
+			old: oldMetadata,
+			new: newMetadata
+		});
+		const table = {
+			schema: newTable.schema,
+			name: newTable.name
+		};
+		const oldColumns = columnsByID(oldTable.columns);
+		const newColumns = columnsByID(newTable.columns);
+		const [dropped, added] = symmetricDifferences(oldColumns, newColumns);
+		for (const id of dropped) {
+			const { name: column } = must(oldColumns.get(id));
+			changes.push({
+				tag: "drop-column",
+				table,
+				column
+			});
+		}
+		const both = intersection(oldColumns, newColumns);
+		for (const id of both) {
+			const { name: oldName, ...oldSpec } = must(oldColumns.get(id));
+			const { name: newName, ...newSpec } = must(newColumns.get(id));
+			if (oldName !== newName || oldSpec.dataType !== newSpec.dataType || oldSpec.notNull !== newSpec.notNull) changes.push({
+				tag: "update-column",
+				table,
+				old: {
+					name: oldName,
+					spec: oldSpec
+				},
+				new: {
+					name: newName,
+					spec: newSpec
+				}
+			});
+		}
+		const alwaysBackfill = ddlTag !== "ALTER TABLE";
+		for (const id of added) {
+			const { name, ...spec } = must(newColumns.get(id));
+			const column = {
+				name,
+				spec
+			};
+			const addColumn = {
+				tag: "add-column",
+				table,
+				column,
+				tableMetadata: getMetadata(newTable)
+			};
+			if (alwaysBackfill) {
+				addColumn.column.spec.dflt = null;
+				addColumn.backfill = { attNum: spec.pos };
+			} else try {
+				mapPostgresToLiteColumn(table.name, column);
+			} catch (e) {
+				if (!(e instanceof UnsupportedColumnDefaultError)) throw e;
+				lc.info?.(`Backfilling column ${table.name}.${name}: ${String(e)}`);
+				addColumn.column.spec.dflt = null;
+				addColumn.backfill = { attNum: spec.pos };
+			}
+			changes.push(addColumn);
+		}
+		return changes;
+	}
+	/**
+	* If `ddlDetection === true`, relation messages are irrelevant,
+	* as schema changes are detected by event triggers that
+	* emit custom messages.
+	*
+	* For degraded-mode replication (`ddlDetection === false`):
+	* 1. query the current published schemas on upstream
+	* 2. compare that with the InternalShardConfig.initialSchema
+	* 3. compare that with the incoming MessageRelation
+	* 4. On any discrepancy, throw an UnsupportedSchemaChangeError
+	*    to halt replication.
+	*
+	* Note that schemas queried in step [1] will be *post-transaction*
+	* schemas, which are not necessarily suitable for actually processing
+	* the statements in the transaction being replicated. In other words,
+	* this mechanism cannot be used to reliably *replicate* schema changes.
+	* However, they serve the purpose determining if schemas have changed.
+	*/
+	async #handleRelation(rel) {
+		const { publications, ddlDetection } = this.#shardConfig;
+		if (ddlDetection) return [];
+		const currentSchema = await getPublicationInfo(this.#db, publications);
+		const difference = getSchemaDifference(this.#initialSchema, currentSchema);
+		if (difference !== null) throw new MissingEventTriggerSupport(difference);
+		const orel = this.#initialSchema.tables.find((t) => t.oid === rel.relationOid);
+		if (!orel) throw new MissingEventTriggerSupport(`relation not in initialSchema: ${stringify(rel)}`);
+		if (relationDifferent(orel, rel)) throw new MissingEventTriggerSupport(`relation has changed within the transaction: ${stringify(orel)} vs ${stringify(rel)}`);
+		return [];
+	}
+};
+function getSchemaDifference(a, b) {
+	if (a.tables.length !== b.tables.length) return `tables created or dropped`;
+	for (let i = 0; i < a.tables.length; i++) {
+		const at = a.tables[i];
+		const bt = b.tables[i];
+		const difference = getTableDifference(at, bt);
+		if (difference) return difference;
+	}
+	return null;
+}
+var byColumnPos = (a, b) => a[1].pos < b[1].pos ? -1 : a[1].pos > b[1].pos ? 1 : 0;
+function getTableDifference(a, b) {
+	if (a.oid !== b.oid || a.schema !== b.schema || a.name !== b.name) return `Table "${a.name}" differs from table "${b.name}"`;
+	if (!deepEqual(a.primaryKey, b.primaryKey)) return `Primary key of table "${a.name}" has changed`;
+	const acols = Object.entries(a.columns).sort(byColumnPos);
+	const bcols = Object.entries(b.columns).sort(byColumnPos);
+	if (acols.length !== bcols.length || acols.some(([aname, acol], i) => {
+		const [bname, bcol] = bcols[i];
+		return aname !== bname || acol.pos !== bcol.pos || acol.typeOID !== bcol.typeOID || acol.notNull !== bcol.notNull;
+	})) return `Columns of table "${a.name}" have changed`;
+	return null;
+}
+function relationDifferent(a, b) {
+	if (a.oid !== b.relationOid || a.schema !== b.schema || a.name !== b.name) return true;
+	if (b.replicaIdentity === "default" && !equals(new Set(a.primaryKey), new Set(b.keyColumns))) return true;
+	const acols = Object.entries(a.columns).sort(byColumnPos);
+	const bcols = b.columns;
+	return acols.length !== bcols.length || acols.some(([aname, acol], i) => {
+		const bcol = bcols[i];
+		return aname !== bcol.name || acol.typeOID !== bcol.typeOid;
+	});
+}
+function translateError(e) {
+	if (!(e instanceof Error)) return new Error(String(e));
+	if (e instanceof postgres.PostgresError && e.code === PG_ADMIN_SHUTDOWN) return new ShutdownSignal(e);
+	return e;
+}
+var idString = (id) => `${id.schema}.${id.name}`;
+function specsByID(published) {
+	return [new Map(published.tables.map((t) => [t.oid, t])), new Map(published.indexes.map((i) => [idString(i), i]))];
+}
+/**
+* Determines if an index was structurally changed (e.g. constraint dropped
+* and recreated with different columns) vs cosmetically changed (e.g. the
+* index spec changed because the table or a column was renamed).
+*
+* Compares boolean properties directly and resolves column names to their
+* stable attnums (pg_attribute `attnum`) for the column comparison.
+*/
+function isIndexStructurallyChanged(prev, next, prevTables, nextTables) {
+	if (prev.unique !== next.unique || prev.isPrimaryKey !== next.isPrimaryKey || prev.isReplicaIdentity !== next.isReplicaIdentity || prev.isImmediate !== next.isImmediate) return true;
+	const prevTable = findTableBySchemaAndName(prevTables, prev.schema, prev.tableName);
+	const nextTable = findTableBySchemaAndName(nextTables, next.schema, next.tableName);
+	if (!prevTable || !nextTable) return true;
+	const prevEntries = Object.entries(prev.columns);
+	const nextEntries = Object.entries(next.columns);
+	if (prevEntries.length !== nextEntries.length) return true;
+	const prevByAttnum = new Map(prevEntries.map(([name, dir]) => [prevTable.columns[name]?.pos, dir]));
+	const nextByAttnum = new Map(nextEntries.map(([name, dir]) => [nextTable.columns[name]?.pos, dir]));
+	if (prevByAttnum.has(void 0) || nextByAttnum.has(void 0)) return true;
+	if (prevByAttnum.size !== nextByAttnum.size) return true;
+	for (const [attnum, dir] of prevByAttnum) if (nextByAttnum.get(attnum) !== dir) return true;
+	return false;
+}
+function findTableBySchemaAndName(tables, schema, name) {
+	for (const table of tables.values()) if (table.schema === schema && table.name === name) return table;
+}
+function columnsByID(columns) {
+	const colsByID = /* @__PURE__ */ new Map();
+	for (const [name, spec] of Object.entries(columns)) colsByID.set(spec.pos, {
+		...spec,
+		name
+	});
+	return colsByID;
+}
+function getMetadata(table) {
+	return {
+		schemaOID: must(table.schemaOID),
+		relationOID: table.oid,
+		rowKey: Object.fromEntries(table.replicaIdentityColumns.map((k) => [k, { attNum: table.columns[k].pos }]))
+	};
+}
+function makeRelation(relation) {
+	const { columns: _, keyColumns, replicaIdentity, ...rest } = relation;
+	return {
+		...rest,
+		rowKey: {
+			columns: keyColumns,
+			type: replicaIdentity
+		},
+		keyColumns,
+		replicaIdentity
+	};
+}
+function summarizeSchemaForLog(schema) {
+	return {
+		tables: schema.tables.length,
+		indexes: schema.indexes.length
+	};
+}
+function summarizeReplicationEventForLog(event) {
+	const { schema, ...rest } = event;
+	const { previousSchema, ...eventWithoutSchemas } = rest;
+	return {
+		...eventWithoutSchemas,
+		schema: summarizeSchemaForLog(schema),
+		...previousSchema !== void 0 && { previousSchema: previousSchema === null ? null : summarizeSchemaForLog(previousSchema) }
+	};
+}
+var UnsupportedSchemaChangeError = class extends Error {
+	name = "UnsupportedSchemaChangeError";
+	description;
+	event;
+	constructor(description, event, options) {
+		super(`Replication halted. Resync the replica to recover: ${description}`, options);
+		this.description = description;
+		this.event = event;
+	}
+};
+var MissingEventTriggerSupport = class extends Error {
+	name = "MissingEventTriggerSupport";
+	constructor(msg) {
+		super(`${msg}. Schema changes cannot be reliably replicated without event trigger support.`);
+	}
+};
+var ShutdownSignal = class extends AbortError {
+	name = "ShutdownSignal";
+	constructor(cause) {
+		super("shutdown signal received (e.g. another zero-cache taking over the replication stream)", { cause });
+	}
+};
+function parseLogicalMessageContent(lc, msg, schema) {
+	const { content } = msg;
+	const str = content instanceof Buffer ? content.toString("utf-8") : new TextDecoder().decode(content);
+	try {
+		return parse(JSON.parse(str), schema, "passthrough");
+	} catch (e) {
+		lc.error?.(`unable to parse logical message content: ${String(e)}`, { message: {
+			...msg,
+			content: str
+		} });
+		throw e;
+	}
+}
+//#endregion
+export { initializePostgresChangeSource };
+
+//# sourceMappingURL=change-source.js.map

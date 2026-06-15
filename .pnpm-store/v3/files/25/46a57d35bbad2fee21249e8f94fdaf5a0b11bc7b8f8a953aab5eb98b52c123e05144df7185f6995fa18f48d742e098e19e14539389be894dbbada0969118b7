@@ -1,0 +1,26 @@
+import * as v from './valita.ts';
+export type JSONValue = null | string | number | bigint | boolean | readonly JSONValue[] | JSONObject;
+export type JSONObject = {
+    readonly [prop: string]: JSONValue | undefined;
+};
+export declare const jsonValueSchema: v.Type<JSONValue>;
+export declare const jsonObjectSchema: v.Type<Readonly<Record<string, JSONValue>>>;
+/**
+ * Parses JSON strings that may contain arbitrarily large integers. Integers
+ * larger than {@link Number.MAX_SAFE_INTEGER} are deserialized as a `bigint`.
+ */
+export declare function parse(str: string, reviver?: (k: string, v: unknown) => unknown): JSONValue;
+/**
+ * Stringifies objects to JSON, supporting objects containing bigint values.
+ * Note that the resulting JSON string may not be deserializable by
+ * all environments, but it is supported by Postgres. The string should be
+ * deserialized with the corresponding {@link parse} method that will represent
+ * large numbers as bigints. From there it is up to the application to suitably
+ * handle bigints passed to downstream logic.
+ */
+export declare function stringify(obj: unknown, replacer?: (string | number)[] | ((key: string, value: unknown) => unknown) | null, indent?: string | number): string;
+export declare const BigIntJSON: {
+    readonly parse: typeof parse;
+    readonly stringify: typeof stringify;
+};
+//# sourceMappingURL=bigint-json.d.ts.map

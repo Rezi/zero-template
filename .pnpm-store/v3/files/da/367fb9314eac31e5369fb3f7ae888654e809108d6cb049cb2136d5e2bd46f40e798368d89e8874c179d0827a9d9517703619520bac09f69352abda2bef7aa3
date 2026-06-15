@@ -1,0 +1,23 @@
+import type { StandardSchemaV1 } from '@standard-schema/spec';
+export declare class InputValidationError extends Error {
+    readonly result: StandardSchemaV1.FailureResult;
+    readonly details: {
+        type: 'InputValidationError';
+        result: StandardSchemaV1.FailureResult;
+    };
+    constructor(message: string, result: StandardSchemaV1.FailureResult);
+}
+/**
+ * Validates input using a StandardSchema validator if provided.
+ * This is shared validation logic used by both defineQuery and defineMutator.
+ *
+ * @param name - The name of the query or mutator (for error messages)
+ * @param input - The input value to validate
+ * @param validator - Optional StandardSchema validator
+ * @param kind - Type of definition ('query' or 'mutator') for error messages
+ * @returns The validated output (either transformed by validator or input as-is)
+ * @throws Error if validation fails or if an async validator is used
+ * @internal
+ */
+export declare function validateInput<TInput, TOutput>(name: string, input: TInput, validator: StandardSchemaV1<TInput, TOutput> | undefined, kind: 'query' | 'mutator'): TOutput;
+//# sourceMappingURL=validate-input.d.ts.map

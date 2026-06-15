@@ -1,0 +1,126 @@
+import { assert } from "./asserts.js";
+import { resolver } from "@rocicorp/resolver";
+//#region ../shared/src/queue.ts
+/**
+* A Queue allows the consumers to await (possibly future) values,
+* and producers to await the consumption of their values.
+*/
+var Queue = class {
+	#consumers = [];
+	#produced = [];
+	enqueue(value) {
+		const consumer = this.#consumers.shift();
+		if (consumer) {
+			consumer.resolver.resolve(value);
+			clearTimeout(consumer.timeoutID);
+			return;
+		}
+		this.#produced.push({ value });
+	}
+	enqueueRejection(reason) {
+		const consumer = this.#consumers.shift();
+		if (consumer) {
+			consumer.resolver.reject(reason);
+			clearTimeout(consumer.timeoutID);
+			return;
+		}
+		this.#produced.push({ rejection: reason });
+	}
+	/**
+	* Deletes all unconsumed entries matching the specified `value` based on identity equality.
+	* The consumed callback(s) are resolved as if the values were dequeued.
+	*
+	* Note: deletion of `undefined` values is not supported. This method will assert
+	* if `value` is undefined.
+	*
+	* @returns The number of entries deleted.
+	*/
+	delete(value) {
+		assert(value !== void 0, "Queue delete value must not be undefined");
+		let count = 0;
+		for (let i = this.#produced.length - 1; i >= 0; i--) if (this.#produced[i].value === value) {
+			this.#produced.splice(i, 1);
+			count++;
+		}
+		return count;
+	}
+	/**
+	* @param timeoutValue An optional value to resolve if `timeoutMs` is reached.
+	* @param timeoutMs The milliseconds after which the `timeoutValue` is resolved
+	*                  if nothing is produced for the consumer.
+	* @returns A Promise that resolves to the next enqueued value.
+	*/
+	dequeue(timeoutValue, timeoutMs = 0) {
+		const produced = this.#produced.shift();
+		if (produced) return produced.value ?? Promise.reject(produced.rejection);
+		const r = resolver();
+		const timeoutID = timeoutValue === void 0 ? void 0 : setTimeout(() => {
+			const i = this.#consumers.findIndex((c) => c.resolver === r);
+			if (i >= 0) {
+				const [consumer] = this.#consumers.splice(i, 1);
+				consumer.resolver.resolve(timeoutValue);
+			}
+		}, timeoutMs);
+		this.#consumers.push({
+			resolver: r,
+			timeoutID
+		});
+		return r.promise;
+	}
+	/**
+	* Drains the entire queue.
+	*
+	* Usage example:
+	* ```ts
+	* // A consumer that, when awoken, drains
+	* // all entries in the queue in order to
+	* // process them in a batch.
+	* for (;;) {
+	*   const value = await queue.dequeue();
+	*   const rest = queue.drain();
+	* }
+	* ```
+	*/
+	drain() {
+		const ret = [];
+		for (const p of this.#produced) ret.push(p.value);
+		this.#produced.length = 0;
+		return ret;
+	}
+	/**
+	* @returns The instantaneous number of outstanding values waiting to be
+	*          dequeued. Note that if a value was enqueued while a consumer
+	*          was waiting (with `await dequeue()`), the value is immediately
+	*          handed to the consumer and the Queue's size remains 0.
+	*/
+	size() {
+		return this.#produced.length;
+	}
+	asAsyncIterable(cleanup = NOOP) {
+		return { [Symbol.asyncIterator]: () => this.asAsyncIterator(cleanup) };
+	}
+	asAsyncIterator(cleanup = NOOP) {
+		return {
+			next: async () => {
+				try {
+					return { value: await this.dequeue() };
+				} catch (e) {
+					cleanup();
+					throw e;
+				}
+			},
+			return: (value) => {
+				cleanup();
+				return Promise.resolve({
+					value,
+					done: true
+				});
+			}
+		};
+	}
+};
+var NOOP = () => {};
+//#endregion
+export { Queue };
+
+//# sourceMappingURL=queue.js.map

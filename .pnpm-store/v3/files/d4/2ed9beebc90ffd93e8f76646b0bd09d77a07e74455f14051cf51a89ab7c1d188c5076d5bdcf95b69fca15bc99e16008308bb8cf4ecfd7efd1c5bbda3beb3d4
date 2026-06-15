@@ -1,0 +1,7 @@
+import type { Context, LogLevel, LogSink } from '@rocicorp/logger';
+export declare class OtelLogSink implements LogSink {
+    #private;
+    constructor();
+    log(level: LogLevel, context: Context | undefined, ...args: unknown[]): void;
+}
+//# sourceMappingURL=otel-log-sink.d.ts.map

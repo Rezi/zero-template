@@ -1,0 +1,32 @@
+import { handleHeapzRequest } from "../../services/heapz.js";
+import { HttpService } from "../../services/http-service.js";
+import { handleStatzRequest } from "../../services/statz.js";
+import { installWebSocketHandoff } from "../../types/websocket-handoff.js";
+//#region ../zero-cache/src/server/runner/zero-dispatcher.ts
+var ZeroDispatcher = class extends HttpService {
+	id = "zero-dispatcher";
+	#getWorker;
+	#onStart;
+	constructor(config, lc, opts, getWorker, onStart) {
+		super(`zero-dispatcher`, lc, opts, (fastify) => {
+			fastify.get("/statz", (req, res) => handleStatzRequest(lc, config, req, res));
+			fastify.get("/heapz", (req, res) => handleHeapzRequest(lc, config, req, res));
+			installWebSocketHandoff(lc, this.#handoff, fastify.server);
+		});
+		this.#getWorker = getWorker;
+		this.#onStart = onStart;
+	}
+	_onStart() {
+		this.#onStart?.();
+	}
+	#handoff = (_req, dispatch, onError) => {
+		this.#getWorker().then((sender) => dispatch({
+			payload: "unused",
+			sender
+		}), onError);
+	};
+};
+//#endregion
+export { ZeroDispatcher };
+
+//# sourceMappingURL=zero-dispatcher.js.map

@@ -1,0 +1,5 @@
+export declare const InitialRun = 0;
+export declare const Regular = 1;
+export type InitialRun = typeof InitialRun;
+export type Regular = typeof Regular;
+//# sourceMappingURL=invoke-kind-enum.d.ts.map

@@ -1,0 +1,7 @@
+//#region ../zero-cache/src/types/pg-versions.ts
+var PG_15 = 15e4;
+var PG_17 = 17e4;
+//#endregion
+export { PG_15, PG_17 };
+
+//# sourceMappingURL=pg-versions.js.map

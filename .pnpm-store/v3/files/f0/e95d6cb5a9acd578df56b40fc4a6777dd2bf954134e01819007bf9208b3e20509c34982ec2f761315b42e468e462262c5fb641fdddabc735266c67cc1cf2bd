@@ -1,0 +1,7 @@
+export declare const Unknown = 0;
+export declare const WrongReplicaVersion = 1;
+export declare const WatermarkTooOld = 2;
+export type Unknown = typeof Unknown;
+export type WrongReplicaVersion = typeof WrongReplicaVersion;
+export type WatermarkTooOld = typeof WatermarkTooOld;
+//# sourceMappingURL=error-type-enum.d.ts.map

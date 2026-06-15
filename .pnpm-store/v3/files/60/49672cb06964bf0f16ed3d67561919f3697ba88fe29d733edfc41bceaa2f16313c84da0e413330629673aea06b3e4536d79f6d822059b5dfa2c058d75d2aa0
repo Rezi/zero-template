@@ -1,0 +1,284 @@
+import { assert, assertArray, assertBoolean, assertNumber, assertObject, assertString, unreachable } from "../../../shared/src/asserts.js";
+import { isProd } from "../../../shared/src/config.js";
+import { assertJSONValue } from "../../../shared/src/json.js";
+import { compareCookies } from "../cookies.js";
+import "../config.js";
+import { assertDeepFrozen, deepFreeze } from "../frozen-json.js";
+import { assertHash } from "../hash.js";
+import { toRefs } from "../dag/chunk.js";
+import { mustGetHeadHash } from "../dag/store.js";
+//#region ../replicache/src/db/commit.ts
+var DEFAULT_HEAD_NAME = "main";
+function commitIsLocalDD31(commit) {
+	return isLocalMetaDD31(commit.meta);
+}
+function commitIsLocal(commit) {
+	return commitIsLocalDD31(commit);
+}
+function commitIsSnapshot(commit) {
+	return isSnapshotMetaDD31(commit.meta);
+}
+var Commit = class {
+	chunk;
+	constructor(chunk) {
+		this.chunk = chunk;
+	}
+	get meta() {
+		return this.chunk.data.meta;
+	}
+	get valueHash() {
+		return this.chunk.data.valueHash;
+	}
+	getMutationID(clientID, dagRead) {
+		return getMutationID(clientID, dagRead, this.meta);
+	}
+	async getNextMutationID(clientID, dagRead) {
+		return await this.getMutationID(clientID, dagRead) + 1;
+	}
+	get indexes() {
+		return this.chunk.data.indexes;
+	}
+};
+async function getMutationID(clientID, dagRead, meta) {
+	switch (meta.type) {
+		case 5: return meta.lastMutationIDs[clientID] ?? 0;
+		case 4: {
+			if (meta.clientID === clientID) return meta.mutationID;
+			const { basisHash } = meta;
+			return getMutationID(clientID, dagRead, (await commitFromHash(basisHash, dagRead)).meta);
+		}
+		default: unreachable(meta);
+	}
+}
+/**
+* Returns the set of local commits from the given `fromCommitHash` back to but not
+* including its base snapshot. If `fromCommitHash` is a snapshot, the returned vector
+* will be empty. When, as typical, `fromCommitHash` is the head of the default chain
+* then the returned commits are the set of pending commits, ie the set of local commits
+* that have not yet been pushed to the data layer.
+*
+* The vector of commits is returned in reverse chain order, that is, starting
+* with the commit with hash `fromCommitHash` and walking backwards.
+*/
+async function localMutations(fromCommitHash, dagRead) {
+	return (await commitChain(fromCommitHash, dagRead)).filter((c) => commitIsLocal(c));
+}
+async function localMutationsDD31(fromCommitHash, dagRead) {
+	return (await commitChain(fromCommitHash, dagRead)).filter((c) => commitIsLocalDD31(c));
+}
+async function localMutationsGreaterThan(commit, mutationIDLimits, dagRead) {
+	const commits = [];
+	const remainingMutationIDLimits = new Map(Object.entries(mutationIDLimits));
+	while (!commitIsSnapshot(commit) && remainingMutationIDLimits.size > 0) {
+		if (commitIsLocalDD31(commit)) {
+			const { meta } = commit;
+			const mutationIDLowerLimit = remainingMutationIDLimits.get(meta.clientID);
+			if (mutationIDLowerLimit !== void 0) if (meta.mutationID <= mutationIDLowerLimit) remainingMutationIDLimits.delete(meta.clientID);
+			else commits.push(commit);
+		}
+		const { basisHash } = commit.meta;
+		if (basisHash === null) throw new Error(`Commit ${commit.chunk.hash} has no basis`);
+		commit = await commitFromHash(basisHash, dagRead);
+	}
+	return commits;
+}
+async function baseSnapshotFromHead(name, dagRead) {
+	const hash = await dagRead.getHead(name);
+	assert(hash, `Missing head ${name}`);
+	return baseSnapshotFromHash(hash, dagRead);
+}
+async function baseSnapshotHashFromHash(hash, dagRead) {
+	return (await baseSnapshotFromHash(hash, dagRead)).chunk.hash;
+}
+async function baseSnapshotFromHash(hash, dagRead) {
+	return baseSnapshotFromCommit(await commitFromHash(hash, dagRead), dagRead);
+}
+async function baseSnapshotFromCommit(commit, dagRead) {
+	while (!commitIsSnapshot(commit)) {
+		const { meta } = commit;
+		if (isLocalMetaDD31(meta)) commit = await commitFromHash(meta.baseSnapshotHash, dagRead);
+		else {
+			const { basisHash } = meta;
+			if (basisHash === null) throw new Error(`Commit ${commit.chunk.hash} has no basis`);
+			commit = await commitFromHash(basisHash, dagRead);
+		}
+	}
+	return commit;
+}
+function snapshotMetaParts(c, clientID) {
+	const m = c.meta;
+	return [m.lastMutationIDs[clientID] ?? 0, m.cookieJSON];
+}
+function compareCookiesForSnapshots(a, b) {
+	return compareCookies(a.meta.cookieJSON, b.meta.cookieJSON);
+}
+/**
+* Returns all commits from the commit with fromCommitHash to its base snapshot,
+* inclusive of both. Resulting vector is in chain-head-first order (so snapshot
+* comes last).
+*/
+async function commitChain(fromCommitHash, dagRead) {
+	let commit = await commitFromHash(fromCommitHash, dagRead);
+	const commits = [];
+	while (!commitIsSnapshot(commit)) {
+		const { meta } = commit;
+		const { basisHash } = meta;
+		if (basisHash === null) throw new Error(`Commit ${commit.chunk.hash} has no basis`);
+		commits.push(commit);
+		commit = await commitFromHash(basisHash, dagRead);
+	}
+	commits.push(commit);
+	return commits;
+}
+async function commitFromHash(hash, dagRead) {
+	return fromChunk(await dagRead.mustGetChunk(hash));
+}
+async function commitFromHead(name, dagRead) {
+	return commitFromHash(await mustGetHeadHash(name, dagRead), dagRead);
+}
+function assertLocalMetaDD31(v) {
+	assertString(v.clientID);
+	assertNumber(v.mutationID);
+	assertString(v.mutatorName);
+	if (!v.mutatorName) throw new Error("Missing mutator name");
+	assertJSONValue(v.mutatorArgsJSON);
+	if (v.originalHash !== null) assertHash(v.originalHash);
+	assertNumber(v.timestamp);
+}
+function isLocalMetaDD31(meta) {
+	return meta.type === 4;
+}
+function assertSnapshotMetaDD31(v) {
+	if (v.basisHash !== null) assertHash(v.basisHash);
+	assertJSONValue(v.cookieJSON);
+	assertLastMutationIDs(v.lastMutationIDs);
+}
+function assertLastMutationIDs(v) {
+	assertObject(v);
+	for (const e of Object.values(v)) assertNumber(e);
+}
+function assertSnapshotCommitDD31(c) {
+	assertSnapshotMetaDD31(c.meta);
+}
+function isSnapshotMetaDD31(meta) {
+	return meta.type === 5;
+}
+function assertMeta(v) {
+	assertObject(v);
+	assertDeepFrozen(v);
+	if (v.basisHash !== null) assertString(v.basisHash);
+	assertNumber(v.type);
+	switch (v.type) {
+		case 4:
+			assertLocalMetaDD31(v);
+			break;
+		case 5:
+			assertSnapshotMetaDD31(v);
+			break;
+		default: throw new Error(`Invalid enum value ${v.type}`);
+	}
+}
+function chunkIndexDefinitionEqualIgnoreName(a, b) {
+	return a.jsonPointer === b.jsonPointer && (a.allowEmpty ?? false) === (b.allowEmpty ?? false) && a.keyPrefix === b.keyPrefix;
+}
+function assertChunkIndexDefinition(v) {
+	assertObject(v);
+	assertDeepFrozen(v);
+	assertString(v.name);
+	assertString(v.keyPrefix);
+	assertString(v.jsonPointer);
+	if (v.allowEmpty !== void 0) assertBoolean(v.allowEmpty);
+}
+function toChunkIndexDefinition(name, indexDefinition) {
+	return {
+		name,
+		keyPrefix: indexDefinition.prefix ?? "",
+		jsonPointer: indexDefinition.jsonPointer,
+		allowEmpty: indexDefinition.allowEmpty ?? false
+	};
+}
+function assertIndexRecord(v) {
+	assertObject(v);
+	assertDeepFrozen(v);
+	assertChunkIndexDefinition(v.definition);
+	assertString(v.valueHash);
+}
+function assertIndexRecords(v) {
+	assertArray(v);
+	assertDeepFrozen(v);
+	for (const ir of v) assertIndexRecord(ir);
+}
+function newLocalDD31(createChunk, basisHash, baseSnapshotHash, mutationID, mutatorName, mutatorArgsJSON, originalHash, valueHash, indexes, timestamp, clientID) {
+	return commitFromCommitData(createChunk, makeCommitData({
+		type: 4,
+		basisHash,
+		baseSnapshotHash,
+		mutationID,
+		mutatorName,
+		mutatorArgsJSON,
+		originalHash,
+		timestamp,
+		clientID
+	}, valueHash, indexes));
+}
+function newSnapshotDD31(createChunk, basisHash, lastMutationIDs, cookieJSON, valueHash, indexes) {
+	return commitFromCommitData(createChunk, newSnapshotCommitDataDD31(basisHash, lastMutationIDs, cookieJSON, valueHash, indexes));
+}
+function newSnapshotCommitDataDD31(basisHash, lastMutationIDs, cookieJSON, valueHash, indexes) {
+	return makeCommitData({
+		type: 5,
+		basisHash,
+		lastMutationIDs,
+		cookieJSON
+	}, valueHash, indexes);
+}
+function fromChunk(chunk) {
+	validateChunk(chunk);
+	return new Commit(chunk);
+}
+function commitFromCommitData(createChunk, data) {
+	return new Commit(createChunk(data, getRefs(data)));
+}
+function getRefs(data) {
+	const refs = /* @__PURE__ */ new Set();
+	refs.add(data.valueHash);
+	const { meta } = data;
+	switch (meta.type) {
+		case 4:
+			meta.basisHash && refs.add(meta.basisHash);
+			break;
+		case 5: break;
+		default: unreachable(meta);
+	}
+	for (const index of data.indexes) refs.add(index.valueHash);
+	return toRefs(refs);
+}
+function makeCommitData(meta, valueHash, indexes) {
+	return deepFreeze({
+		meta,
+		valueHash,
+		indexes
+	});
+}
+function assertCommitData(v) {
+	if (isProd) return;
+	assertObject(v);
+	assertDeepFrozen(v);
+	assertMeta(v.meta);
+	assertString(v.valueHash);
+	assertIndexRecords(v.indexes);
+}
+function validateChunk(chunk) {
+	const { data } = chunk;
+	assertCommitData(data);
+	const seen = /* @__PURE__ */ new Set();
+	for (const index of data.indexes) {
+		const { name } = index.definition;
+		if (seen.has(name)) throw new Error(`Duplicate index ${name}`);
+		seen.add(name);
+	}
+}
+//#endregion
+export { DEFAULT_HEAD_NAME, assertLocalMetaDD31, assertSnapshotCommitDD31, assertSnapshotMetaDD31, baseSnapshotFromCommit, baseSnapshotFromHash, baseSnapshotFromHead, baseSnapshotHashFromHash, chunkIndexDefinitionEqualIgnoreName, commitFromHash, commitFromHead, commitIsLocalDD31, compareCookiesForSnapshots, getMutationID, getRefs, isLocalMetaDD31, localMutations, localMutationsDD31, localMutationsGreaterThan, newLocalDD31, newSnapshotCommitDataDD31, newSnapshotDD31, snapshotMetaParts, toChunkIndexDefinition };
+
+//# sourceMappingURL=commit.js.map

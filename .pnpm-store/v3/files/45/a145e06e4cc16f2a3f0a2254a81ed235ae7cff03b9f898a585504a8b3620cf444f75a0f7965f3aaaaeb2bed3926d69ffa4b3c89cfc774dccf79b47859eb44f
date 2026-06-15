@@ -1,0 +1,38 @@
+import * as v from '../../shared/src/valita.ts';
+declare const rowPatchOpSchema: v.UnionType<[v.ObjectType<{
+    op: v.Type<"put">;
+    tableName: v.Type<string>;
+    value: v.Type<Readonly<Record<string, import("../../shared/src/json.ts").ReadonlyJSONValue | undefined>>>;
+}, undefined>, v.ObjectType<{
+    op: v.Type<"update">;
+    tableName: v.Type<string>;
+    id: v.Type<Readonly<Record<string, string | number | boolean>>>;
+    merge: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONObject>;
+    constrain: v.Optional<string[]>;
+}, undefined>, v.ObjectType<{
+    op: v.Type<"del">;
+    tableName: v.Type<string>;
+    id: v.Type<Readonly<Record<string, string | number | boolean>>>;
+}, undefined>, v.ObjectType<{
+    op: v.Type<"clear">;
+}, undefined>]>;
+export declare const rowsPatchSchema: v.ArrayType<v.UnionType<[v.ObjectType<{
+    op: v.Type<"put">;
+    tableName: v.Type<string>;
+    value: v.Type<Readonly<Record<string, import("../../shared/src/json.ts").ReadonlyJSONValue | undefined>>>;
+}, undefined>, v.ObjectType<{
+    op: v.Type<"update">;
+    tableName: v.Type<string>;
+    id: v.Type<Readonly<Record<string, string | number | boolean>>>;
+    merge: v.Optional<import("../../shared/src/json.ts").ReadonlyJSONObject>;
+    constrain: v.Optional<string[]>;
+}, undefined>, v.ObjectType<{
+    op: v.Type<"del">;
+    tableName: v.Type<string>;
+    id: v.Type<Readonly<Record<string, string | number | boolean>>>;
+}, undefined>, v.ObjectType<{
+    op: v.Type<"clear">;
+}, undefined>]>>;
+export type RowPatchOp = v.Infer<typeof rowPatchOpSchema>;
+export {};
+//# sourceMappingURL=row-patch.d.ts.map

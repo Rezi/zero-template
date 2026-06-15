@@ -1,0 +1,5 @@
+/** Namespace db name in test to isolate tests' indexeddb state. */
+export declare function setupForTest(): void;
+export declare function teardownForTest(): Promise<void>;
+export declare function getIDBDatabasesDBName(): string;
+//# sourceMappingURL=idb-databases-store-db-name.d.ts.map

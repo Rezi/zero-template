@@ -1,0 +1,62 @@
+import type { LogContext } from '@rocicorp/logger';
+import type { LogConfig } from '../../otel/src/log-options.ts';
+import type { Condition, Ordering } from '../../zero-protocol/src/ast.ts';
+import type { Row } from '../../zero-protocol/src/data.ts';
+import type { PrimaryKey } from '../../zero-protocol/src/primary-key.ts';
+import type { SchemaValue, ValueType } from '../../zero-schema/src/table-schema.ts';
+import type { DebugDelegate } from '../../zql/src/builder/debug-delegate.ts';
+import { type Source, type SourceChange, type SourceInput } from '../../zql/src/ivm/source.ts';
+import type { Stream } from '../../zql/src/ivm/stream.ts';
+import type { Database } from './db.ts';
+/**
+ * A source that is backed by a SQLite table.
+ *
+ * Values are written to the backing table _after_ being vended by the source.
+ *
+ * This ordering of events is to ensure self joins function properly. That is,
+ * we can't reveal a value to an output before it has been pushed to that output.
+ *
+ * The code is fairly straightforward except for:
+ * 1. Dealing with a `fetch` that has a basis of `before`.
+ * 2. Dealing with compound orders that have differing directions (a ASC, b DESC, c ASC)
+ *
+ * See comments in relevant functions for more details.
+ */
+export declare class TableSource implements Source {
+    #private;
+    /**
+     * @param shouldYield a function called after each row is read from the database,
+     * which should return true if the source should yield the special 'yield' value
+     * to yield control back to the caller at the end of the pipeline.  Can
+     * also throw an error to abort the pipeline processing.
+     */
+    constructor(logContext: LogContext, logConfig: LogConfig, db: Database, tableName: string, columns: Record<string, SchemaValue>, primaryKey: PrimaryKey, shouldYield?: () => boolean);
+    get tableSchema(): {
+        name: string;
+        columns: Record<string, SchemaValue>;
+        primaryKey: readonly [string, ...string[]];
+    };
+    /**
+     * Sets the db (snapshot) to use, to facilitate the Snapshotter leapfrog
+     * algorithm for concurrent traversal of historic timelines.
+     */
+    setDB(db: Database): void;
+    connect(sort: Ordering | undefined, filters?: Condition, splitEditKeys?: Set<string>, debug?: DebugDelegate): SourceInput;
+    toSQLiteRow(row: Row): Row;
+    push(change: SourceChange): Stream<'yield'>;
+    genPush(change: SourceChange): Generator<"yield" | undefined, void, unknown>;
+    /**
+     * Retrieves a row from the backing DB by a unique key, or `undefined` if such a
+     * row does not exist. This is not used in the IVM pipeline but is useful
+     * for retrieving data that is consistent with the state (and type
+     * semantics) of the pipeline. Note that this key may not necessarily correspond
+     * to the `primaryKey` with which this TableSource.
+     */
+    getRow(rowKey: Row): Row | undefined;
+}
+export declare function toSQLiteTypes(columns: readonly string[], row: Row, columnTypes: Record<string, SchemaValue>): readonly unknown[];
+export declare function toSQLiteTypeName(type: ValueType): "INTEGER" | "REAL" | "TEXT" | "NULL";
+export declare function fromSQLiteTypes(valueTypes: Record<string, SchemaValue>, row: Row, tableName: string): Row;
+export declare class UnsupportedValueError extends Error {
+}
+//# sourceMappingURL=table-source.d.ts.map

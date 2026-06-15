@@ -1,0 +1,305 @@
+import { h64 } from "../../../shared/src/hash.js";
+import { getServerVersion, getZeroConfig } from "../config/zero-config.js";
+import { setupOtelDiagnosticLogger } from "./otel-diag-logger.js";
+import { homedir, platform } from "os";
+import "@opentelemetry/api";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { resourceFromAttributes } from "@opentelemetry/resources";
+import { execSync } from "child_process";
+import { randomUUID } from "crypto";
+import { dirname, join } from "path";
+import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-http";
+import { MeterProvider, PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
+//#region ../zero-cache/src/server/anonymous-otel-start.ts
+var hostNameRe = /^[a-f0-9]{12}$/;
+var AnonymousTelemetryManager = class AnonymousTelemetryManager {
+	static #instance;
+	#starting = false;
+	#stopped = false;
+	#meter;
+	#meterProvider;
+	#totalCrudMutations = 0;
+	#totalCustomMutations = 0;
+	#totalCrudQueries = 0;
+	#totalCustomQueries = 0;
+	#totalRowsSynced = 0;
+	#totalConnectionsSuccess = 0;
+	#totalConnectionsAttempted = 0;
+	#activeClientGroupsGetter;
+	#activeUsersGetter;
+	#lc;
+	#config;
+	#processId;
+	#cachedAttributes;
+	#viewSyncerCount = 1;
+	constructor() {
+		this.#processId = randomUUID();
+	}
+	static getInstance() {
+		if (!AnonymousTelemetryManager.#instance) AnonymousTelemetryManager.#instance = new AnonymousTelemetryManager();
+		return AnonymousTelemetryManager.#instance;
+	}
+	start(lc, config) {
+		this.#lc = lc;
+		setupOtelDiagnosticLogger(lc);
+		if (!config) try {
+			config = getZeroConfig();
+		} catch (e) {
+			this.#lc?.info?.("telemetry: disabled - unable to parse config", e);
+			return;
+		}
+		if (process.env.DO_NOT_TRACK) {
+			this.#lc?.info?.("telemetry: disabled - DO_NOT_TRACK environment variable is set");
+			return;
+		}
+		if (!config.enableTelemetry) {
+			this.#lc?.info?.("telemetry: disabled - enableTelemetry is false");
+			return;
+		}
+		if (this.#starting) return;
+		this.#starting = true;
+		this.#config = config;
+		this.#viewSyncerCount = config.numSyncWorkers ?? 1;
+		this.#cachedAttributes = void 0;
+		this.#lc?.info?.(`telemetry: starting in 1 minute`);
+		setTimeout(() => this.#run(), 6e4);
+	}
+	#run() {
+		if (this.#stopped) return;
+		const resource = resourceFromAttributes(this.#getAttributes());
+		const exportIntervalMillis = 6e4 * this.#viewSyncerCount + Math.floor(Math.random() * 1e4);
+		this.#meterProvider = new MeterProvider({
+			resource,
+			readers: [new PeriodicExportingMetricReader({
+				exportIntervalMillis,
+				exporter: new OTLPMetricExporter({
+					url: "https://metrics.rocicorp.dev",
+					timeoutMillis: 3e4
+				})
+			})]
+		});
+		this.#meter = this.#meterProvider.getMeter("zero-anonymous-telemetry");
+		this.#setupMetrics();
+		this.#lc?.info?.(`telemetry: started (exports every ${exportIntervalMillis / 1e3} seconds for ${this.#viewSyncerCount} view-syncers)`);
+	}
+	#setupMetrics() {
+		const uptimeGauge = this.#meter.createObservableGauge("zero.uptime", {
+			description: "System uptime in seconds",
+			unit: "seconds"
+		});
+		const uptimeCounter = this.#meter.createObservableCounter("zero.uptime_counter", {
+			description: "System uptime in seconds",
+			unit: "seconds"
+		});
+		const crudMutationsCounter = this.#meter.createObservableCounter("zero.crud_mutations_processed", { description: "Total number of CRUD mutations processed" });
+		const customMutationsCounter = this.#meter.createObservableCounter("zero.custom_mutations_processed", { description: "Total number of custom mutations processed" });
+		const totalMutationsCounter = this.#meter.createObservableCounter("zero.mutations_processed", { description: "Total number of mutations processed" });
+		const crudQueriesCounter = this.#meter.createObservableCounter("zero.crud_queries_processed", { description: "Total number of CRUD queries processed" });
+		const customQueriesCounter = this.#meter.createObservableCounter("zero.custom_queries_processed", { description: "Total number of custom queries processed" });
+		const totalQueriesCounter = this.#meter.createObservableCounter("zero.queries_processed", { description: "Total number of queries processed" });
+		const rowsSyncedCounter = this.#meter.createObservableCounter("zero.rows_synced", { description: "Total number of rows synced" });
+		const connectionsSuccessCounter = this.#meter.createObservableCounter("zero.connections_success", { description: "Total number of successful connections" });
+		const connectionsAttemptedCounter = this.#meter.createObservableCounter("zero.connections_attempted", { description: "Total number of attempted connections" });
+		const activeClientGroupsGauge = this.#meter.createObservableGauge("zero.gauge_active_client_groups", { description: "Number of currently active client groups" });
+		const attrs = this.#getAttributes();
+		const active = (metric) => (result) => {
+			const actives = this.#activeUsersGetter?.();
+			if (actives) {
+				const value = actives[metric];
+				result.observe(value, attrs);
+			}
+		};
+		this.#meter.createObservableGauge("zero.active_users_last_day", { description: "Count of CVR instances active in the last 24h" }).addCallback(active("active_users_last_day"));
+		this.#meter.createObservableGauge("zero.users_1da", { description: "Count of 1-day active profiles" }).addCallback(active("users_1da"));
+		this.#meter.createObservableGauge("zero.users_7da", { description: "Count of 7-day active profiles" }).addCallback(active("users_7da"));
+		this.#meter.createObservableGauge("zero.users_30da", { description: "Count of 30-day active profiles" }).addCallback(active("users_30da"));
+		this.#meter.createObservableGauge("zero.users_1da_legacy", { description: "Count of 1-day active profiles with CVR fallback" }).addCallback(active("users_1da_legacy"));
+		this.#meter.createObservableGauge("zero.users_7da_legacy", { description: "Count of 7-day active profiles with CVR fallback" }).addCallback(active("users_7da_legacy"));
+		this.#meter.createObservableGauge("zero.users_30da_legacy", { description: "Count of 30-day active profiles with CVR fallback" }).addCallback(active("users_30da_legacy"));
+		uptimeGauge.addCallback((result) => {
+			const uptimeSeconds = Math.floor(process.uptime());
+			result.observe(uptimeSeconds, attrs);
+		});
+		uptimeCounter.addCallback((result) => {
+			const uptimeSeconds = Math.floor(process.uptime());
+			result.observe(uptimeSeconds, attrs);
+		});
+		crudMutationsCounter.addCallback((result) => {
+			result.observe(this.#totalCrudMutations, attrs);
+		});
+		customMutationsCounter.addCallback((result) => {
+			result.observe(this.#totalCustomMutations, attrs);
+		});
+		totalMutationsCounter.addCallback((result) => {
+			const totalMutations = this.#totalCrudMutations + this.#totalCustomMutations;
+			result.observe(totalMutations, attrs);
+		});
+		crudQueriesCounter.addCallback((result) => {
+			result.observe(this.#totalCrudQueries, attrs);
+		});
+		customQueriesCounter.addCallback((result) => {
+			result.observe(this.#totalCustomQueries, attrs);
+		});
+		totalQueriesCounter.addCallback((result) => {
+			const totalQueries = this.#totalCrudQueries + this.#totalCustomQueries;
+			result.observe(totalQueries, attrs);
+		});
+		rowsSyncedCounter.addCallback((result) => {
+			result.observe(this.#totalRowsSynced, attrs);
+		});
+		connectionsSuccessCounter.addCallback((result) => {
+			result.observe(this.#totalConnectionsSuccess, attrs);
+		});
+		connectionsAttemptedCounter.addCallback((result) => {
+			result.observe(this.#totalConnectionsAttempted, attrs);
+		});
+		activeClientGroupsGauge.addCallback((result) => {
+			const activeClientGroups = this.#activeClientGroupsGetter?.() ?? 0;
+			result.observe(activeClientGroups, attrs);
+		});
+	}
+	recordMutation(type, count = 1) {
+		if (type === "crud") this.#totalCrudMutations += count;
+		else this.#totalCustomMutations += count;
+	}
+	recordQuery(type, count = 1) {
+		if (type === "crud") this.#totalCrudQueries += count;
+		else this.#totalCustomQueries += count;
+	}
+	recordRowsSynced(count) {
+		this.#totalRowsSynced += count;
+	}
+	recordConnectionSuccess() {
+		this.#totalConnectionsSuccess++;
+	}
+	recordConnectionAttempted() {
+		this.#totalConnectionsAttempted++;
+	}
+	setActiveClientGroupsGetter(getter) {
+		this.#activeClientGroupsGetter = getter;
+	}
+	setActiveUsersGetter(getter) {
+		this.#activeUsersGetter = getter;
+	}
+	shutdown() {
+		this.#stopped = true;
+		if (this.#meterProvider) {
+			this.#lc?.info?.("telemetry: shutting down");
+			this.#meterProvider.shutdown();
+		}
+	}
+	#getAttributes() {
+		if (!this.#cachedAttributes) {
+			this.#cachedAttributes = {
+				"zero.app.id": h64(this.#config?.upstream.db || "unknown").toString(),
+				"zero.machine.os": platform(),
+				"zero.telemetry.type": "anonymous",
+				"zero.infra.platform": this.#getPlatform(),
+				"zero.version": getServerVersion(this.#config),
+				"zero.task.id": this.#config?.taskID || "unknown",
+				"zero.project.id": this.#getGitProjectId(),
+				"zero.process.id": this.#processId,
+				"zero.fs.id": this.#getOrSetFsID()
+			};
+			this.#lc?.debug?.(`telemetry: cached attributes=${JSON.stringify(this.#cachedAttributes)}`);
+		}
+		return this.#cachedAttributes;
+	}
+	#getPlatform() {
+		if (process.env.ZERO_ON_CLOUD_ZERO) return "cloudzero";
+		if (process.env.FLY_APP_NAME || process.env.FLY_REGION) return "fly.io";
+		if (process.env.ECS_CONTAINER_METADATA_URI_V4 || process.env.ECS_CONTAINER_METADATA_URI || process.env.AWS_EXECUTION_ENV) return "aws";
+		if (process.env.RAILWAY_ENV || process.env.RAILWAY_STATIC_URL) return "railway";
+		if (process.env.RENDER || process.env.RENDER_SERVICE_ID) return "render";
+		if (process.env.GCP_PROJECT || process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT) return "gcp";
+		if (process.env.COOLIFY_URL || process.env.COOLIFY_CONTAINER_NAME) return "coolify";
+		if (process.env.CONTAINER_APP_REVISION) return "azure";
+		if (process.env.FLIGHTCONTROL || process.env.FC_URL) return "flightcontrol";
+		return "unknown";
+	}
+	#findUp(startDir, target) {
+		let dir = startDir;
+		while (dir !== dirname(dir)) {
+			if (existsSync(join(dir, target))) return dir;
+			dir = dirname(dir);
+		}
+		return null;
+	}
+	#getGitProjectId() {
+		try {
+			const cwd = process.cwd();
+			const gitRoot = this.#findUp(cwd, ".git");
+			if (!gitRoot) return "unknown";
+			const rootCommitHash = execSync("git rev-list --max-parents=0 HEAD -1", {
+				cwd: gitRoot,
+				encoding: "utf8",
+				timeout: 1e3,
+				stdio: [
+					"ignore",
+					"pipe",
+					"ignore"
+				]
+			}).trim();
+			return rootCommitHash.length === 40 ? rootCommitHash : "unknown";
+		} catch (error) {
+			const details = error instanceof Error ? {
+				message: error.message,
+				name: error.name,
+				stack: error.stack
+			} : String(error);
+			this.#lc?.debug?.("telemetry: unable to get Git root commit:", details);
+			return "unknown";
+		}
+	}
+	#getOrSetFsID() {
+		try {
+			if (this.#isInContainer()) return "container";
+			const fsidPath = join(homedir(), ".rocicorp", "fsid");
+			mkdirSync(dirname(fsidPath), { recursive: true });
+			const newId = randomUUID();
+			try {
+				writeFileSync(fsidPath, newId, {
+					encoding: "utf8",
+					flag: "wx"
+				});
+				return newId;
+			} catch (writeError) {
+				if (writeError.code === "EEXIST") return readFileSync(fsidPath, "utf8").trim();
+				throw writeError;
+			}
+		} catch (error) {
+			this.#lc?.debug?.("telemetry: unable to get or set filesystem ID:", error);
+			return "unknown";
+		}
+	}
+	#isInContainer() {
+		try {
+			if (process.env.ZERO_IN_CONTAINER) return true;
+			if (existsSync("/.dockerenv")) return true;
+			if (existsSync("/usr/local/bin/docker-entrypoint.sh")) return true;
+			if (process.env.KUBERNETES_SERVICE_HOST) return true;
+			if (process.env.DOCKER_CONTAINER_ID || process.env.HOSTNAME?.match(hostNameRe)) return true;
+			if (existsSync("/proc/1/cgroup")) {
+				const cgroup = readFileSync("/proc/1/cgroup", "utf8");
+				if (cgroup.includes("docker") || cgroup.includes("kubepods") || cgroup.includes("containerd")) return true;
+			}
+			return false;
+		} catch (error) {
+			this.#lc?.debug?.("telemetry: unable to detect container environment:", error);
+			return false;
+		}
+	}
+};
+var manager = () => AnonymousTelemetryManager.getInstance();
+var startAnonymousTelemetry = (lc, config) => manager().start(lc, config);
+var recordMutation = (type, count = 1) => manager().recordMutation(type, count);
+var recordQuery = (type, count = 1) => manager().recordQuery(type, count);
+var recordRowsSynced = (count) => manager().recordRowsSynced(count);
+var recordConnectionSuccess = () => manager().recordConnectionSuccess();
+var recordConnectionAttempted = () => manager().recordConnectionAttempted();
+var setActiveClientGroupsGetter = (getter) => manager().setActiveClientGroupsGetter(getter);
+var setActiveUsersGetter = (getter) => manager().setActiveUsersGetter(getter);
+//#endregion
+export { recordConnectionAttempted, recordConnectionSuccess, recordMutation, recordQuery, recordRowsSynced, setActiveClientGroupsGetter, setActiveUsersGetter, startAnonymousTelemetry };
+
+//# sourceMappingURL=anonymous-otel-start.js.map

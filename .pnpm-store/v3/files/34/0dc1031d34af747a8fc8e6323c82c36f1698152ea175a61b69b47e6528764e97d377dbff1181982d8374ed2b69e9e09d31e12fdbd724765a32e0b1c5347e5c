@@ -1,0 +1,38 @@
+import type { MessagePort } from 'node:worker_threads';
+import type { LogContext } from '@rocicorp/logger';
+import { type ValidateLegacyJWT } from '../auth/auth.ts';
+import { type ZeroConfig } from '../config/zero-config.ts';
+import type { Mutagen } from '../services/mutagen/mutagen.ts';
+import type { Pusher } from '../services/mutagen/pusher.ts';
+import type { ReplicaState } from '../services/replicator/replicator.ts';
+import type { ActivityBasedService, Service, SingletonService } from '../services/service.ts';
+import type { ConnectionContextManager } from '../services/view-syncer/connection-context-manager.ts';
+import { DrainCoordinator } from '../services/view-syncer/drain-coordinator.ts';
+import type { ViewSyncer } from '../services/view-syncer/view-syncer.ts';
+import type { Worker } from '../types/processes.ts';
+import type { Subscription } from '../types/subscription.ts';
+export type SyncerWorkerData = {
+    replicatorPort: MessagePort;
+};
+/**
+ * The Syncer worker receives websocket handoffs for "/sync" connections
+ * from the Dispatcher in the main thread, and creates websocket
+ * {@link Connection}s with a corresponding {@link ViewSyncer}, {@link Mutagen},
+ * and {@link Subscription} to version notifications from the Replicator
+ * worker.
+ */
+export declare class Syncer implements SingletonService {
+    #private;
+    readonly id: string;
+    constructor(lc: LogContext, config: ZeroConfig, viewSyncerFactory: (id: string, sub: Subscription<ReplicaState>, drainCoordinator: DrainCoordinator) => ViewSyncer & ActivityBasedService, mutagenFactory: ((id: string) => Mutagen & Service) | undefined, pusherFactory: ((id: string, connContextManager: ConnectionContextManager) => Pusher & Service) | undefined, parent: Worker, validateLegacyJWT: ValidateLegacyJWT | undefined);
+    run(): Promise<void>;
+    /**
+     * Graceful shutdown involves shutting down view syncers one at a time, pausing
+     * for the duration of view syncer's hydration between each one. This paces the
+     * disconnects to avoid creating a backlog of hydrations in the receiving server
+     * when the clients reconnect.
+     */
+    drain(): Promise<void>;
+    stop(): Promise<void>;
+}
+//# sourceMappingURL=syncer.d.ts.map

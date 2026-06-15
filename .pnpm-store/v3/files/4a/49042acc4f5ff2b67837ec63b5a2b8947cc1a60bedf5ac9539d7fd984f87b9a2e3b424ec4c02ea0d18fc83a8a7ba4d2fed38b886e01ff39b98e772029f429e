@@ -1,0 +1,3 @@
+import { expoSQLiteStoreProvider } from "../../replicache/src/kv/expo-sqlite/store.js";
+import "../../replicache/src/expo-sqlite.js";
+export { expoSQLiteStoreProvider };

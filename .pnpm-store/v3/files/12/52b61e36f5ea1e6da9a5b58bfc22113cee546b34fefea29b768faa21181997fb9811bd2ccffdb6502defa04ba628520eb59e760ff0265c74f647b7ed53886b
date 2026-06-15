@@ -1,0 +1,76 @@
+import { assert } from "../../../shared/src/asserts.js";
+import { readonlyObject, valita_exports } from "../../../shared/src/valita.js";
+import { DEFAULT_HEAD_NAME, commitIsLocalDD31, localMutations } from "../db/commit.js";
+import { clientGroupIDSchema, clientIDSchema } from "./ids.js";
+import { withRead } from "../with-transactions.js";
+import { jsonSchema } from "../../../shared/src/json-schema.js";
+import { ReportError } from "../report-error.js";
+import { toError } from "../to-error.js";
+import { PushError, assertPusherResult } from "../pusher.js";
+var mutationV1Schema = readonlyObject({
+	id: valita_exports.number(),
+	name: valita_exports.string(),
+	args: jsonSchema,
+	timestamp: valita_exports.number(),
+	clientID: clientIDSchema
+});
+valita_exports.object({
+	pushVersion: valita_exports.literal(1),
+	schemaVersion: valita_exports.string(),
+	profileID: valita_exports.string(),
+	clientGroupID: clientGroupIDSchema,
+	mutations: valita_exports.array(mutationV1Schema)
+});
+function convertDD31(lm) {
+	return {
+		id: lm.mutationID,
+		name: lm.mutatorName,
+		args: lm.mutatorArgsJSON,
+		timestamp: lm.timestamp,
+		clientID: lm.clientID
+	};
+}
+async function push(requestID, store, lc, profileID, clientGroupID, _clientID, pusher, schemaVersion, pushVersion) {
+	const pending = await withRead(store, async (dagRead) => {
+		const mainHeadHash = await dagRead.getHead(DEFAULT_HEAD_NAME);
+		if (!mainHeadHash) throw new Error("Internal no main head");
+		return localMutations(mainHeadHash, dagRead);
+	});
+	if (pending.length === 0) return;
+	pending.reverse();
+	assert(pushVersion === 1, "Expected pushVersion to be PUSH_VERSION_DD31");
+	const pushMutations = [];
+	for (const commit of pending) if (commitIsLocalDD31(commit)) pushMutations.push(convertDD31(commit.meta));
+	else throw new Error("Internal non local pending commit");
+	assert(clientGroupID, "Expected clientGroupID to be defined");
+	const pushReq = {
+		profileID,
+		clientGroupID,
+		mutations: pushMutations,
+		pushVersion: 1,
+		schemaVersion
+	};
+	lc.debug?.("Starting push...");
+	const pushStart = Date.now();
+	const pusherResult = await callPusher(pusher, pushReq, requestID);
+	lc.debug?.("...Push complete in ", Date.now() - pushStart, "ms");
+	return pusherResult;
+}
+async function callPusher(pusher, body, requestID) {
+	let pusherResult;
+	try {
+		pusherResult = await pusher(body, requestID);
+	} catch (e) {
+		throw new PushError(toError(e));
+	}
+	try {
+		assertPusherResult(pusherResult);
+		return pusherResult;
+	} catch (e) {
+		throw new ReportError("Invalid pusher result", toError(e));
+	}
+}
+//#endregion
+export { push };
+
+//# sourceMappingURL=push.js.map

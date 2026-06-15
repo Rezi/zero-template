@@ -1,0 +1,182 @@
+import type { MaybePromise } from '../../../shared/src/types.ts';
+import type { Hash } from '../hash.ts';
+import type { Chunk } from './chunk.ts';
+import { type ChunkHasher, type Refs } from './chunk.ts';
+import { type HeadChange, type RefCountUpdatesDelegate } from './gc.ts';
+import { type Read, type Store, type Write } from './store.ts';
+/**
+ * Dag Store which lazily loads values from a source store and then caches
+ * them in an LRU cache.  The memory cache for chunks from the source store
+ * size is limited to `sourceCacheSizeLimit` bytes, and values are evicted in an
+ * LRU fashion.  The purpose of this store is to avoid holding the entire client
+ * view (i.e. the source store's content) in each tab's JavaScript heap.
+ *
+ * This store's heads are independent from the heads of source store, and are
+ * only stored in memory.
+ *
+ * Chunks which are created via this store's {@link Write} transaction's
+ * {@link createChunk} method are assumed to not be persisted to the source
+ * store and thus are cached separately from the source store chunks.  These
+ * memory-only chunks will not be evicted, and their sizes are not counted
+ * towards the source chunk cache size.  A memory-only chunk will be deleted if
+ * it is no longer reachable from one of this store's heads.
+ *
+ * Writes only manipulate the in memory state of this store and do not alter the
+ * source store.  Thus values must be written to the source store through a
+ * separate process (see {@link persist}).
+ *
+ * Intended use:
+ * 1. source store is the 'perdag', a slower persistent store (i.e.
+ *    dag.StoreImpl using a kv.IDBStore)
+ * 2. this store's 'main' head is initialized to the hash of a chunk containing
+ *    a commit in the source store
+ * 3. reads lazily read chunks from the source store and cache them
+ * 3. writes are initially made to this store with memory-only chunks
+ * 4. writes are asynchronously persisted to the source store through a separate
+ *    process (see {@link persist}}. This process gathers memory-only chunks
+ *    from this store and then writes them to the source store.  It then informs
+ *    this store that these chunks are no longer memory-only by calling
+ *    {@link chunksPersisted}, which move these chunks
+ *    to this store's LRU cache of source chunks (making them eligible for
+ *    eviction).
+ *
+ * @param sourceStore Store to lazy load and cache values from.
+ * @param sourceCacheSizeLimit Size limit in bytes for cache of chunks loaded
+ * from `sourceStore`.  This size of a value is determined using
+ * `getSizeOfValue`.  Keys do not count towards cache size.  Memory-only chunks
+ * do not count towards cache size.
+ * @param getSizeOfValue Function for measuring the size in bytes of a value.
+ */
+export declare class LazyStore implements Store {
+    #private;
+    /** The following are protected so testing subclass can access. */
+    protected readonly _memOnlyChunks: Map<Hash, Chunk<unknown>>;
+    protected readonly _sourceChunksCache: ChunksCache;
+    /**
+     * Ref counts are maintained so that chunks which are unreachable
+     * from this stores heads can be eagerly and deterministically deleted from
+     * `this._memOnlyChunks` and `this._sourceChunksCache`.
+     *
+     * These ref counts are independent from `this._sourceStore`'s ref counts.
+     * These ref counts are based on reachability from `this._heads`.
+     * A chunk is deleted from `this._memOnlyChunks` or
+     * `this._sourceChunksCache` (which ever it is in) when its ref count becomes
+     * zero.
+     * These ref counts count the refs in `this._heads` and `this._refs`.
+     *
+     * Not all reachable chunk's refs are included in `this._refs`, because this
+     * would require loading all chunks reachable in the source store in a
+     * non-lazy manner. `this._refs` contains the refs of all currently reachable
+     * chunks that were ever in `this._memOnlyChunks` or
+     * `this._sourceChunksCache` (even if they have been evicted).  A
+     * chunk's ref information is lazily discovered and stored in `this._refs` and
+     * counted in `this._refCounts`. A chunk's entries in `this._refs` and
+     * `this._refCounts` are only deleted when a chunk is deleted due to it
+     * becoming unreachable (it is not deleted if the chunk is evicted from the
+     * source-store cache).
+     *
+     * The major implication of this lazy discovery of source store refs, is that
+     * a reachable source store chunk may not be cached when loaded, because it is
+     * not known to be reachable because some of the pertinent refs have not been
+     * discovered.  However, in practice chunks are read by traversing the graph
+     * starting from a head, and all pertinent refs are discovered as part of the
+     * traversal.
+     *
+     * These ref counts can be changed in two ways:
+     * 1. A LazyRead has a cache miss and loads a chunk from the source store that
+     * is reachable from this._heads.  If this chunk's refs are not currently
+     * counted, it will not have an entry in `this._refs`.  In this case, the
+     * chunks refs will be put in `this._refs` and `this._refCounts` will be
+     * updated to count them.
+     * 2. A LazyWrite commit updates a head (which can result in increasing or
+     * decreasing ref count) or puts a reachable chunk (either a `memory-only` or
+     * `source` chunk) that references this hash (increasing ref count).  The
+     * computation of these ref count changes is delegated to the
+     * `computeRefCountUpdates` shared with dag.StoreImpl.  In order to
+     * delegate determining reachability to `computeRefCountUpdates` and defer
+     * this determination until commit time, LazyWrite treats cache misses
+     * as a 'put' of the lazily-loaded chunk.
+     *
+     * A chunk's hash may have an entry in `this._refCounts` without that
+     * chunk have ever been in `this._memOnlyChunks` or `this._sourceChunksCache`.
+     * This is the case when a head or a reachable chunk that was ever in
+     * `this._memOnlyChunks` or `this._sourceChunksCache` references a chunk
+     * which is not currently cached (either because it has not been read, or
+     * because it has been evicted).
+     */
+    protected readonly _refCounts: Map<Hash, number>;
+    protected readonly _refs: Map<Hash, readonly Hash[]>;
+    constructor(sourceStore: Store, sourceCacheSizeLimit: number, chunkHasher: ChunkHasher, assertValidHash: (hash: Hash) => void, getSizeOfChunk?: (chunk: Chunk) => number);
+    read(sourceRead?: Read): Promise<LazyRead>;
+    write(): Promise<LazyWrite>;
+    close(): Promise<void>;
+    /**
+     * Does not acquire any lock on the store.
+     */
+    isCached(chunkHash: Hash): boolean;
+    withSuspendedSourceCacheEvictsAndDeletes<T>(fn: () => MaybePromise<T>): Promise<T>;
+}
+export declare class LazyRead implements Read {
+    #private;
+    protected readonly _heads: Map<string, Hash>;
+    protected readonly _memOnlyChunks: Map<Hash, Chunk>;
+    protected readonly _sourceChunksCache: ChunksCache;
+    protected readonly _sourceStore: Store;
+    readonly assertValidHash: (hash: Hash) => void;
+    constructor(heads: Map<string, Hash>, memOnlyChunks: Map<Hash, Chunk>, sourceChunksCache: ChunksCache, sourceStore: Store, release: () => void, assertValidHash: (hash: Hash) => void, sourceRead?: Read);
+    isMemOnlyChunkHash(hash: Hash): boolean;
+    hasChunk(hash: Hash): Promise<boolean>;
+    getChunk(hash: Hash): Promise<Chunk | undefined>;
+    mustGetChunk(hash: Hash): Promise<Chunk>;
+    getHead(name: string): Promise<Hash | undefined>;
+    release(): void;
+    get closed(): boolean;
+    protected _getSourceRead(): Promise<Read>;
+}
+export declare class LazyWrite extends LazyRead implements Write, RefCountUpdatesDelegate {
+    #private;
+    protected readonly _pendingHeadChanges: Map<string, HeadChange>;
+    protected readonly _pendingMemOnlyChunks: Map<Hash, Chunk<unknown>>;
+    protected readonly _pendingCachedChunks: Map<Hash, {
+        chunk: Chunk;
+        size: number;
+    }>;
+    constructor(heads: Map<string, Hash>, memOnlyChunks: Map<Hash, Chunk>, sourceChunksCache: ChunksCache, sourceStore: Store, refCounts: Map<Hash, number>, refs: Map<Hash, readonly Hash[]>, release: () => void, chunkHasher: ChunkHasher, assertValidHash: (hash: Hash) => void);
+    createChunk: <V>(data: V, refs: Refs) => Chunk<V>;
+    putChunk<V>(c: Chunk<V>, size?: number): Promise<void>;
+    setHead(name: string, hash: Hash): Promise<void>;
+    removeHead(name: string): Promise<void>;
+    isMemOnlyChunkHash(hash: Hash): boolean;
+    getChunk(hash: Hash): Promise<Chunk | undefined>;
+    getHead(name: string): Promise<Hash | undefined>;
+    commit(): Promise<void>;
+    getRefCount(hash: Hash): number | undefined;
+    getRefs(hash: Hash): readonly Hash[] | undefined;
+    areRefsCounted(hash: Hash): boolean;
+    chunksPersisted(chunkHashes: readonly Hash[]): void;
+}
+type CacheEntry = {
+    chunk: Chunk;
+    size: number;
+};
+declare class ChunksCache {
+    #private;
+    /**
+     * Iteration order is from least to most recently used.
+     *
+     * Public so that testing subclass can access.
+     */
+    readonly cacheEntries: Map<Hash, CacheEntry>;
+    constructor(cacheSizeLimit: number, getSizeOfChunk: (v: Chunk) => number, refCounts: Map<Hash, number>, refs: Map<Hash, readonly Hash[]>);
+    get(hash: Hash): Chunk | undefined;
+    getWithoutUpdatingLRU(hash: Hash): Chunk | undefined;
+    put(chunk: Chunk): void;
+    updateForCommit(chunksToPut: Map<Hash, {
+        chunk: Chunk;
+        size: number;
+    }>, refCountUpdates: Map<Hash, number>): void;
+    persisted(chunks: Iterable<Chunk>): void;
+    withSuspendedEvictsAndDeletes<T>(fn: () => MaybePromise<T>): Promise<T>;
+}
+export {};
+//# sourceMappingURL=lazy-store.d.ts.map

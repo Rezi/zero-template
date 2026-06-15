@@ -1,0 +1,13 @@
+/**
+ * Creates a proxy that lazily transforms and caches record values.
+ *
+ * @template Source - The type of values in the source record
+ * @template Dest - The type of transformed values
+ * @param target - The source record to proxy
+ * @param toValue - Function to transform source values to destination values
+ * @param onMissing - Optional function called when accessing a non-existent
+ *   property. Can throw an error if desired.
+ * @returns A proxy that presents transformed values
+ */
+export declare function recordProxy<Source, Dest>(target: Record<string, Source>, toValue: (source: Source, prop: string) => Dest, onMissing?: (prop: string) => void): Record<string, Dest>;
+//# sourceMappingURL=record-proxy.d.ts.map

@@ -1,0 +1,27 @@
+import { readonly, valita_exports } from "../../shared/src/valita.js";
+import { jsonSchema } from "../../shared/src/json-schema.js";
+import { astSchema } from "./ast.js";
+//#region ../zero-protocol/src/queries-patch.ts
+var putOpSchema = valita_exports.object({
+	op: valita_exports.literal("put"),
+	hash: valita_exports.string(),
+	ttl: valita_exports.number().optional()
+});
+var upPutOpSchema = putOpSchema.extend({
+	ast: astSchema.optional(),
+	name: valita_exports.string().optional(),
+	args: readonly(valita_exports.array(jsonSchema)).optional()
+});
+var delOpSchema = valita_exports.object({
+	op: valita_exports.literal("del"),
+	hash: valita_exports.string()
+});
+var clearOpSchema = valita_exports.object({ op: valita_exports.literal("clear") });
+var patchOpSchema = valita_exports.union(putOpSchema, delOpSchema, clearOpSchema);
+var upPatchOpSchema = valita_exports.union(upPutOpSchema, delOpSchema, clearOpSchema);
+var queriesPatchSchema = valita_exports.array(patchOpSchema);
+var upQueriesPatchSchema = valita_exports.array(upPatchOpSchema);
+//#endregion
+export { queriesPatchSchema, upQueriesPatchSchema };
+
+//# sourceMappingURL=queries-patch.js.map

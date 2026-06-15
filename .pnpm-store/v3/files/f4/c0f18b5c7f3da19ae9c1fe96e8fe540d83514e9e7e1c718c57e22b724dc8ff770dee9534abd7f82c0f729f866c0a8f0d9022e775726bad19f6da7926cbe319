@@ -1,0 +1,22 @@
+import type { AST, System } from '../../../zero-protocol/src/ast.ts';
+import type { Schema } from '../../../zero-types/src/schema.ts';
+import type { Format, ViewFactory } from '../ivm/view.ts';
+import type { CustomQueryID } from './named.ts';
+import type { QueryDelegate } from './query-delegate.ts';
+import { QueryImpl } from './query-impl.ts';
+import type { HumanReadable, PreloadOptions, PullRow, Query, RunOptions } from './query.ts';
+import type { TTL } from './ttl.ts';
+import type { TypedView } from './typed-view.ts';
+export declare function newRunnableQuery<TTable extends keyof TSchema['tables'] & string, TSchema extends Schema>(delegate: QueryDelegate, schema: TSchema, table: TTable): Query<TTable, TSchema>;
+export declare class RunnableQueryImpl<TTable extends keyof TSchema['tables'] & string, TSchema extends Schema, TReturn = PullRow<TTable, TSchema>> extends QueryImpl<TTable, TSchema, TReturn> implements Query<TTable, TSchema, TReturn> {
+    #private;
+    constructor(delegate: QueryDelegate, schema: TSchema, tableName: TTable, ast?: AST, format?: Format, system?: System, customQueryID?: CustomQueryID, currentJunction?: string);
+    run(options?: RunOptions): Promise<HumanReadable<TReturn>>;
+    preload(options?: PreloadOptions): {
+        cleanup: () => void;
+        complete: Promise<void>;
+    };
+    materialize(ttl?: TTL): TypedView<HumanReadable<TReturn>>;
+    materialize<T>(factory: ViewFactory<TTable, TSchema, TReturn, T>, ttl?: TTL): T;
+}
+//# sourceMappingURL=runnable-query-impl.d.ts.map

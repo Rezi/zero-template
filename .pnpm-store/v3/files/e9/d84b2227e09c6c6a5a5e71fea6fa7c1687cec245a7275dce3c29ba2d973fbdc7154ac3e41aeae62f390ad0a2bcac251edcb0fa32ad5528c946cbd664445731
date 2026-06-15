@@ -1,0 +1,22 @@
+import type { Row } from '../../../zero-protocol/src/data.ts';
+import type { Change } from './change.ts';
+import { type Node } from './data.ts';
+import { type FilterInput, type FilterOperator, type FilterOutput } from './filter-operators.ts';
+import type { SourceSchema } from './schema.ts';
+/**
+ * The Filter operator filters data through a predicate. It is stateless.
+ *
+ * The predicate must be pure.
+ */
+export declare class Filter implements FilterOperator {
+    #private;
+    constructor(input: FilterInput, predicate: (row: Row) => boolean);
+    beginFilter(): void;
+    endFilter(): void;
+    filter(node: Node): Generator<'yield', boolean>;
+    setFilterOutput(output: FilterOutput): void;
+    destroy(): void;
+    getSchema(): SourceSchema;
+    push(change: Change): Generator<"yield", void, any>;
+}
+//# sourceMappingURL=filter.d.ts.map

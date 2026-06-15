@@ -1,0 +1,1 @@
+{"version":3,"file":"explain-queries.d.ts","sourceRoot":"","sources":["../../../../zqlite/src/explain-queries.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAC,iBAAiB,EAAC,MAAM,iDAAiD,CAAC;AACvF,OAAO,KAAK,EAAC,QAAQ,EAAC,MAAM,SAAS,CAAC;AAEtC,wBAAgB,cAAc,CAAC,MAAM,EAAE,iBAAiB,EAAE,EAAE,EAAE,QAAQ,4BAiBrE"}

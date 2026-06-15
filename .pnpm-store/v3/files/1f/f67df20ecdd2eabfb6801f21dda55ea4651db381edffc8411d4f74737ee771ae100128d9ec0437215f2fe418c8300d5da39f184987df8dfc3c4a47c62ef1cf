@@ -1,0 +1,15 @@
+//#region ../replicache/src/request-idle.ts
+/**
+* A Promise wrapper for requestIdleCallback with fallback to setTimeout for
+* browsers without support (aka Safari)
+*/
+function requestIdle(timeout) {
+	return new Promise((resolve) => {
+		if (typeof requestIdleCallback === "function") requestIdleCallback(() => resolve(), { timeout });
+		else setTimeout(resolve, timeout);
+	});
+}
+//#endregion
+export { requestIdle };
+
+//# sourceMappingURL=request-idle.js.map

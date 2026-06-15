@@ -1,0 +1,104 @@
+import type { LogContext } from '@rocicorp/logger';
+import { Subscribable } from '../../../shared/src/subscribable.ts';
+import type { ConnectionManager } from './connection-manager.ts';
+/**
+ * The current connection state of the Zero instance. One of the following states:
+ *
+ * - `connecting`: The client is actively trying to connect every 5 seconds.
+ * - `disconnected`: The client is now in an "offline" state. It will continue
+ *   to try to connect every 5 seconds.
+ * - `connected`: The client has opened a successful connection to the server.
+ * - `needs-auth`: Authentication is invalid or expired. No connection retries will be made
+ *   until the host application calls `connect()`.
+ * - `error`: A fatal error occurred. No connection retries will be made until the host
+ *   application calls `connect()` again.
+ * - `closed`: The client was shut down (for example via `zero.close()`). This is
+ *   a terminal state, and a new Zero instance must be created to reconnect.
+ */
+export type ConnectionState = {
+    name: 'disconnected';
+    reason: string;
+} | {
+    name: 'connecting';
+    reason?: string;
+} | {
+    name: 'connected';
+} | {
+    name: 'needs-auth';
+    reason: {
+        type: 'mutate';
+        status: 401 | 403;
+        body?: string;
+    } | {
+        type: 'query';
+        status: 401 | 403;
+        body?: string;
+    } | {
+        type: 'zero-cache';
+        reason: string;
+    };
+} | {
+    name: 'error';
+    reason: string;
+} | {
+    name: 'closed';
+    reason: string;
+};
+export interface Source<T> {
+    /**
+     * The current state value.
+     */
+    readonly current: T;
+    /**
+     * Subscribe to state changes.
+     *
+     * @param listener - Called when the state changes with the new state value.
+     * @returns A function to unsubscribe from state changes.
+     */
+    subscribe(listener: (state: T) => void): () => void;
+}
+/**
+ * Connection API for managing Zero's connection lifecycle.
+ */
+export interface Connection {
+    /**
+     * The current connection state as a subscribable value.
+     */
+    readonly state: Source<ConnectionState>;
+    /**
+     * Updates the auth token and, when Zero is paused in `needs-auth` or `error`,
+     * resumes connecting.
+     *
+     * Calling `connect()` without `auth` preserves the current auth token.
+     * If Zero is already `connected`, it sends an auth update to the server
+     * _without_ reconnecting. In other states, the new token is used the next time
+     * Zero connects.
+     *
+     * This method does not reconnect from `disconnected` or `closed`. To switch
+     * to logged-out, create a new Zero instance with `auth` omitted.
+     *
+     * @param opts - Optional connection options.
+     * @param opts.auth - Optional new auth token to store and use for auth refreshes or
+     *                    the next connection.
+     * @returns A promise that resolves immediately unless Zero is paused in
+     *          `needs-auth` or `error`, in which case it resolves after the next
+     *          connection state change.
+     */
+    connect(opts?: {
+        auth: string;
+    }): Promise<void>;
+}
+export declare class ConnectionImpl implements Connection {
+    #private;
+    constructor(connectionManager: ConnectionManager, lc: LogContext, setAuth: (auth: string) => void);
+    get state(): Source<ConnectionState>;
+    connect(opts?: {
+        auth: string;
+    }): Promise<void>;
+}
+export declare class ConnectionSource extends Subscribable<ConnectionState> implements Source<ConnectionState> {
+    #private;
+    constructor(connectionManager: ConnectionManager);
+    get current(): ConnectionState;
+}
+//# sourceMappingURL=connection.d.ts.map

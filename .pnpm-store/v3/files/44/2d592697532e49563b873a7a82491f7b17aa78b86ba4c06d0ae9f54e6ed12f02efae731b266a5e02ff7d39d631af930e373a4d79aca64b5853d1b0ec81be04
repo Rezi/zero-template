@@ -1,0 +1,40 @@
+import { assert } from "../../shared/src/asserts.js";
+import { must } from "../../shared/src/must.js";
+import { getValueAtPath } from "../../shared/src/object-traversal.js";
+import { isMutator } from "../../zql/src/mutate/mutator.js";
+import "../../zero-protocol/src/push.js";
+import { handleMutateRequest } from "./process-mutations.js";
+import "@rocicorp/logger";
+//#region ../zero-server/src/push-processor.ts
+var separatorRe = /[.|]/;
+var PushProcessor = class {
+	#dbProvider;
+	#logLevel;
+	#context;
+	constructor(dbProvider, context, logLevel = "info") {
+		this.#dbProvider = dbProvider;
+		this.#context = context;
+		this.#logLevel = logLevel;
+	}
+	process(mutators, queryOrQueryString, body) {
+		if (queryOrQueryString instanceof Request) return handleMutateRequest(this.#dbProvider, (transact, mutation) => this.#processMutation(mutators, transact, mutation), queryOrQueryString, this.#logLevel);
+		return handleMutateRequest(this.#dbProvider, (transact, mutation) => this.#processMutation(mutators, transact, mutation), queryOrQueryString, must(body, "body is required when using query params directly"), this.#logLevel);
+	}
+	#processMutation(mutators, transact, _mutation) {
+		return transact((tx, name, args) => this.#dispatchMutation(mutators, tx, name, args));
+	}
+	#dispatchMutation(mutators, dbTx, key, args) {
+		const mutator = getValueAtPath(mutators, key, separatorRe);
+		assert(typeof mutator === "function", `could not find mutator ${key}`);
+		if (isMutator(mutator)) return mutator.fn({
+			args,
+			ctx: this.#context,
+			tx: dbTx
+		});
+		return mutator(dbTx, args);
+	}
+};
+//#endregion
+export { PushProcessor, separatorRe };
+
+//# sourceMappingURL=push-processor.js.map

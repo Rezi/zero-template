@@ -1,0 +1,23 @@
+import { assert } from "../../../shared/src/asserts.js";
+import { mapEntries } from "../../../shared/src/objects.js";
+import { JSONB } from "../types/pg-types.js";
+//#region ../zero-cache/src/db/pg-type-parser.ts
+var INT4_ARRAY_TYPE = 1007;
+var JSON_TYPE = String(114);
+var JSONB_TYPE = String(JSONB);
+async function getTypeParsers(db, { returnJsonAsString } = {}) {
+	if (!db.options.parsers[INT4_ARRAY_TYPE]) {
+		assert(db.options.fetch_types, `Supplied db must fetch_types`);
+		await db`SELECT 1`.simple();
+		assert(db.options.parsers[INT4_ARRAY_TYPE], `array types not fetched ${Object.keys(db.options.parsers)}`);
+	}
+	const parsers = mapEntries(db.options.parsers, (type, parse) => {
+		if ((type === JSON_TYPE || type === JSONB_TYPE) && returnJsonAsString) return [type, (x) => x];
+		return [type, parse.array ? (val) => parse(val.substring(1)) : parse];
+	});
+	return { getTypeParser: (typeOID) => parsers[typeOID] ?? String };
+}
+//#endregion
+export { getTypeParsers };
+
+//# sourceMappingURL=pg-type-parser.js.map

@@ -1,0 +1,83 @@
+import { promiseVoid } from "../../../shared/src/resolved-promises.js";
+import { IDBStore } from "./idb-store.js";
+import { localNavigator } from "../../../shared/src/navigator.js";
+import { MemStore, dropMemStore } from "./mem-store.js";
+//#region ../replicache/src/kv/idb-store-with-mem-fallback.ts
+/**
+* This store uses an {@link IDBStore} by default. If the {@link IDBStore} fails
+* to open the DB with an exception that matches
+* {@link isFirefoxPrivateBrowsingError} we switch out the implementation to use
+* a {@link MemStore} instead.
+*
+* The reason this is relatively complicated is that when {@link IDBStore} is
+* created, it calls `openDatabase` synchronously, but that returns a `Promise`
+* that will reject in the case of Firefox private browsing. We don't await this
+* promise until we call `read` or `write` so we cannot do the switch until
+* then.
+*/
+var IDBStoreWithMemFallback = class {
+	#lc;
+	#name;
+	#store;
+	constructor(lc, name) {
+		this.#lc = lc;
+		this.#name = name;
+		this.#store = new IDBStore(name);
+	}
+	read() {
+		return this.#withBrainTransplant((s) => s.read());
+	}
+	write() {
+		return this.#withBrainTransplant((s) => s.write());
+	}
+	async #withBrainTransplant(f) {
+		try {
+			return await f(this.#store);
+		} catch (e) {
+			if (isFirefoxPrivateBrowsingError(e)) {
+				if (this.#store instanceof IDBStore) {
+					this.#lc.info?.("Switching to MemStore because of Firefox private browsing error");
+					this.#store = new MemStore(this.#name);
+				}
+				return f(this.#store);
+			}
+			throw e;
+		}
+	}
+	close() {
+		return this.#store.close();
+	}
+	get closed() {
+		return this.#store.closed;
+	}
+};
+function isFirefoxPrivateBrowsingError(e) {
+	return isFirefox() && e instanceof DOMException && e.name === "InvalidStateError" && e.message === "A mutation operation was attempted on a database that did not allow mutations.";
+}
+function isFirefox() {
+	return localNavigator?.userAgent?.includes("Firefox") ?? false;
+}
+function newIDBStoreWithMemFallback(lc, name) {
+	if (isFirefox()) return new IDBStoreWithMemFallback(lc, name);
+	return new IDBStore(name);
+}
+function dropIDBStoreWithMemFallback(name) {
+	if (!isFirefox()) return dropIDBStore(name);
+	try {
+		return dropIDBStore(name);
+	} catch (e) {
+		if (isFirefoxPrivateBrowsingError(e)) return dropMemStore(name);
+	}
+	return promiseVoid;
+}
+function dropIDBStore(name) {
+	return new Promise((resolve, reject) => {
+		const req = indexedDB.deleteDatabase(name);
+		req.onsuccess = () => resolve();
+		req.onerror = () => reject(req.error);
+	});
+}
+//#endregion
+export { dropIDBStoreWithMemFallback, newIDBStoreWithMemFallback };
+
+//# sourceMappingURL=idb-store-with-mem-fallback.js.map

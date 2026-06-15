@@ -1,0 +1,93 @@
+import "./specs.js";
+import { ZERO_VERSION_COLUMN_NAME } from "../services/replicator/schema/constants.js";
+import { liteTypeString, liteTypeToZqlValueType, upstreamDataType } from "../types/lite.js";
+import { liteTableName } from "../types/names.js";
+//#region ../zero-cache/src/db/pg-to-lite.ts
+/**
+* Determines if a PostgreSQL column is an enum type.
+* This checks both the element type class (for arrays of enums) and the main type class.
+*/
+function isEnumColumn(spec) {
+	return (spec.elemPgTypeClass ?? spec.pgTypeClass) === "e";
+}
+/**
+* Determines if a PostgreSQL column is an array type.
+* In PostgreSQL's system, array columns have a non-null elemPgTypeClass.
+*/
+function isArrayColumn(spec) {
+	return spec.elemPgTypeClass !== null && spec.elemPgTypeClass !== void 0;
+}
+function zeroVersionColumnSpec(defaultVersion) {
+	return {
+		pos: Number.MAX_SAFE_INTEGER,
+		characterMaximumLength: null,
+		dataType: "text",
+		notNull: false,
+		dflt: !defaultVersion ? null : `'${defaultVersion}'`,
+		elemPgTypeClass: null
+	};
+}
+function warnIfDataTypeSupported(lc, liteTypeString, table, column) {
+	if (liteTypeToZqlValueType(liteTypeString) === void 0) lc.warn?.(`\n\nWARNING: zero does not yet support the "${upstreamDataType(liteTypeString)}" data type.\nThe "${table}"."${column}" column will not be synced to clients.\n\n`);
+}
+var NUMERIC_LITERAL_REGEX = /^-?\d+(\.\d+)?$/;
+var BOOLEAN_LITERAL_REGEX = /^(true|false)$/;
+var QUOTED_STRING_WITH_CAST_REGEX = /^('.*')::(\w+)$/;
+var EMPTY_ARRAY_CONSTRUCTOR_REGEX = /^ARRAY\s*\[\s*\]::\w+\[\]$/i;
+var EMPTY_ARRAY_LITERAL_REGEX = /^'\{\}'::\w+\[\]$/;
+function mapPostgresToLiteDefault(table, column, defaultExpression) {
+	if (!defaultExpression) return null;
+	if (NUMERIC_LITERAL_REGEX.test(defaultExpression)) return defaultExpression;
+	if (BOOLEAN_LITERAL_REGEX.test(defaultExpression)) return defaultExpression === "true" ? "1" : "0";
+	const match = QUOTED_STRING_WITH_CAST_REGEX.exec(defaultExpression);
+	if (match) return match[1];
+	if (EMPTY_ARRAY_CONSTRUCTOR_REGEX.test(defaultExpression) || EMPTY_ARRAY_LITERAL_REGEX.test(defaultExpression)) return "'[]'";
+	throw new UnsupportedColumnDefaultError(`Unsupported default value for ${table}.${column}: ${defaultExpression}`);
+}
+function mapPostgresToLiteColumn(table, column, ignoreDefault) {
+	const { pos, dataType, notNull, dflt, elemPgTypeClass = null } = column.spec;
+	return {
+		pos,
+		dataType: liteTypeString(dataType, notNull, isEnumColumn(column.spec), isArrayColumn(column.spec)),
+		characterMaximumLength: null,
+		notNull: false,
+		dflt: ignoreDefault === "ignore-default" ? null : mapPostgresToLiteDefault(table, column.name, dflt),
+		elemPgTypeClass
+	};
+}
+function mapPostgresToLite(t, defaultVersion) {
+	const { schema: _, primaryKey: _dropped, ...liteSpec } = t;
+	const name = liteTableName(t);
+	return {
+		...liteSpec,
+		name,
+		columns: {
+			...Object.fromEntries(Object.entries(t.columns).map(([col, spec]) => [col, mapPostgresToLiteColumn(name, {
+				name: col,
+				spec
+			}, "ignore-default")])),
+			[ZERO_VERSION_COLUMN_NAME]: zeroVersionColumnSpec(defaultVersion)
+		}
+	};
+}
+function mapPostgresToLiteIndex(index) {
+	const { schema, tableName, name, ...liteIndex } = index;
+	return {
+		tableName: liteTableName({
+			schema,
+			name: tableName
+		}),
+		name: liteTableName({
+			schema,
+			name
+		}),
+		...liteIndex
+	};
+}
+var UnsupportedColumnDefaultError = class extends Error {
+	name = "UnsupportedColumnDefaultError";
+};
+//#endregion
+export { UnsupportedColumnDefaultError, isArrayColumn, isEnumColumn, mapPostgresToLite, mapPostgresToLiteColumn, mapPostgresToLiteIndex, warnIfDataTypeSupported };
+
+//# sourceMappingURL=pg-to-lite.js.map

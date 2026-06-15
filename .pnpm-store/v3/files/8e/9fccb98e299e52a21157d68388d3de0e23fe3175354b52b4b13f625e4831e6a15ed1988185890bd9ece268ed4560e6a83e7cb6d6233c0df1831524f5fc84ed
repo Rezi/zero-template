@@ -1,0 +1,47 @@
+import { must } from "../../../shared/src/must.js";
+import { decodeSecProtocols } from "../../../zero-protocol/src/connect.js";
+import { URLParams } from "../types/url-params.js";
+//#region ../zero-cache/src/workers/connect-params.ts
+function getConnectParams(protocolVersion, url, headers) {
+	const params = new URLParams(url);
+	try {
+		const clientID = params.get("clientID", true);
+		const clientGroupID = params.get("clientGroupID", true);
+		const profileID = params.get("profileID", false);
+		const baseCookie = params.get("baseCookie", false);
+		const timestamp = params.getInteger("ts", true);
+		const lmID = params.getInteger("lmid", true);
+		const wsID = params.get("wsid", false) ?? "";
+		const userID = params.get("userID", false) ?? void 0;
+		const debugPerf = params.getBoolean("debugPerf");
+		const { initConnectionMessage, authToken } = decodeSecProtocols(must(headers["sec-websocket-protocol"]));
+		return {
+			params: {
+				protocolVersion,
+				clientID,
+				clientGroupID,
+				profileID,
+				baseCookie,
+				timestamp,
+				lmID,
+				wsID,
+				debugPerf,
+				initConnectionMsg: initConnectionMessage,
+				auth: authToken,
+				userID,
+				httpCookie: headers.cookie,
+				origin: headers.origin
+			},
+			error: null
+		};
+	} catch (e) {
+		return {
+			params: null,
+			error: e instanceof Error ? e.message : String(e)
+		};
+	}
+}
+//#endregion
+export { getConnectParams };
+
+//# sourceMappingURL=connect-params.js.map

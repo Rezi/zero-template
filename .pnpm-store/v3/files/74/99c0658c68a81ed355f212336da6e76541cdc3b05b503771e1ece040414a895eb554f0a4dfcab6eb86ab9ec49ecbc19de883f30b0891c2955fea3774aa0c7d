@@ -1,0 +1,2 @@
+export * from '../../../zero-server/src/adapters/kysely.ts';
+//# sourceMappingURL=kysely.d.ts.map

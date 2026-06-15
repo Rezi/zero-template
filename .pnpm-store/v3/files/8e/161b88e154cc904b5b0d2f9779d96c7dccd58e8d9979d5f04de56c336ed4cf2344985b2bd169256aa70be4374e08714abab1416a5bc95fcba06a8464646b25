@@ -1,0 +1,61 @@
+import { must } from "../../../../shared/src/must.js";
+import { mapValues } from "../../../../shared/src/objects.js";
+import { cvrSchema } from "../../types/shards.js";
+import { RunningState } from "../running-state.js";
+import { setActiveUsersGetter } from "../../server/anonymous-otel-start.js";
+//#region ../zero-cache/src/services/view-syncer/active-users-gauge.ts
+var DAY = 1440 * (60 * 1e3);
+var ActiveUsersGauge = class {
+	id = "active-users-gauge";
+	#lc;
+	#db;
+	#schema;
+	#updateIntervalMs;
+	#state = new RunningState("active-users-gauge");
+	#setActiveUsersGetter;
+	#lastActiveUsers;
+	constructor(lc, db, shard, opts = {}, setActiveUsersGetterFn = setActiveUsersGetter) {
+		this.#lc = lc;
+		this.#db = db;
+		this.#schema = cvrSchema(shard);
+		this.#updateIntervalMs = opts.updateIntervalMs ?? 60 * 1e3;
+		this.#setActiveUsersGetter = setActiveUsersGetterFn;
+	}
+	async run() {
+		while (this.#state.shouldRun()) {
+			try {
+				const now = Date.now();
+				const since30day = now - DAY * 30;
+				const since7day = now - DAY * 7;
+				const since1day = now - DAY;
+				const [actives] = await this.#db`
+          SELECT 
+            COUNT(*) FILTER (WHERE "lastActive" >= ${since1day}) AS active_users_last_day,
+            COUNT(DISTINCT("profileID")) FILTER (WHERE "lastActive" >= ${since1day} AND starts_with("profileID", 'p')) AS users_1da,
+            COUNT(DISTINCT("profileID")) FILTER (WHERE "lastActive" >= ${since7day} AND starts_with("profileID", 'p')) AS users_7da,
+            COUNT(DISTINCT("profileID")) FILTER (WHERE starts_with("profileID", 'p')) AS users_30da,
+            COUNT(DISTINCT("profileID")) FILTER (WHERE "lastActive" >= ${since1day}) AS users_1da_legacy,
+            COUNT(DISTINCT("profileID")) FILTER (WHERE "lastActive" >= ${since7day}) AS users_7da_legacy,
+            COUNT(DISTINCT("profileID")) AS users_30da_legacy
+            FROM ${this.#db(this.#schema)}.instances
+            WHERE "lastActive" >= ${since30day}
+        `;
+				const setGetter = this.#lastActiveUsers === void 0;
+				this.#lastActiveUsers = mapValues(actives, (bigVal) => Number(bigVal));
+				if (setGetter) this.#setActiveUsersGetter(() => must(this.#lastActiveUsers));
+				this.#lc.debug?.(`updated active-users gauge`, this.#lastActiveUsers);
+			} catch (e) {
+				this.#lc.warn?.("error updating active-users gauge", e);
+			}
+			await this.#state.sleep(this.#updateIntervalMs);
+		}
+	}
+	stop() {
+		this.#state.stop(this.#lc);
+		return this.#state.stopped();
+	}
+};
+//#endregion
+export { ActiveUsersGauge };
+
+//# sourceMappingURL=active-users-gauge.js.map

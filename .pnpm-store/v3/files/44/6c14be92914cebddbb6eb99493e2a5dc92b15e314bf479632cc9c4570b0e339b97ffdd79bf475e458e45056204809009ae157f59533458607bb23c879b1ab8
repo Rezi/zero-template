@@ -1,0 +1,17 @@
+import type { RowID } from './schema/types.ts';
+/**
+ * The hash of a row ID used as the unit XOR'd into a query's
+ * {@link rowSetSignature}. Includes schema + table + rowKey, so the hash is
+ * unique across tables in the same query.
+ */
+export declare function rowIDSignatureUnit(id: RowID): bigint;
+/**
+ * Parses a hex-encoded signature back to its bigint form. Empty / undefined
+ * is the identity (`0n`).
+ */
+export declare function parseSignature(hex: string | undefined | null): bigint;
+/**
+ * Serializes a bigint signature to lowercase hex. `0n` serializes to `'0'`.
+ */
+export declare function formatSignature(sig: bigint): string;
+//# sourceMappingURL=row-set-signature.d.ts.map

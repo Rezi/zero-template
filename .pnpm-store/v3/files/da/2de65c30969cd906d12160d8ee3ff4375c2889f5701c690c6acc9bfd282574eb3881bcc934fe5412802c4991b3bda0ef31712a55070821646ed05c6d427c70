@@ -1,0 +1,53 @@
+import { assert, assertString } from "../../../shared/src/asserts.js";
+import { assertDeepFrozen } from "../frozen-json.js";
+//#region ../replicache/src/dag/chunk.ts
+/**
+* Convert to a Refs when we already know it is sorted and has no duplicates.
+*/
+function asRefs(sortedRefs) {
+	return sortedRefs;
+}
+/**
+* Sorts and tags as Refs. If an Array is passed in the array is sorted in
+* place, otherwise a copy of the iterable is created. This checks for duplicates.
+*/
+function toRefs(refs) {
+	if (Array.isArray(refs)) {
+		refs.sort();
+		for (let i = 1; i < refs.length; i++) assert(refs[i - 1] !== refs[i], "Refs must not have duplicates");
+		return asRefs(refs);
+	}
+	const refsArray = [...refs];
+	refsArray.sort();
+	return asRefs(refsArray);
+}
+var Chunk = class {
+	hash;
+	data;
+	/**
+	* Meta is an array of refs. If there are no refs we do not write a meta
+	* chunk.
+	*/
+	meta;
+	constructor(hash, data, refs) {
+		assert(!refs.includes(hash), "Chunk cannot reference itself");
+		assertDeepFrozen(data);
+		this.hash = hash;
+		this.data = data;
+		this.meta = refs;
+	}
+};
+function assertRefs(v) {
+	if (!Array.isArray(v)) throw new Error("Refs must be an array");
+	if (v.length > 0) {
+		assertString(v[0]);
+		for (let i = 1; i < v.length; i++) assertString(v[i]);
+	}
+}
+function createChunk(data, refs, chunkHasher) {
+	return new Chunk(chunkHasher(), data, refs);
+}
+//#endregion
+export { Chunk, assertRefs, createChunk, toRefs };
+
+//# sourceMappingURL=chunk.js.map

@@ -1,0 +1,55 @@
+import type { LogContext } from '@rocicorp/logger';
+import { type Cookie } from '../cookies.ts';
+import type { Store } from '../dag/store.ts';
+import type { Commit } from '../db/commit.ts';
+import { type LocalMeta } from '../db/commit.ts';
+import type * as FormatVersion from '../format-version-enum.ts';
+import { type FrozenJSONValue } from '../frozen-json.ts';
+import { type Hash } from '../hash.ts';
+import type { HTTPRequestInfo } from '../http-request-info.ts';
+import type { Puller, PullResponseOKV1Internal, PullResponseV1 } from '../puller.ts';
+import { type DiffComputationConfig, DiffsMap } from './diff.ts';
+import * as HandlePullResponseResultType from './handle-pull-response-result-type-enum.ts';
+import type { ClientGroupID, ClientID } from './ids.ts';
+type FormatVersion = (typeof FormatVersion)[keyof typeof FormatVersion];
+export declare const PULL_VERSION_SDD = 0;
+export declare const PULL_VERSION_DD31 = 1;
+/**
+ * The JSON value used as the body when doing a POST to the [pull
+ * endpoint](/reference/server-pull).
+ */
+export type PullRequest = PullRequestV1;
+/**
+ * The JSON value used as the body when doing a POST to the [pull
+ * endpoint](/reference/server-pull).
+ */
+export type PullRequestV1 = {
+    pullVersion: 1;
+    schemaVersion: string;
+    profileID: string;
+    cookie: Cookie;
+    clientGroupID: ClientGroupID;
+};
+export declare function isPullRequestV1(pr: PullRequest): pr is PullRequestV1;
+export type BeginPullResponseV1 = {
+    httpRequestInfo: HTTPRequestInfo;
+    pullResponse?: PullResponseV1;
+    syncHead: Hash;
+};
+export declare function beginPullV1(profileID: string, clientID: ClientID, clientGroupID: ClientGroupID, schemaVersion: string, puller: Puller, requestID: string, store: Store, formatVersion: FormatVersion, lc: LogContext, createSyncBranch?: boolean): Promise<BeginPullResponseV1>;
+type HandlePullResponseResult = {
+    type: HandlePullResponseResultType.Applied;
+    syncHead: Hash;
+} | {
+    type: HandlePullResponseResultType.NoOp | HandlePullResponseResultType.CookieMismatch;
+};
+export declare function handlePullResponseV1(lc: LogContext, store: Store, expectedBaseCookie: FrozenJSONValue, response: PullResponseOKV1Internal, clientID: ClientID, formatVersion: FormatVersion): Promise<HandlePullResponseResult>;
+export declare function maybeEndPull<M extends LocalMeta>(store: Store, lc: LogContext, expectedSyncHead: Hash, clientID: ClientID, diffConfig: DiffComputationConfig, formatVersion: FormatVersion): Promise<{
+    syncHead: Hash;
+    mainHead: Hash;
+    oldMainHead: Hash;
+    replayMutations: Commit<M>[];
+    diffs: DiffsMap;
+}>;
+export {};
+//# sourceMappingURL=pull.d.ts.map

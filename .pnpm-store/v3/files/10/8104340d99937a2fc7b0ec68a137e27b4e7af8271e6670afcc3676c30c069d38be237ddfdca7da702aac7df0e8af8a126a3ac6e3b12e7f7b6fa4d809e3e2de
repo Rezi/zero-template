@@ -1,0 +1,34 @@
+import type { SQLQuery } from '@databases/sql';
+import type { Condition, Ordering } from '../../zero-protocol/src/ast.ts';
+import type { SchemaValue, ValueType } from '../../zero-schema/src/table-schema.ts';
+import type { Constraint } from '../../zql/src/ivm/constraint.ts';
+import type { MultiConstraint, Start } from '../../zql/src/ivm/operator.ts';
+/**
+ * Condition type without correlated subqueries.
+ * This matches the output of transformFilters from zql/builder/filter.ts
+ */
+export type NoSubqueryCondition = Exclude<Condition, {
+    type: 'correlatedSubquery';
+}>;
+export declare function buildSelectQuery(tableName: string, columns: Record<string, SchemaValue>, constraint: Constraint | undefined, filters: NoSubqueryCondition | undefined, order: Ordering | undefined, reverse: boolean | undefined, start: Start | undefined, multiConstraints?: readonly MultiConstraint[] | undefined): SQLQuery;
+export declare function constraintsToSQL(constraint: Constraint | undefined, columns: Record<string, SchemaValue>): SQLQuery[];
+/**
+ * Builds a single batched IN clause from a `MultiConstraint`. All entries
+ * are assumed to share the same shape (the keys of the first entry);
+ * FlippedJoin derives them from the same parentKey for all children.
+ *
+ * Single-column form: `col IN (?, ?, ?)`
+ * Compound form:      `(a, b) IN (VALUES (?, ?), (?, ?), …)`
+ *
+ * NOTE: SQLite optimizes `col IN (literal-list)` using the column's index;
+ * verified via EXPLAIN QUERY PLAN — see query-builder.test.ts.
+ */
+export declare function multiConstraintToSQL(multiConstraint: MultiConstraint, columns: Record<string, SchemaValue>): SQLQuery;
+export declare function orderByToSQL(order: Ordering, reverse: boolean): SQLQuery;
+/**
+ * Converts filters (conditions) to SQL WHERE clause.
+ * This applies all filters present in the AST for a query to the source.
+ */
+export declare function filtersToSQL(filters: NoSubqueryCondition): SQLQuery;
+export declare function toSQLiteType(v: unknown, type: ValueType): unknown;
+//# sourceMappingURL=query-builder.d.ts.map

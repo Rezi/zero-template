@@ -1,0 +1,6 @@
+//#region ../otel/src/version.ts
+var version = "0.0.2";
+//#endregion
+export { version };
+
+//# sourceMappingURL=version.js.map

@@ -1,0 +1,1 @@
+{"version":3,"file":"version.d.ts","sourceRoot":"","sources":["../../../../zero-protocol/src/version.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,CAAC,MAAM,4BAA4B,CAAC;AAEhD,eAAO,MAAM,aAAa,gBAAa,CAAC;AACxC,eAAO,MAAM,qBAAqB,6CAAmC,CAAC;AAEtE,MAAM,MAAM,OAAO,GAAG,CAAC,CAAC,KAAK,CAAC,OAAO,aAAa,CAAC,CAAC;AACpD,MAAM,MAAM,eAAe,GAAG,CAAC,CAAC,KAAK,CAAC,OAAO,qBAAqB,CAAC,CAAC"}

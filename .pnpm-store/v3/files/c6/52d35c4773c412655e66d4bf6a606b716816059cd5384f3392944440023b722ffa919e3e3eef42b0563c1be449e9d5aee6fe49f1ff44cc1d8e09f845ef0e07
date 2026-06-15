@@ -1,0 +1,104 @@
+import { type FrozenCookie } from '../cookies.ts';
+import { type Chunk, type CreateChunk, type Refs } from '../dag/chunk.ts';
+import { type MustGetChunk, type Read } from '../dag/store.ts';
+import { type FrozenJSONValue, type FrozenTag } from '../frozen-json.ts';
+import { type Hash } from '../hash.ts';
+import type { IndexDefinition } from '../index-defs.ts';
+import type { ClientID } from '../sync/ids.ts';
+import * as MetaType from './meta-type-enum.ts';
+export declare const DEFAULT_HEAD_NAME = "main";
+export declare function commitIsLocalDD31(commit: Commit<Meta>): commit is Commit<LocalMetaDD31>;
+export declare function commitIsLocal(commit: Commit<Meta>): commit is Commit<LocalMetaDD31>;
+export declare function commitIsSnapshot(commit: Commit<Meta>): commit is Commit<SnapshotMetaDD31>;
+export declare class Commit<M extends Meta> {
+    readonly chunk: Chunk<CommitData<M>>;
+    constructor(chunk: Chunk<CommitData<M>>);
+    get meta(): M;
+    get valueHash(): Hash;
+    getMutationID(clientID: ClientID, dagRead: MustGetChunk): Promise<number>;
+    getNextMutationID(clientID: ClientID, dagRead: MustGetChunk): Promise<number>;
+    get indexes(): readonly IndexRecord[];
+}
+export declare function getMutationID(clientID: ClientID, dagRead: MustGetChunk, meta: Meta): Promise<number>;
+/**
+ * Returns the set of local commits from the given `fromCommitHash` back to but not
+ * including its base snapshot. If `fromCommitHash` is a snapshot, the returned vector
+ * will be empty. When, as typical, `fromCommitHash` is the head of the default chain
+ * then the returned commits are the set of pending commits, ie the set of local commits
+ * that have not yet been pushed to the data layer.
+ *
+ * The vector of commits is returned in reverse chain order, that is, starting
+ * with the commit with hash `fromCommitHash` and walking backwards.
+ */
+export declare function localMutations(fromCommitHash: Hash, dagRead: Read): Promise<Commit<LocalMetaDD31>[]>;
+export declare function localMutationsDD31(fromCommitHash: Hash, dagRead: Read): Promise<Commit<LocalMetaDD31>[]>;
+export declare function localMutationsGreaterThan(commit: Commit<Meta>, mutationIDLimits: Record<ClientID, number>, dagRead: Read): Promise<Commit<LocalMetaDD31>[]>;
+export declare function baseSnapshotFromHead(name: string, dagRead: Read): Promise<Commit<SnapshotMetaDD31>>;
+export declare function baseSnapshotHashFromHash(hash: Hash, dagRead: Read): Promise<Hash>;
+export declare function baseSnapshotFromHash(hash: Hash, dagRead: Read): Promise<Commit<SnapshotMetaDD31>>;
+export declare function baseSnapshotFromCommit(commit: Commit<Meta>, dagRead: Read): Promise<Commit<SnapshotMetaDD31>>;
+export declare function snapshotMetaParts(c: Commit<SnapshotMetaDD31>, clientID: ClientID): [lastMutationID: number, cookie: FrozenCookie | FrozenJSONValue];
+export declare function compareCookiesForSnapshots(a: Commit<SnapshotMetaDD31>, b: Commit<SnapshotMetaDD31>): number;
+/**
+ * Returns all commits from the commit with fromCommitHash to its base snapshot,
+ * inclusive of both. Resulting vector is in chain-head-first order (so snapshot
+ * comes last).
+ */
+export declare function commitChain(fromCommitHash: Hash, dagRead: Read): Promise<Commit<Meta>[]>;
+export declare function commitFromHash(hash: Hash, dagRead: MustGetChunk): Promise<Commit<Meta>>;
+export declare function commitFromHead(name: string, dagRead: Read): Promise<Commit<Meta>>;
+export type LocalMetaDD31 = {
+    readonly type: MetaType.LocalDD31;
+    readonly basisHash: Hash;
+    readonly mutationID: number;
+    readonly mutatorName: string;
+    readonly mutatorArgsJSON: FrozenJSONValue;
+    readonly originalHash: Hash | null;
+    readonly timestamp: number;
+    readonly clientID: ClientID;
+    readonly baseSnapshotHash: Hash;
+};
+export type LocalMeta = LocalMetaDD31;
+export declare function assertLocalMetaDD31(v: Record<string, unknown>): asserts v is LocalMetaDD31;
+export declare function isLocalMetaDD31(meta: Meta): meta is LocalMetaDD31;
+export declare function assertLocalCommitDD31(c: Commit<Meta>): asserts c is Commit<LocalMetaDD31>;
+export type SnapshotMetaDD31 = {
+    readonly type: MetaType.SnapshotDD31;
+    readonly basisHash: Hash | null;
+    readonly lastMutationIDs: Record<ClientID, number>;
+    readonly cookieJSON: FrozenCookie;
+};
+export type SnapshotMeta = SnapshotMetaDD31;
+export declare function assertSnapshotMetaDD31(v: Record<string, unknown>): asserts v is SnapshotMetaDD31;
+export type Meta = LocalMetaDD31 | SnapshotMetaDD31;
+export declare function assertSnapshotCommitDD31(c: Commit<Meta>): asserts c is Commit<SnapshotMetaDD31>;
+/**
+ * This is the type used for index definitions as defined in the Commit chunk data.
+ *
+ * Changing this requires a REPLICACHE_FORMAT_VERSION bump.
+ */
+export type ChunkIndexDefinition = {
+    readonly name: string;
+    readonly keyPrefix: string;
+    readonly jsonPointer: string;
+    readonly allowEmpty?: boolean;
+};
+export declare function chunkIndexDefinitionEqualIgnoreName(a: ChunkIndexDefinition, b: ChunkIndexDefinition): boolean;
+export declare function toChunkIndexDefinition(name: string, indexDefinition: IndexDefinition): Required<ChunkIndexDefinition>;
+export type IndexRecord = {
+    readonly definition: ChunkIndexDefinition;
+    readonly valueHash: Hash;
+};
+export declare function newLocalDD31(createChunk: CreateChunk, basisHash: Hash, baseSnapshotHash: Hash, mutationID: number, mutatorName: string, mutatorArgsJSON: FrozenJSONValue, originalHash: Hash | null, valueHash: Hash, indexes: readonly IndexRecord[], timestamp: number, clientID: ClientID): Commit<LocalMetaDD31>;
+export declare function newSnapshotDD31(createChunk: CreateChunk, basisHash: Hash | null, lastMutationIDs: Record<ClientID, number>, cookieJSON: FrozenCookie, valueHash: Hash, indexes: readonly IndexRecord[]): Commit<SnapshotMetaDD31>;
+export declare function newSnapshotCommitDataDD31(basisHash: Hash | null, lastMutationIDs: Record<ClientID, number>, cookieJSON: FrozenCookie, valueHash: Hash, indexes: readonly IndexRecord[]): CommitData<SnapshotMetaDD31>;
+export declare function fromChunk(chunk: Chunk): Commit<Meta>;
+export declare function getRefs(data: CommitData<Meta>): Refs;
+export type CommitData<M extends Meta> = FrozenTag<{
+    readonly meta: M;
+    readonly valueHash: Hash;
+    readonly indexes: readonly IndexRecord[];
+}>;
+export declare function makeCommitData<M extends Meta>(meta: M, valueHash: Hash, indexes: readonly IndexRecord[]): CommitData<M>;
+export declare function assertCommitData(v: unknown): asserts v is CommitData<Meta>;
+//# sourceMappingURL=commit.d.ts.map

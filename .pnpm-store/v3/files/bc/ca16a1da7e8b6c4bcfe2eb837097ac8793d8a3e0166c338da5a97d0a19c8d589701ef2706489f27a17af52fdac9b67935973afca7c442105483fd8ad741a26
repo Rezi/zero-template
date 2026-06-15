@@ -1,0 +1,139 @@
+import { AbortError } from "../../../shared/src/abort-error.js";
+import { sleepWithAbort } from "../../../shared/src/sleep.js";
+import { isPostgresError } from "../types/pg.js";
+import { resolver } from "@rocicorp/resolver";
+import { PG_UNDEFINED_TABLE } from "@drdgvhbh/postgres-error-codes";
+//#region ../zero-cache/src/services/running-state.ts
+var DEFAULT_INITIAL_RETRY_DELAY_MS = 25;
+var DEFAULT_MAX_RETRY_DELAY_MS = 1e4;
+/**
+* Facilitates lifecycle control with exponential backoff.
+*/
+var RunningState = class {
+	#serviceName;
+	#controller;
+	#sleep;
+	#setTimeout;
+	#stopped;
+	#initialRetryDelay;
+	#maxRetryDelay;
+	#pendingTimeouts = /* @__PURE__ */ new Set();
+	#retryDelay;
+	constructor(serviceName, retryConfig, setTimeoutFn = setTimeout, sleeper = sleepWithAbort) {
+		const { initialRetryDelay = DEFAULT_INITIAL_RETRY_DELAY_MS, maxRetryDelay = DEFAULT_MAX_RETRY_DELAY_MS } = retryConfig ?? {};
+		this.#serviceName = serviceName;
+		this.#initialRetryDelay = initialRetryDelay;
+		this.#maxRetryDelay = maxRetryDelay;
+		this.#retryDelay = initialRetryDelay;
+		this.#controller = new AbortController();
+		this.#sleep = sleeper;
+		this.#setTimeout = setTimeoutFn;
+		const { promise, resolve } = resolver();
+		this.#stopped = promise;
+		this.#controller.signal.addEventListener("abort", () => {
+			resolve();
+			for (const timeout of this.#pendingTimeouts) clearTimeout(timeout);
+			this.#pendingTimeouts.clear();
+		}, { once: true });
+	}
+	get signal() {
+		return this.#controller.signal;
+	}
+	get retryDelay() {
+		return this.#retryDelay;
+	}
+	/**
+	* Returns `true` until {@link stop()} has been called.
+	*
+	* This is usually called as part of the service's main loop
+	* conditional to determine if the next iteration should execute.
+	*/
+	shouldRun() {
+		return !this.#controller.signal.aborted;
+	}
+	/**
+	* Registers a Cancelable object to be invoked when {@link stop()} is called.
+	* Returns a method to unregister the object.
+	*/
+	cancelOnStop(c) {
+		const onStop = () => c.cancel();
+		this.#controller.signal.addEventListener("abort", onStop, { once: true });
+		return () => this.#controller.signal.removeEventListener("abort", onStop);
+	}
+	/**
+	* Sets a Timeout that is automatically cancelled if the service is cancelled.
+	*/
+	setTimeout(fn, timeoutMs, ...args) {
+		const timeout = this.#setTimeout(() => {
+			clearTimeout(timeout);
+			this.#pendingTimeouts.delete(timeout);
+			return fn(...args);
+		}, timeoutMs);
+		this.#pendingTimeouts.add(timeout);
+	}
+	/**
+	* Returns a promise that resolves after `ms` milliseconds or when
+	* the service is stopped.
+	*/
+	async sleep(ms) {
+		await Promise.race(this.#sleep(ms, this.#controller.signal));
+	}
+	/**
+	* Called to stop the service. After this is called, {@link shouldRun()}
+	* will return `false` and the {@link stopped()} Promise will be resolved.
+	*/
+	stop(lc, err) {
+		if (this.shouldRun()) {
+			lc[!err || err instanceof AbortError ? "info" : "error"]?.(`stopping ${this.#serviceName}`, err ?? "");
+			this.#controller.abort();
+		}
+	}
+	/**
+	* Returns a Promise that resolves when {@link stop()} is called.
+	*/
+	stopped() {
+		return this.#stopped;
+	}
+	/**
+	* Call in response to an error or unexpected termination in the main
+	* loop of the service. The returned Promise will resolve after an
+	* exponential delay, or once {@link stop()} is called.
+	*
+	* If the supplied `err` is an `AbortError`, the service will shut down.
+	*/
+	async backoff(lc, err) {
+		const delay = this.#retryDelay;
+		this.#retryDelay = Math.min(delay * 2, this.#maxRetryDelay);
+		if (isPostgresError(err, PG_UNDEFINED_TABLE)) err = new AbortError("undefined table", { cause: err });
+		if (err instanceof AbortError || err instanceof UnrecoverableError) {
+			this.resetBackoff();
+			this.stop(lc, err);
+		} else if (this.shouldRun()) {
+			lc[delay < 1e3 ? "info" : delay < 6500 ? "warn" : "error"]?.(`retrying ${this.#serviceName} in ${delay} ms`, err);
+			await this.sleep(delay);
+		}
+	}
+	/**
+	* When using {@link backoff()}, this method should be called when the
+	* implementation receives a healthy signal (e.g. a successful
+	* response). This resets the delay used in {@link backoff()}.
+	*
+	* @returns The previous backoff delay
+	*/
+	resetBackoff() {
+		const prevDelay = this.#retryDelay;
+		this.#retryDelay = this.#initialRetryDelay;
+		return prevDelay;
+	}
+};
+/**
+* Superclass for Errors that should bypass exponential backoff
+* and immediately shut down the server.
+*/
+var UnrecoverableError = class extends Error {
+	name = "UnrecoverableError";
+};
+//#endregion
+export { DEFAULT_MAX_RETRY_DELAY_MS, RunningState, UnrecoverableError };
+
+//# sourceMappingURL=running-state.js.map

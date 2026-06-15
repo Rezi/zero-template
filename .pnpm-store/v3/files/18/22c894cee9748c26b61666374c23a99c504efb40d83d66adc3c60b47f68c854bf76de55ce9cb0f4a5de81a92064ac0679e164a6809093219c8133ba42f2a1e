@@ -1,0 +1,12 @@
+import { assert } from "../../../../shared/src/asserts.js";
+//#region ../zero-cache/src/services/mutagen/error.ts
+var MutationAlreadyProcessedError = class extends Error {
+	constructor(clientID, received, actual) {
+		super(`Ignoring mutation from ${clientID} with ID ${received} as it was already processed. Expected: ${actual}`);
+		assert(received < actual, () => `MutationAlreadyProcessedError: received (${received}) must be < actual (${actual})`);
+	}
+};
+//#endregion
+export { MutationAlreadyProcessedError };
+
+//# sourceMappingURL=error.js.map
