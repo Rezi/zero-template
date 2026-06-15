@@ -1,12 +1,14 @@
-import {bigint, index, integer, pgTable, text} from 'drizzle-orm/pg-core'
+import {index, integer, pgTable, text, timestamp} from 'drizzle-orm/pg-core'
 import {relations} from 'drizzle-orm'
+
+export * from '../auth/schema'
 
 export const artists = pgTable('artists', {
   id: text().primaryKey(),
   name: text().notNull(),
   genre: text().notNull(),
   bio: text(),
-  createdAt: bigint('created_at', {mode: 'number'}).notNull(),
+  createdAt: timestamp('created_at').notNull(),
 })
 
 export const albums = pgTable(
@@ -19,7 +21,7 @@ export const albums = pgTable(
       .references(() => artists.id),
     releaseYear: integer('release_year').notNull(),
     coverArtUrl: text('cover_art_url'),
-    createdAt: bigint('created_at', {mode: 'number'}).notNull(),
+    createdAt: timestamp('created_at').notNull(),
   },
   table => [index('albums_artist_id_idx').on(table.artistId)],
 )
@@ -28,7 +30,7 @@ export const fans = pgTable('fans', {
   id: text().primaryKey(),
   name: text().notNull(),
   email: text().notNull(),
-  createdAt: bigint('created_at', {mode: 'number'}).notNull(),
+  createdAt: timestamp('created_at').notNull(),
 })
 
 export const favorites = pgTable(
@@ -41,7 +43,7 @@ export const favorites = pgTable(
     albumId: text('album_id')
       .notNull()
       .references(() => albums.id),
-    createdAt: bigint('created_at', {mode: 'number'}).notNull(),
+    createdAt: timestamp('created_at').notNull(),
   },
   table => [
     index('favorites_fan_id_idx').on(table.fanId),

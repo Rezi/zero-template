@@ -1,5 +1,10 @@
-import { createRouter as createTanStackRouter } from '@tanstack/react-router'
-import { routeTree } from './routeTree.gen'
+import {createRouter as createTanStackRouter} from '@tanstack/react-router'
+import type {Zero} from '@rocicorp/zero'
+import {routeTree} from './routeTree.gen'
+
+export interface RouterContext {
+  zero?: Zero
+}
 
 export function getRouter() {
   const router = createTanStackRouter({
@@ -7,6 +12,8 @@ export function getRouter() {
     scrollRestoration: true,
     defaultPreload: 'intent',
     defaultPreloadStaleTime: 0,
+    defaultPreloadGcTime: 0,
+    context: {} satisfies RouterContext,
   })
 
   return router
