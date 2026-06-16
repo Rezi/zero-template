@@ -1,8 +1,0 @@
-//#region ../zql/src/query/escape-like.ts
-function escapeLike(val) {
-	return val.replace(/[%_]/g, "\\$&");
-}
-//#endregion
-export { escapeLike };
-
-//# sourceMappingURL=escape-like.js.map

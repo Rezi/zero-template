@@ -1,3 +1,0 @@
-export declare const PG_15 = 150000;
-export declare const PG_17 = 170000;
-//# sourceMappingURL=pg-versions.d.ts.map

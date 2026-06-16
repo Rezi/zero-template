@@ -1,5 +1,0 @@
-/**
- * The current version of Zero.
- */
-export declare const version: string;
-//# sourceMappingURL=version.d.ts.map

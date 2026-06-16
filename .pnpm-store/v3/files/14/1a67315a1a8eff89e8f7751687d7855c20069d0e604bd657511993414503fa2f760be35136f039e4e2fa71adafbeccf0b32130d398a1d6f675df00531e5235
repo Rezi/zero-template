@@ -1,7 +1,0 @@
-type Navigator = {
-    onLine: boolean;
-    userAgent: string;
-};
-declare const localNavigator: Navigator | undefined;
-export { localNavigator as navigator };
-//# sourceMappingURL=navigator.d.ts.map

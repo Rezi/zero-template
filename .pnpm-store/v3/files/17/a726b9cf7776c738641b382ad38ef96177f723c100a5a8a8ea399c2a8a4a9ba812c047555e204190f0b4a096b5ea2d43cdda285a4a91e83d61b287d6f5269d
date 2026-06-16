@@ -1,8 +1,0 @@
-//#region ../zero-client/src/util/socket.ts
-function send(ws, data) {
-	ws.send(JSON.stringify(data));
-}
-//#endregion
-export { send };
-
-//# sourceMappingURL=socket.js.map

@@ -1,9 +1,0 @@
-export declare class NotImplementedError extends Error {
-    constructor(message: string);
-}
-export type PlannerExceptionKind = 'max_flippable_joins';
-export declare class PlannerException extends Error {
-    readonly kind: PlannerExceptionKind;
-    constructor(kind: PlannerExceptionKind, message: string);
-}
-//# sourceMappingURL=error.d.ts.map

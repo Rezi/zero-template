@@ -1,6 +1,0 @@
-//#region ../shared/src/config.ts
-var isProd = process.env.NODE_ENV === "production";
-//#endregion
-export { isProd };
-
-//# sourceMappingURL=config.js.map

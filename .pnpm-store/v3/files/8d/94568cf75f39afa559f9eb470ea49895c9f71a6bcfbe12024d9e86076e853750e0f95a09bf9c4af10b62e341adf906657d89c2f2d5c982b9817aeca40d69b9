@@ -1,1 +1,0 @@
-{"version":3,"file":"names.js","names":[],"sources":["../../../../../zero-cache/src/types/names.ts"],"sourcesContent":["export function liteTableName(t: {schema: string; name: string}) {\n  return t.schema === 'public' ? t.name : `${t.schema}.${t.name}`;\n}\n"],"mappings":";AAAA,SAAgB,cAAc,GAAmC;AAC/D,QAAO,EAAE,WAAW,WAAW,EAAE,OAAO,GAAG,EAAE,OAAO,GAAG,EAAE"}

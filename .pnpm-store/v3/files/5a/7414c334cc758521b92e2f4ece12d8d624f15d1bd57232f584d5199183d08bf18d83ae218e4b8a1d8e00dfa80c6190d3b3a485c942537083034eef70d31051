@@ -1,2 +1,0 @@
-import { PostgresJSConnection, PostgresJsTransactionInternal, zeroPostgresJS } from "../../../zero-server/src/adapters/postgresjs.js";
-export { PostgresJSConnection, PostgresJsTransactionInternal, zeroPostgresJS };

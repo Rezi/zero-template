@@ -1,1 +1,0 @@
-{"version":3,"file":"pong.d.ts","sourceRoot":"","sources":["../../../../zero-protocol/src/pong.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,CAAC,MAAM,4BAA4B,CAAC;AAEhD,eAAO,MAAM,cAAc,6BAAe,CAAC;AAC3C,eAAO,MAAM,iBAAiB,4DAA+C,CAAC;AAE9E,MAAM,MAAM,QAAQ,GAAG,CAAC,CAAC,KAAK,CAAC,OAAO,cAAc,CAAC,CAAC;AACtD,MAAM,MAAM,WAAW,GAAG,CAAC,CAAC,KAAK,CAAC,OAAO,iBAAiB,CAAC,CAAC"}

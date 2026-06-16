@@ -1,5 +1,0 @@
-export declare const LocalDD31 = 4;
-export declare const SnapshotDD31 = 5;
-export type LocalDD31 = typeof LocalDD31;
-export type SnapshotDD31 = typeof SnapshotDD31;
-//# sourceMappingURL=meta-type-enum.d.ts.map

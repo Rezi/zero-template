@@ -1,9 +1,0 @@
-//#region ../replicache/src/report-error.ts
-/**
-* Wrapper error class that should be reported as error (logger.error)
-*/
-var ReportError = class extends Error {};
-//#endregion
-export { ReportError };
-
-//# sourceMappingURL=report-error.js.map

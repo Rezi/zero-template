@@ -1,2 +1,0 @@
-import { DrizzleConnection, toIterableRows, zeroDrizzle } from "../../../zero-server/src/adapters/drizzle.js";
-export { DrizzleConnection, toIterableRows, zeroDrizzle };

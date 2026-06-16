@@ -1,9 +1,0 @@
-export declare const TYPE = 0;
-export declare const NODE = 1;
-export declare const OLD_NODE = 2;
-export declare const CHILD_DATA = 2;
-export type TYPE = typeof TYPE;
-export type NODE = typeof NODE;
-export type OLD_NODE = typeof OLD_NODE;
-export type CHILD_DATA = typeof CHILD_DATA;
-//# sourceMappingURL=change-index-enum.d.ts.map

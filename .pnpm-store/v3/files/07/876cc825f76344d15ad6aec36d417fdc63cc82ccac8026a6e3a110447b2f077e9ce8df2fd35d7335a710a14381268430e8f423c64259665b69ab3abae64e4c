@@ -1,3 +1,0 @@
-import type { NonNullValue, SimplePredicateNoNull } from './filter.ts';
-export declare function getLikePredicate(pattern: NonNullValue, flags: 'i' | ''): SimplePredicateNoNull;
-//# sourceMappingURL=like.d.ts.map

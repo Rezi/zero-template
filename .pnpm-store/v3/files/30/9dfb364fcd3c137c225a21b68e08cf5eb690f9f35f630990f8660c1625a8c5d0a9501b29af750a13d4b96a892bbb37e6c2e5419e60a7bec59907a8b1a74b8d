@@ -1,2 +1,0 @@
-import { PrismaConnection, zeroPrisma } from "../../../zero-server/src/adapters/prisma.js";
-export { PrismaConnection, zeroPrisma };

@@ -1,1 +1,0 @@
-{"version":3,"file":"connection-status.d.ts","sourceRoot":"","sources":["../../../../../zero-client/src/client/connection-status.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAC,IAAI,EAAC,MAAM,6BAA6B,CAAC;AACtD,OAAO,KAAK,oBAAoB,MAAM,6BAA6B,CAAC;AAEpE,OAAO,EAAC,oBAAoB,IAAI,gBAAgB,EAAC,CAAC;AAClD,MAAM,MAAM,gBAAgB,GAAG,IAAI,CAAC,OAAO,oBAAoB,CAAC,CAAC"}

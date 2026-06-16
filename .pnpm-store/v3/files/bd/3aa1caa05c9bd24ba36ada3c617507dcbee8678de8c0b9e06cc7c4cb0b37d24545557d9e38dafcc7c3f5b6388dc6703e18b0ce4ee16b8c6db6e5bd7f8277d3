@@ -1,7 +1,0 @@
-import { readonlyRecord, valita_exports } from "../../shared/src/valita.js";
-import { jsonSchema } from "../../shared/src/json-schema.js";
-var rowSchema = readonlyRecord(valita_exports.union(jsonSchema, valita_exports.undefined()));
-//#endregion
-export { rowSchema };
-
-//# sourceMappingURL=data.js.map

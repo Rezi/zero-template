@@ -1,3 +1,0 @@
-import { SQLiteStore, clearAllNamedStoresForTesting, dropStore } from "../../replicache/src/kv/sqlite-store.js";
-import "../../replicache/src/sqlite.js";
-export { SQLiteStore, clearAllNamedStoresForTesting, dropStore };

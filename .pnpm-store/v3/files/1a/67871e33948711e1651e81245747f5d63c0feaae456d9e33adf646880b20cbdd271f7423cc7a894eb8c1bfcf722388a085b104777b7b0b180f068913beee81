@@ -1,7 +1,0 @@
-import * as v from '../../shared/src/valita.ts';
-export declare const mutationIDSchema: v.ObjectType<{
-    id: v.Type<number>;
-    clientID: v.Type<string>;
-}, undefined>;
-export type MutationID = v.Infer<typeof mutationIDSchema>;
-//# sourceMappingURL=mutation-id.d.ts.map

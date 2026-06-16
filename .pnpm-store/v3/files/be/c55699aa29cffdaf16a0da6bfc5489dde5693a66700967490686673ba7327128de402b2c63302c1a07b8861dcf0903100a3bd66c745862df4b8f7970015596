@@ -1,6 +1,0 @@
-//#region ../replicache/src/sync/sync-head-name.ts
-var SYNC_HEAD_NAME = "sync";
-//#endregion
-export { SYNC_HEAD_NAME };
-
-//# sourceMappingURL=sync-head-name.js.map

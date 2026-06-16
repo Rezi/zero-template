@@ -1,3 +1,0 @@
-import { LogContext, type LogLevel } from '@rocicorp/logger';
-export declare function createLogContext(level: LogLevel): LogContext;
-//# sourceMappingURL=logging.d.ts.map

@@ -1,7 +1,0 @@
-//#region ../zero-protocol/src/mutation-type-enum.ts
-var CRUD = "crud";
-var Custom = "custom";
-//#endregion
-export { CRUD, Custom };
-
-//# sourceMappingURL=mutation-type-enum.js.map

@@ -1,4 +1,0 @@
-import type { RowCountsBySource } from '../../zero-protocol/src/analyze-query-result.ts';
-import type { Database } from './db.ts';
-export declare function explainQueries(counts: RowCountsBySource, db: Database): Record<string, string[]>;
-//# sourceMappingURL=explain-queries.d.ts.map

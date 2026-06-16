@@ -1,2 +1,0 @@
-export declare function stringCompare(a: string, b: string): number;
-//# sourceMappingURL=string-compare.d.ts.map

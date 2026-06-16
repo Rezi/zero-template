@@ -1,8 +1,0 @@
-import { valita_exports } from "../../../shared/src/valita.js";
-//#region ../replicache/src/sync/ids.ts
-var clientGroupIDSchema = valita_exports.string();
-var clientIDSchema = valita_exports.string();
-//#endregion
-export { clientGroupIDSchema, clientIDSchema };
-
-//# sourceMappingURL=ids.js.map

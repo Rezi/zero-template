@@ -1,2 +1,0 @@
-export declare const hasOwn: (o: object, v: PropertyKey) => boolean;
-//# sourceMappingURL=has-own.d.ts.map

@@ -1,8 +1,0 @@
-import * as v from '@badrap/valita';
-export type JSONValue = null | string | boolean | number | Array<JSONValue> | JSONObject;
-export type JSONObject = {
-    [key: string]: JSONValue | undefined;
-};
-export declare const jsonValueSchema: v.Type<JSONValue>;
-export declare const jsonObjectSchema: v.Type<Record<string, JSONValue | undefined>>;
-//# sourceMappingURL=json.d.ts.map

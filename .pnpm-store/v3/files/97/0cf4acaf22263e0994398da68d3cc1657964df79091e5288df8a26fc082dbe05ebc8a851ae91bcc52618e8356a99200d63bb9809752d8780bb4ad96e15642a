@@ -1,9 +1,0 @@
-import type { FrozenJSONValue } from '../frozen-json.ts';
-import type { Write } from './store.ts';
-import { WriteImplBase } from './write-impl-base.ts';
-export declare class WriteImpl extends WriteImplBase implements Write {
-    #private;
-    constructor(map: Map<string, FrozenJSONValue>, release: () => void);
-    commit(): Promise<void>;
-}
-//# sourceMappingURL=write-impl.d.ts.map

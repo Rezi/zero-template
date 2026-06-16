@@ -1,8 +1,0 @@
-import { valita_exports } from "../../shared/src/valita.js";
-//#region ../zero-protocol/src/version.ts
-var versionSchema = valita_exports.string();
-var nullableVersionSchema = valita_exports.union(versionSchema, valita_exports.null());
-//#endregion
-export { nullableVersionSchema, versionSchema };
-
-//# sourceMappingURL=version.js.map

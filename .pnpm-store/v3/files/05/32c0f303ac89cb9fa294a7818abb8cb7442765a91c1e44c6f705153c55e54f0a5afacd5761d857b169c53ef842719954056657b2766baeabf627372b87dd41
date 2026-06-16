@@ -1,9 +1,0 @@
-import type { SQLQuery } from '@databases/sql';
-import sql from '@databases/sql';
-export declare function compile(sql: SQLQuery): string;
-export declare function format(sql: SQLQuery): {
-    text: string;
-    values: unknown[];
-};
-export { sql };
-//# sourceMappingURL=sql.d.ts.map

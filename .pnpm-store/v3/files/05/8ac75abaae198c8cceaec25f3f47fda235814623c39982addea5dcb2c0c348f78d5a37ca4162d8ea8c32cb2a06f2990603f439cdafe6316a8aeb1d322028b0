@@ -1,8 +1,0 @@
-import { version } from "../../../../otel/src/version.js";
-import { trace } from "@opentelemetry/api";
-//#region ../zero-cache/src/services/view-syncer/tracer.ts
-var tracer = trace.getTracer("view-syncer", version);
-//#endregion
-export { tracer };
-
-//# sourceMappingURL=tracer.js.map

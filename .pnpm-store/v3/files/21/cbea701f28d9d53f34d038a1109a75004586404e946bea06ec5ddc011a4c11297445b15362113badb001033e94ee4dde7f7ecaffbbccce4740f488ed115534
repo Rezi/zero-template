@@ -1,2 +1,0 @@
-export declare function sortedEntries<T extends Record<string, any>>(object: T): [keyof T & string, T[keyof T]][];
-//# sourceMappingURL=sorted-entries.d.ts.map

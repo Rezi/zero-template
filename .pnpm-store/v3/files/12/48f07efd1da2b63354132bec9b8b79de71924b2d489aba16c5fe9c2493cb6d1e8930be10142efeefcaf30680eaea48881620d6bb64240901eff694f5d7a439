@@ -1,2 +1,0 @@
-import "./kv/op-sqlite/store.js";
-export {};

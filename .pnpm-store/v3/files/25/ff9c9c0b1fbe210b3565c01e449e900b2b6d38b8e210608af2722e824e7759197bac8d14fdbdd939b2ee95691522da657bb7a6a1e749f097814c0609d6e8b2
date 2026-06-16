@@ -1,3 +1,0 @@
-import { opSQLiteStoreProvider } from "../../replicache/src/kv/op-sqlite/store.js";
-import "../../replicache/src/op-sqlite.js";
-export { opSQLiteStoreProvider };

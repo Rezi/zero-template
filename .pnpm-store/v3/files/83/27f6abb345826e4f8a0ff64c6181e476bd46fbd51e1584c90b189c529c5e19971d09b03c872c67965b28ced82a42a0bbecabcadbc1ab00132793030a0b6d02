@@ -1,9 +1,0 @@
-type PartialDocument = Pick<Document, 'visibilityState' | 'addEventListener' | 'removeEventListener'>;
-export declare function getDocumentVisibilityWatcher(doc: PartialDocument | undefined, hiddenIntervalMS: number, signal: AbortSignal): DocumentVisibilityWatcher;
-export interface DocumentVisibilityWatcher {
-    readonly visibilityState: DocumentVisibilityState;
-    waitForVisible(): Promise<unknown>;
-    waitForHidden(): Promise<unknown>;
-}
-export {};
-//# sourceMappingURL=document-visible.d.ts.map

@@ -10,15 +10,16 @@ A real-time zero-app app built as an **Nx monorepo**. The stack:
 - **[Vite](https://vite.dev/)** + **[Tailwind CSS v4](https://tailwindcss.com/)** — build & styling
 - **[Vitest](https://vitest.dev/)** + **[Playwright](https://playwright.dev/)** — unit & e2e tests
 
-> **Package manager: pnpm** (`packageManager: pnpm@9.15.9`). Do **not** use `npm install` — it corrupts the pnpm `node_modules` layout and causes duplicate transitive dependencies. Use [Corepack](https://nodejs.org/api/corepack.html) (`corepack enable`) to get the pinned pnpm version automatically.
+> **Package manager & task runner: [Deno](https://deno.com/)** (≥ 2.x). Dependencies are declared in `package.json` and resolved by Deno into a real `node_modules` directory (`"nodeModulesDir": "auto"` in `deno.json`); the lockfile is `deno.lock`. Tasks live in `deno.json` and are run with `deno task <name>`. Do **not** use `npm`/`pnpm install` — that would create a competing lockfile and `node_modules` layout.
 
 ---
 
 ## Getting started
 
 ```bash
-corepack enable          # activates pnpm@9.15.9 (pinned in package.json)
-pnpm install
+# install Deno (https://deno.com/) if you don't have it, then install deps and
+# build the platform-specific native binaries (see "native binaries" note below):
+deno task deno
 
 # create .env with the variables listed in the "Environment" section below
 # (.env is git-ignored — it holds local secrets)
@@ -27,17 +28,21 @@ pnpm install
 docker compose up -d
 
 # run migrations + start the app
-pnpm db:migrate
-pnpm dev                 # → http://localhost:3000
+deno task db:migrate
+deno task dev            # → http://localhost:3000
 ```
 
 In a separate terminal, run the Zero cache server:
 
 ```bash
-pnpm zero-cache
+deno task zero-cache
 ```
 
-> **Note on native binaries:** the committed `pnpm-lock.yaml` resolves platform-specific binaries (esbuild, lightningcss, nx). Always run `pnpm install` **on the machine you develop on** so the correct native binaries are fetched. If you ever see `WorkspaceContext is not a constructor` (Nx) or a bundler crash, your `node_modules` was installed for a different OS/arch — reinstall.
+> **Tip — interactive dev dashboard:** `deno task wiz` opens a [@clack/prompts](https://www.npmjs.com/package/@clack/prompts) wizard that launches and supervises the common dev flows from one menu: dev server, Zero cache, per-project targets, builds/tests/lint, e2e, Docker (Postgres), Drizzle migrations and the native rebuild. Jobs run in the background so you can have several going at once (e.g. dev server + zero-cache + a build); their output is captured to `.wiz/logs/` and viewable from the menu. Exiting stops the jobs it started.
+
+> **Note on native binaries & build scripts:** a few dependencies run install/build scripts and ship platform-specific binaries (`@rocicorp/zero-sqlite3` compiles SQLite via node-gyp; `esbuild`, `lightningcss`, `nx`, `protobufjs`). Deno does **not** run those scripts unless you allow them, and `@rocicorp/zero-sqlite3` additionally needs a generated header that isn't in its npm tarball — so a plain `deno install` is not enough. **`deno task deno`** (→ `scripts/rebuild-deno-native.sh`) handles all of this: it reinstalls deps with the right `--allow-scripts`, generates the missing header, and compiles `better_sqlite3.node` for the current OS/arch. It needs a C toolchain and `node-gyp` on PATH (`npm install -g node-gyp`; macOS also needs the Xcode CLI tools — `xcode-select --install`).
+>
+> Run `deno task deno` **on the machine you develop on**, and re-run it whenever you switch machines — `node_modules` holds only one platform's binaries at a time. Symptoms that you're on the wrong build: `dlopen … slice is not valid mach-o file` / `invalid ELF header` (zero-sqlite3), `WorkspaceContext is not a constructor` (Nx), or a bundler crash. The fix is always the same: re-run `deno task deno`.
 
 ---
 
@@ -54,6 +59,7 @@ zero-app/
 │  ├─ auth/                 authentication                (MIXED: client + /server)
 │  ├─ db/                   Drizzle connection & schema    (BE)
 │  └─ zero/                 Zero schema/queries/mutators  (MIXED: client + /server)
+├─ deno.json             Deno tasks + node_modules / lockfile config
 ├─ nx.json               Nx config (targetDefaults, named inputs)
 ├─ tsconfig.base.json    TypeScript path aliases (@zero-app/*)
 └─ eslint.config.mjs     Flat ESLint config incl. @nx/enforce-module-boundaries
@@ -105,8 +111,8 @@ There are **no circular dependencies**. The better-auth table definitions live i
 Inspect it yourself:
 
 ```bash
-pnpm nx graph                 # interactive graph in the browser
-pnpm nx graph --file=graph.json
+deno task graph                      # interactive graph in the browser
+deno task nx graph --file=graph.json
 ```
 
 ---
@@ -216,38 +222,40 @@ Defined in `.env` (git-ignored for real values). **Only `VITE_PUBLIC_*` variable
 
 ## Nx commands
 
-Run a single target on a single project — `pnpm nx <target> <project>`:
+Nx is invoked through Deno. `deno task nx` is a passthrough that forwards all arguments to the Nx CLI.
+
+Run a single target on a single project — `deno task nx <target> <project>`:
 
 ```bash
-pnpm nx serve zero-app         # dev server (http://localhost:3000)
-pnpm nx build zero-app         # production build (also builds lib deps first)
-pnpm nx preview zero-app       # preview a production build
-pnpm nx lint ui-library          # lint one library
-pnpm nx build db                 # type-check one library (libs "build" = tsc --noEmit)
-pnpm nx e2e zero-app-e2e       # Playwright e2e (boots the app via webServer)
+deno task nx serve zero-app      # dev server (http://localhost:3000)
+deno task nx build zero-app      # production build (also builds lib deps first)
+deno task nx preview zero-app    # preview a production build
+deno task nx lint ui-library     # lint one library
+deno task nx build db            # type-check one library (libs "build" = tsc --noEmit)
+deno task nx e2e zero-app-e2e    # Playwright e2e (boots the app via webServer)
 ```
 
-Run a target across the whole workspace — `pnpm nx run-many`:
+Run a target across the whole workspace — `deno task nx run-many`:
 
 ```bash
-pnpm nx run-many --target=lint        # lint everything
-pnpm nx run-many --target=build       # build the app + type-check all libs
-pnpm nx run-many --target=test        # all unit tests
+deno task nx run-many --target=lint    # lint everything
+deno task nx run-many --target=build   # build the app + type-check all libs
+deno task nx run-many --target=test    # all unit tests
 ```
 
 Only what changed since `main`:
 
 ```bash
-pnpm nx affected --target=lint
-pnpm nx affected --target=build
+deno task nx affected --target=lint
+deno task nx affected --target=build
 ```
 
 Other useful commands:
 
 ```bash
-pnpm nx graph                    # visualize the dependency graph
-pnpm nx show project zero-app  # inspect a project's targets/tags
-pnpm nx reset                    # clear the Nx cache (and daemon)
+deno task graph                       # visualize the dependency graph
+deno task nx show project zero-app    # inspect a project's targets/tags
+deno task nx reset                    # clear the Nx cache (and daemon)
 ```
 
 ### Targets per project
@@ -258,22 +266,27 @@ pnpm nx reset                    # clear the Nx cache (and daemon)
 | `zero-app-e2e` | — | — | — | — | ✅ | ✅ `playwright` |
 | `zero-app-components` / `ui-library` / `auth` / `db` / `zero` | ✅ `tsc` type-check | — | — | — | ✅ | — |
 
-> Libraries are consumed via TS path aliases, so their `build` target is a `tsc --noEmit` type-check rather than an emit step. `pnpm nx build zero-app` automatically type-checks the libraries it depends on first (`dependsOn: ["^build"]`).
+> Libraries are consumed via TS path aliases, so their `build` target is a `tsc --noEmit` type-check rather than an emit step. `deno task build` automatically type-checks the libraries it depends on first (`dependsOn: ["^build"]`).
 
-### Root npm scripts (thin wrappers)
+### Deno tasks (thin wrappers)
 
-| Script | Runs |
+Defined in `deno.json`, run with `deno task <name>`:
+
+| Task | Runs |
 |---|---|
-| `pnpm dev` | `nx serve zero-app` |
-| `pnpm build` | `nx build zero-app` |
-| `pnpm preview` | `nx preview zero-app` |
-| `pnpm test` | `nx run-many --target=test` |
-| `pnpm lint` | `nx run-many --target=lint` |
-| `pnpm e2e` | `nx e2e zero-app-e2e` |
-| `pnpm graph` | `nx graph` |
-| `pnpm zero-cache` | starts the Zero cache dev server |
-| `pnpm db:generate` / `db:migrate` / `db:push` | Drizzle Kit (config in `libs/db/`) |
-| `pnpm generate-zero-schema` | regenerate `libs/zero/src/lib/schema.ts` from the Drizzle schema |
+| `deno task dev` | `nx serve zero-app` |
+| `deno task build` | `nx build zero-app` |
+| `deno task preview` | `nx preview zero-app` |
+| `deno task test` | `nx run-many --target=test` |
+| `deno task lint` | `nx run-many --target=lint` |
+| `deno task e2e` | `nx e2e zero-app-e2e` |
+| `deno task graph` | `nx graph` |
+| `deno task nx …` | passthrough to the Nx CLI (any target/project) |
+| `deno task wiz` | interactive dev dashboard — launch/supervise dev server, zero-cache, builds, tests, Docker, etc. (`scripts/wizard.ts`) |
+| `deno task deno` | reinstall deps + (re)build native binaries for the current OS/arch (`scripts/rebuild-deno-native.sh`) |
+| `deno task zero-cache` | starts the Zero cache dev server |
+| `deno task db:generate` / `db:migrate` / `db:push` | Drizzle Kit (config in `libs/db/`) |
+| `deno task generate-zero-schema` | regenerate `libs/zero/src/lib/schema.ts` from the Drizzle schema |
 
 ---
 
@@ -282,10 +295,10 @@ pnpm nx reset                    # clear the Nx cache (and daemon)
 Drizzle config lives in `libs/db/` and the schema in `libs/db/src/lib/schema.ts` (which also re-exports the better-auth tables from `auth-schema.ts`).
 
 ```bash
-pnpm db:generate           # generate a migration from schema changes
-pnpm db:migrate            # apply migrations
-pnpm db:push               # push schema directly (dev only)
-pnpm generate-zero-schema  # regenerate the Zero schema from Drizzle
+deno task db:generate           # generate a migration from schema changes
+deno task db:migrate            # apply migrations
+deno task db:push               # push schema directly (dev only)
+deno task generate-zero-schema  # regenerate the Zero schema from Drizzle
 ```
 
 The Zero schema (`libs/zero/src/lib/schema.ts`) is **generated** by `drizzle-zero` from the Drizzle schema — do not edit it by hand.
@@ -297,11 +310,11 @@ The Zero schema (`libs/zero/src/lib/schema.ts`) is **generated** by `drizzle-zer
 - **A route** → add a file under `apps/zero-app/src/routes/`. TanStack Router regenerates `routeTree.gen.ts` automatically.
 - **A server API route** → use the `server.handlers` property (see `routes/api/*.ts`) and import BE code from the `/server` aliases.
 - **An app component** → add it to `libs/zero-app-components/src/lib/` and export it from `libs/zero-app-components/src/index.ts`. Generic, dependency-free building blocks belong in `libs/ui-library/` instead.
-- **A new library** → `pnpm nx g @nx/js:lib libs/<name>`, then add `tags` to its `project.json` and a path alias in `tsconfig.base.json`. Update boundary rules in `eslint.config.mjs` if the new tag needs dependency permissions.
+- **A new library** → `deno task nx g @nx/js:lib libs/<name>`, then add `tags` to its `project.json` and a path alias in `tsconfig.base.json`. Update boundary rules in `eslint.config.mjs` if the new tag needs dependency permissions.
 
 Before pushing, make sure the workspace is green:
 
 ```bash
-pnpm nx run-many --target=lint
-pnpm nx run-many --target=build
+deno task nx run-many --target=lint
+deno task nx run-many --target=build
 ```

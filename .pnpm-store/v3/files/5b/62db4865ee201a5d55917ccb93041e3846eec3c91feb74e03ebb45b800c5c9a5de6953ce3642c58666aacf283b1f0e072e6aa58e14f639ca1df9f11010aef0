@@ -1,2 +1,0 @@
-export declare function elide(val: string, maxBytes: number): string;
-//# sourceMappingURL=strings.d.ts.map

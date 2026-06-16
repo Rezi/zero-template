@@ -1,2 +1,0 @@
-export declare function setIntervalWithSignal(fn: () => void, ms: number, signal: AbortSignal): void;
-//# sourceMappingURL=set-interval-with-signal.d.ts.map

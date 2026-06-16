@@ -1,1 +1,0 @@
-{"version":3,"file":"http-request-info.d.ts","sourceRoot":"","sources":["../../../../replicache/src/http-request-info.ts"],"names":[],"mappings":"AAMA,wBAAgB,qBAAqB,CACnC,CAAC,EAAE,OAAO,GACT,OAAO,CAAC,CAAC,IAAI,eAAe,CAI9B;AAED,MAAM,MAAM,eAAe,GAAG;IAC5B,cAAc,EAAE,MAAM,CAAC;IACvB,YAAY,EAAE,MAAM,CAAC;CACtB,CAAC"}

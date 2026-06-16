@@ -1,4 +1,0 @@
-export declare class QueryParseError extends Error {
-    constructor(opts: ErrorOptions);
-}
-//# sourceMappingURL=error.d.ts.map

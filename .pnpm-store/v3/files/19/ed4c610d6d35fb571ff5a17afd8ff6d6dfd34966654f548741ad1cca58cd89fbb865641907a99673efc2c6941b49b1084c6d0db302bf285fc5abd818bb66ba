@@ -1,3 +1,0 @@
-#!/usr/bin/env node
-import '../../shared/src/dotenv.ts';
-//# sourceMappingURL=zero-out.d.ts.map

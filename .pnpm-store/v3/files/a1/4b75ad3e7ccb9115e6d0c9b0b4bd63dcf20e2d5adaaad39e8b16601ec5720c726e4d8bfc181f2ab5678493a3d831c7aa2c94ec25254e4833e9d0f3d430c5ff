@@ -1,3 +1,0 @@
-#!/usr/bin/env node
-import '../../ast-to-zql/src/bin.ts';
-//# sourceMappingURL=ast-to-zql.d.ts.map

@@ -1,8 +1,0 @@
-//#region ../shared/src/abort-error.ts
-var AbortError = class extends Error {
-	name = "AbortError";
-};
-//#endregion
-export { AbortError };
-
-//# sourceMappingURL=abort-error.js.map

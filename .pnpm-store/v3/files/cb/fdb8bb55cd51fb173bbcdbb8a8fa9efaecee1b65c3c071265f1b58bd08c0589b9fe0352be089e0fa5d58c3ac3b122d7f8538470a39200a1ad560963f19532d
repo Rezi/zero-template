@@ -1,1 +1,0 @@
-{"version":3,"file":"to-error.js","names":[],"sources":["../../../../replicache/src/to-error.ts"],"sourcesContent":["export function toError(e: unknown): Error {\n  if (e instanceof Error) {\n    return e;\n  }\n  return new Error(String(e));\n}\n"],"mappings":";AAAA,SAAgB,QAAQ,GAAmB;AACzC,KAAI,aAAa,MACf,QAAO;AAET,QAAO,IAAI,MAAM,OAAO,EAAE,CAAC"}

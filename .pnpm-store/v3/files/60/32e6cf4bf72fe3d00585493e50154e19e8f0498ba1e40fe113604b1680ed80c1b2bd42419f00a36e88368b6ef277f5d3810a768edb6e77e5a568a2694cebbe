@@ -1,1 +1,0 @@
-{"version":3,"file":"constants.js","names":[],"sources":["../../../../../../../zero-cache/src/services/replicator/schema/constants.ts"],"sourcesContent":["/**\n * Constants for replication metadata.\n *\n * Extracted to avoid loading SQLite when only needing constant values.\n */\n\nexport const ZERO_VERSION_COLUMN_NAME = '_0_version';\n"],"mappings":";;;;;;AAMA,IAAa,2BAA2B"}

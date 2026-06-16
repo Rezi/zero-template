@@ -1,8 +1,0 @@
-//#region ../zero-cache/src/db/mode-enum.ts
-var SERIALIZABLE = "ISOLATION LEVEL SERIALIZABLE";
-var READ_COMMITTED = "ISOLATION LEVEL READ COMMITTED";
-var READONLY = "ISOLATION LEVEL REPEATABLE READ READ ONLY";
-//#endregion
-export { READONLY, READ_COMMITTED, SERIALIZABLE };
-
-//# sourceMappingURL=mode-enum.js.map

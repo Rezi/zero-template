@@ -1,5 +1,0 @@
-export declare function liteTableName(t: {
-    schema: string;
-    name: string;
-}): string;
-//# sourceMappingURL=names.d.ts.map

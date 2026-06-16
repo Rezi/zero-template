@@ -1,9 +1,0 @@
-import type { LogLevel } from '@rocicorp/logger';
-import { ProtocolError, type ErrorBody } from '../../../zero-protocol/src/error.ts';
-export declare class ProtocolErrorWithLevel extends ProtocolError {
-    readonly logLevel: LogLevel;
-    constructor(errorBody: ErrorBody, logLevel: LogLevel, options?: ErrorOptions);
-}
-export declare function getLogLevel(error: unknown): LogLevel;
-export declare function wrapWithProtocolError(error: unknown): ProtocolError;
-//# sourceMappingURL=error-with-level.d.ts.map

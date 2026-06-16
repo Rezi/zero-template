@@ -1,4 +1,0 @@
-import type { JSONValue, ReadonlyJSONValue } from './json.ts';
-export declare function deepClone(value: ReadonlyJSONValue): JSONValue;
-export declare function internalDeepClone(value: ReadonlyJSONValue, seen: Array<ReadonlyJSONValue>): JSONValue;
-//# sourceMappingURL=deep-clone.d.ts.map

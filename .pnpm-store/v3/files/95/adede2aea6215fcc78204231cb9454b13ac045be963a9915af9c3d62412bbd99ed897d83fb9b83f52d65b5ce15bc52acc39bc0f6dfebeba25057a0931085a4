@@ -1,3 +1,0 @@
-export declare const IP_ADDRESS_HOSTNAME_REGEX: RegExp;
-export declare function shouldEnableAnalytics(server: string | null, enableAnalytics?: boolean): boolean;
-//# sourceMappingURL=enable-analytics.d.ts.map

@@ -1,8 +1,0 @@
-import * as v from '../../shared/src/valita.ts';
-export declare const primaryKeySchema: v.Type<readonly [string, ...string[]]>;
-export type PrimaryKey = v.Infer<typeof primaryKeySchema>;
-export declare const primaryKeyValueSchema: v.UnionType<[v.Type<string>, v.Type<number>, v.Type<boolean>]>;
-export type PrimaryKeyValue = v.Infer<typeof primaryKeyValueSchema>;
-export declare const primaryKeyValueRecordSchema: v.Type<Readonly<Record<string, string | number | boolean>>>;
-export type PrimaryKeyValueRecord = v.Infer<typeof primaryKeyValueRecordSchema>;
-//# sourceMappingURL=primary-key.d.ts.map

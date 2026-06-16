@@ -1,1 +1,0 @@
-{"version":3,"file":"navigator.d.ts","sourceRoot":"","sources":["../../../../shared/src/navigator.ts"],"names":[],"mappings":"AAAA,KAAK,SAAS,GAAG;IACf,MAAM,EAAE,OAAO,CAAC;IAChB,SAAS,EAAE,MAAM,CAAC;CAEnB,CAAC;AAEF,QAAA,MAAM,cAAc,EAAE,SAAS,GAAG,SACwB,CAAC;AAE3D,OAAO,EAAC,cAAc,IAAI,SAAS,EAAC,CAAC"}

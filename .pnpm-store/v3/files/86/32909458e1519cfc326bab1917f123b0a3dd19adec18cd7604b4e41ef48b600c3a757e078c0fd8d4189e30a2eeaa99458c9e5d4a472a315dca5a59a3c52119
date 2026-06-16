@@ -1,6 +1,0 @@
-declare function getOrInsertNative<K, V>(map: Map<K, V>, key: K, defaultValue: V): V;
-declare function getOrInsertComputedNative<K, V>(map: Map<K, V>, key: K, compute: (key: K) => V): V;
-export declare const getOrInsert: typeof getOrInsertNative;
-export declare const getOrInsertComputed: typeof getOrInsertComputedNative;
-export {};
-//# sourceMappingURL=map.d.ts.map

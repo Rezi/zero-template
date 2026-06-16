@@ -1,3 +1,0 @@
-import type { HTTPString } from './http-string.ts';
-export declare function getServer(server: string | undefined | null): HTTPString | null;
-//# sourceMappingURL=server-option.d.ts.map

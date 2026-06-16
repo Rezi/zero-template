@@ -1,5 +1,0 @@
-export declare const Add = 0;
-export declare const Remove = 1;
-export type Add = typeof Add;
-export type Remove = typeof Remove;
-//# sourceMappingURL=index-operation-enum.d.ts.map

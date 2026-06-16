@@ -1,3 +1,0 @@
-export declare const isProd: boolean;
-export { isProd as skipAssertJSONValue };
-//# sourceMappingURL=config.d.ts.map

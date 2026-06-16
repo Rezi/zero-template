@@ -3,13 +3,17 @@
     "allow": [
       "Bash(gh api *)",
       "mcp__context7__query-docs",
-      "Bash(pnpm zero-cache *)",
+      "Bash(deno task zero-cache *)",
       "Read(//Users/tomasrezac/Documents/dev/ztunes/auth/**)",
       "Read(//Users/tomasrezac/Documents/dev/ztunes/app/routes/**)",
       "Read(//Users/tomasrezac/Documents/dev/ztunes/app/components/**)",
       "Read(//Users/tomasrezac/Documents/dev/ztunes/**)",
-      "Bash(pnpm add *)",
-      "Bash(git mv)"
+      "Bash(deno add *)",
+      "Bash(git mv)",
+      "Bash(npx prebuild-install *)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(ZERO_QUERY_URL=http://localhost:3000/api/query ZERO_MUTATE_URL=http://localhost:3000/api/mutate timeout 15 deno task zero-cache)",
+      "Read(//tmp/**)"
     ]
   }
 }

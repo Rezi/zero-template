@@ -14,7 +14,7 @@ function Home() {
   const isSignedIn = !!session.data?.user
   const [error, setError] = useState<string | null>(null)
 
-  const [albums] = useQuery(queries.albums.byArtist({artistId: 'artist_1'}))
+  const [albums] = useQuery(queries.albums.byArtist({artistId: 'artist_001'}))
 
   const onClick = async () => {
     setError(null)
@@ -26,7 +26,7 @@ function Home() {
       const result = zero.mutate(
         mutators.albums.create({
           id: crypto.randomUUID(),
-          artistId: 'artist_1',
+          artistId: 'artist_001',
           title: 'Please Please Me',
           releaseYear: 1963,
         }),

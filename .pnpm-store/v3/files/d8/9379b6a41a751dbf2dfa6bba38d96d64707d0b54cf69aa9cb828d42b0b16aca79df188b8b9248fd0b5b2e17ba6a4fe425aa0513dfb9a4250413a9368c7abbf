@@ -1,3 +1,0 @@
-import { current_exports } from "../../../zero-cache/src/services/change-source/protocol/current.js";
-import "../../../zero-cache/src/services/change-source/protocol/mod.js";
-export { current_exports as v0 };

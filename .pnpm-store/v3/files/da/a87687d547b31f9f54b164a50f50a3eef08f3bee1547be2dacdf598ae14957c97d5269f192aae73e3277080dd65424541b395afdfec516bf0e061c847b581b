@@ -1,4 +1,0 @@
-import type { ReadonlyJSONValue } from './json.ts';
-export declare function getErrorMessage(error: unknown): string;
-export declare function getErrorDetails(error: unknown): ReadonlyJSONValue | undefined;
-//# sourceMappingURL=error.d.ts.map

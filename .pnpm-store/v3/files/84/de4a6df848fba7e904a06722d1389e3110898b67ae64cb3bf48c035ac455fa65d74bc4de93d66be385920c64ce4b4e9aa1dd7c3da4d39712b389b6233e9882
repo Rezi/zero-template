@@ -1,2 +1,0 @@
-import { KyselyConnection, zeroKysely } from "../../../zero-server/src/adapters/kysely.js";
-export { KyselyConnection, zeroKysely };

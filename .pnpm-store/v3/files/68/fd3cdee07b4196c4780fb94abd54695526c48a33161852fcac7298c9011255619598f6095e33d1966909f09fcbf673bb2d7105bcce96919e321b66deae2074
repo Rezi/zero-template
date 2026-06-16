@@ -1,8 +1,0 @@
-//#region ../zero-protocol/src/error-origin-enum.ts
-var Client = "client";
-var Server = "server";
-var ZeroCache = "zeroCache";
-//#endregion
-export { Client, Server, ZeroCache };
-
-//# sourceMappingURL=error-origin-enum.js.map

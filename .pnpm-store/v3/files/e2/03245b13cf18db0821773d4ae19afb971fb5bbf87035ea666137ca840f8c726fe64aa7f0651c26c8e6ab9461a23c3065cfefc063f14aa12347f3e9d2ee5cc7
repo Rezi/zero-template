@@ -1,2 +1,0 @@
-export * as v0 from './current.ts';
-//# sourceMappingURL=mod.d.ts.map

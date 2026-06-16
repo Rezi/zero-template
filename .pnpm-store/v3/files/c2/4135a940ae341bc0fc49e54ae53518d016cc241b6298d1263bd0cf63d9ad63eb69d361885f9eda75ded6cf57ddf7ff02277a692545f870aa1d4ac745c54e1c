@@ -1,4 +1,0 @@
-import { type AST } from './ast.ts';
-export declare function hashOfAST(ast: AST): string;
-export declare function hashOfNameAndArgs(name: string, args: readonly unknown[]): string;
-//# sourceMappingURL=query-hash.d.ts.map

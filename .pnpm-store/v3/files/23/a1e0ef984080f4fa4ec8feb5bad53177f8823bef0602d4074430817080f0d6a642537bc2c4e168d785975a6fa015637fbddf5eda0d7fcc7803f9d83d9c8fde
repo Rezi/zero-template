@@ -1,9 +1,0 @@
-export declare const CHANGE_STREAMER_URL: URL;
-export declare const MAIN_URL: URL;
-export declare const MUTATOR_URL: URL;
-export declare const REAPER_URL: URL;
-export declare const REPLICATOR_URL: URL;
-export declare const SHADOW_SYNCER_URL: URL;
-export declare const SYNCER_URL: URL;
-export declare const WRITE_WORKER_URL: URL;
-//# sourceMappingURL=worker-urls.d.ts.map

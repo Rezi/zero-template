@@ -1,1 +1,0 @@
-{"version":3,"file":"socket.js","names":[],"sources":["../../../../../zero-client/src/util/socket.ts"],"sourcesContent":["import type {Upstream} from '../../../zero-protocol/src/up.ts';\n\nexport function send(ws: WebSocket, data: Upstream) {\n  ws.send(JSON.stringify(data));\n}\n"],"mappings":";AAEA,SAAgB,KAAK,IAAe,MAAgB;AAClD,IAAG,KAAK,KAAK,UAAU,KAAK,CAAC"}

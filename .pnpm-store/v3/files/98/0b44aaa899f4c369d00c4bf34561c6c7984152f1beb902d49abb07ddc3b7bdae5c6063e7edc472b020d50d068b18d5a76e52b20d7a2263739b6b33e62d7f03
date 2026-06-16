@@ -1,9 +1,0 @@
-import { stringCompare } from "./string-compare.js";
-//#region ../shared/src/sorted-entries.ts
-function sortedEntries(object) {
-	return Object.entries(object).sort((a, b) => stringCompare(a[0], b[0]));
-}
-//#endregion
-export { sortedEntries };
-
-//# sourceMappingURL=sorted-entries.js.map

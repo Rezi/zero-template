@@ -1,2 +1,0 @@
-import "./kv/expo-sqlite/store.js";
-export {};

@@ -1,2 +1,0 @@
-export declare function deleteLiteDB(dbFile: string): void;
-//# sourceMappingURL=delete-lite-db.d.ts.map

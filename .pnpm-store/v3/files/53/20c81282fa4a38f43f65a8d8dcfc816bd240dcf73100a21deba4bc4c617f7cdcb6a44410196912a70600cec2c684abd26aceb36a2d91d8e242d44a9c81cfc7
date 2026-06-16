@@ -1,4 +1,0 @@
-export declare const h32: (s: string) => number;
-export declare const h64: (s: string) => bigint;
-export declare const h128: (s: string) => bigint;
-//# sourceMappingURL=hash.d.ts.map

@@ -1,9 +1,0 @@
-//#region ../zero-types/src/format.ts
-var defaultFormat = {
-	singular: false,
-	relationships: {}
-};
-//#endregion
-export { defaultFormat };
-
-//# sourceMappingURL=format.js.map

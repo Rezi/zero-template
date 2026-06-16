@@ -1,1 +1,0 @@
-{"version":3,"file":"sql.d.ts","sourceRoot":"","sources":["../../../../../zqlite/src/internal/sql.ts"],"names":[],"mappings":"AACA,OAAO,KAAK,EAAe,QAAQ,EAAC,MAAM,gBAAgB,CAAC;AAC3D,OAAO,GAAG,MAAM,gBAAgB,CAAC;AAOjC,wBAAgB,OAAO,CAAC,GAAG,EAAE,QAAQ,GAAG,MAAM,CAE7C;AAED,wBAAgB,MAAM,CAAC,GAAG,EAAE,QAAQ;;;EAEnC;AAED,OAAO,EAAC,GAAG,EAAC,CAAC"}

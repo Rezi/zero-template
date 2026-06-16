@@ -1,9 +1,0 @@
-export declare const promiseTrue: Promise<true>;
-export declare const promiseFalse: Promise<false>;
-export declare const promiseUndefined: Promise<undefined>;
-export declare const promiseVoid: Promise<void>;
-/**
- * A promise that never resolves.
- */
-export declare const promiseNever: Promise<never>;
-//# sourceMappingURL=resolved-promises.d.ts.map

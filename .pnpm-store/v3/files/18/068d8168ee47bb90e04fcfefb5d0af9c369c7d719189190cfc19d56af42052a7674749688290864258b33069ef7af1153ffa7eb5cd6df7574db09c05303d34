@@ -1,3 +1,0 @@
-#!/usr/bin/env node
-import '../../analyze-query/src/bin-analyze.ts';
-//# sourceMappingURL=analyze-query.d.ts.map

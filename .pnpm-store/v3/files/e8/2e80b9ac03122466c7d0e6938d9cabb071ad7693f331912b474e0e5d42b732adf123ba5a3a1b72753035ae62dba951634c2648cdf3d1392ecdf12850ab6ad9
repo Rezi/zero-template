@@ -1,6 +1,0 @@
-//#region ../shared/src/navigator.ts
-var localNavigator = typeof navigator !== "undefined" ? navigator : void 0;
-//#endregion
-export { localNavigator };
-
-//# sourceMappingURL=navigator.js.map

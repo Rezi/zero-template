@@ -1,6 +1,0 @@
-import type { Store } from './dag/store.ts';
-declare function makeChannelNameV0(replicacheName: string): string;
-declare function makeChannelNameV1(replicacheName: string): string;
-export { makeChannelNameV0 as makeChannelNameV0ForTesting, makeChannelNameV1 as makeChannelNameV1ForTesting, };
-export declare function initNewClientChannel(replicacheName: string, idbName: string, signal: AbortSignal, clientGroupID: string, isNewClientGroup: boolean, onUpdateNeeded: () => void, perdag: Store): void;
-//# sourceMappingURL=new-client-channel.d.ts.map

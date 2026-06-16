@@ -1,5 +1,0 @@
-/**
- * Creates a password prompt using HTML <dialog> element
- */
-export declare function createHTMLPasswordPrompt(message: string): Promise<string | null>;
-//# sourceMappingURL=html-dialog-prompt.d.ts.map

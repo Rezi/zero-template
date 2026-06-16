@@ -1,1 +1,0 @@
-{"version":3,"file":"abort-error.js","names":[],"sources":["../../../../shared/src/abort-error.ts"],"sourcesContent":["export class AbortError extends Error {\n  name = 'AbortError';\n}\n"],"mappings":";AAAA,IAAa,aAAb,cAAgC,MAAM;CACpC,OAAO"}

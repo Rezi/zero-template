@@ -1,6 +1,0 @@
-export declare const CRUD = "crud";
-export declare const Custom = "custom";
-export type MutationType = typeof CRUD | typeof Custom;
-export type CRUD = typeof CRUD;
-export type Custom = typeof Custom;
-//# sourceMappingURL=mutation-type-enum.d.ts.map

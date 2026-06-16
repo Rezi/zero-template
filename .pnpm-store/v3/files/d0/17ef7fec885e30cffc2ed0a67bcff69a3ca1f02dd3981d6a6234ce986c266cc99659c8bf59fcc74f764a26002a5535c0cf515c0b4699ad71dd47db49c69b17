@@ -1,6 +1,0 @@
-import * as v from '../../shared/src/valita.ts';
-export declare const pongBodySchema: v.ObjectType<{}, undefined>;
-export declare const pongMessageSchema: v.TupleType<[v.Type<"pong">, v.ObjectType<{}, undefined>]>;
-export type PongBody = v.Infer<typeof pongBodySchema>;
-export type PongMessage = v.Infer<typeof pongMessageSchema>;
-//# sourceMappingURL=pong.d.ts.map

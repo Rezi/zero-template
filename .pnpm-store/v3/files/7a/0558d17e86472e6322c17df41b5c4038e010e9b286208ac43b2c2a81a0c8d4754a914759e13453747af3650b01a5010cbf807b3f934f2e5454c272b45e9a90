@@ -1,1 +1,0 @@
-{"version":3,"file":"get-default-pusher.d.ts","sourceRoot":"","sources":["../../../../replicache/src/get-default-pusher.ts"],"names":[],"mappings":"AAKA,OAAO,KAAK,EAAC,MAAM,EAAe,MAAM,aAAa,CAAC;AAGtD;;GAEG;AACH,wBAAgB,gBAAgB,CAAC,GAAG,EAAE;IAAC,OAAO,EAAE,MAAM,CAAC;IAAC,IAAI,EAAE,MAAM,CAAA;CAAC,GAAG,MAAM,CAuC7E;AAID,wBAAgB,eAAe,CAAC,MAAM,EAAE,MAAM,GAAG,OAAO,CAEvD"}

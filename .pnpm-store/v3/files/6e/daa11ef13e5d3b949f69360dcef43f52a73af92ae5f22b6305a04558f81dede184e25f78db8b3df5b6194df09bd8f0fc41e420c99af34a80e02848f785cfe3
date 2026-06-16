@@ -1,9 +1,0 @@
-import type { LogContext } from '@rocicorp/logger';
-import type { Store } from '../dag/store.ts';
-import type { ClientID } from '../sync/ids.ts';
-import { type ClientMap } from './clients.ts';
-export declare const HEARTBEAT_INTERVAL: number;
-export declare let latestHeartbeatUpdate: Promise<ClientMap> | undefined;
-export declare function startHeartbeats(clientID: ClientID, dagStore: Store, onClientStateNotFound: () => void, heartbeatIntervalMs: number, lc: LogContext, signal: AbortSignal): void;
-export declare function writeHeartbeat(clientID: ClientID, dagStore: Store): Promise<ClientMap>;
-//# sourceMappingURL=heartbeat.d.ts.map

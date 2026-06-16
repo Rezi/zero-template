@@ -1,1 +1,0 @@
-{"version":3,"file":"mutation-type-enum.js","names":[],"sources":["../../../../zero-protocol/src/mutation-type-enum.ts"],"sourcesContent":["export const CRUD = 'crud';\nexport const Custom = 'custom';\nexport type MutationType = typeof CRUD | typeof Custom;\n\nexport type CRUD = typeof CRUD;\nexport type Custom = typeof Custom;\n"],"mappings":";AAAA,IAAa,OAAO;AACpB,IAAa,SAAS"}

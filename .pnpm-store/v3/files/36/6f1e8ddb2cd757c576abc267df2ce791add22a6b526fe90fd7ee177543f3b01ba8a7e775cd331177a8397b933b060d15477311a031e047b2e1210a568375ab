@@ -1,2 +1,0 @@
-import { NodePgConnection, NodePgTransactionInternal, zeroNodePg } from "../../../zero-server/src/adapters/pg.js";
-export { NodePgConnection, NodePgTransactionInternal, zeroNodePg };

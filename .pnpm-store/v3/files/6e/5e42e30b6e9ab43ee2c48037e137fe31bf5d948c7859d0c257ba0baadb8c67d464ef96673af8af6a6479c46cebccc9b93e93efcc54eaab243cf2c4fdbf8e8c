@@ -1,5 +1,0 @@
-export declare function emptyFunction(): void;
-export declare const emptyObject: Readonly<{}>;
-export declare const emptyArray: readonly never[];
-export declare function identity<T>(x: T): T;
-//# sourceMappingURL=sentinels.d.ts.map

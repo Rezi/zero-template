@@ -1,4 +1,0 @@
-import '../../../../shared/src/dotenv.ts';
-import { runWorker } from './run-worker.ts';
-export default runWorker;
-//# sourceMappingURL=main.d.ts.map

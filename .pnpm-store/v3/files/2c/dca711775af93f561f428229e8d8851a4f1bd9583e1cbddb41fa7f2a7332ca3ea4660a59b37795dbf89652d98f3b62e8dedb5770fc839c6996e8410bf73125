@@ -1,8 +1,0 @@
-import { literalUnion } from "../../../shared/src/valita.js";
-import { NewClientGroup, SchemaVersionNotSupported, VersionNotSupported } from "./update-needed-reason-type-enum.js";
-//#region ../zero-client/src/client/options.ts
-var updateNeededReasonTypeSchema = literalUnion(NewClientGroup, VersionNotSupported, SchemaVersionNotSupported);
-//#endregion
-export { updateNeededReasonTypeSchema };
-
-//# sourceMappingURL=options.js.map

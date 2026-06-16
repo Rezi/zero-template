@@ -1,9 +1,0 @@
-//#region ../shared/src/must.ts
-function must(v, msg) {
-	if (v == null) throw new Error(msg ?? `Unexpected ${v} value`);
-	return v;
-}
-//#endregion
-export { must };
-
-//# sourceMappingURL=must.js.map

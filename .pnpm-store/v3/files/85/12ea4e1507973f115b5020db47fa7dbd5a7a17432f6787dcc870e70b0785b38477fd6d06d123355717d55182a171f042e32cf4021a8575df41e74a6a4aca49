@@ -1,7 +1,0 @@
-import { open } from "@op-engineering/op-sqlite";
-//#region ../replicache/src/kv/op-sqlite/types.ts
-var open$1 = open;
-//#endregion
-export { open$1 as open };
-
-//# sourceMappingURL=types.js.map

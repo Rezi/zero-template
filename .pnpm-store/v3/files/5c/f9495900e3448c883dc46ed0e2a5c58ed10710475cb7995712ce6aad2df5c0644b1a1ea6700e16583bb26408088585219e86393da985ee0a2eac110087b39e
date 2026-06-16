@@ -1,2 +1,0 @@
-import "../../../zero-protocol/src/ast.js";
-export {};

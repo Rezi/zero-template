@@ -1,2 +1,0 @@
-export declare function asyncIterableToArray<T>(it: AsyncIterable<T>): Promise<T[]>;
-//# sourceMappingURL=async-iterable-to-array.d.ts.map

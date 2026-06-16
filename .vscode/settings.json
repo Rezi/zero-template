@@ -1,4 +1,6 @@
 {
+  "deno.enable": false,
+  "deno.enablePaths": ["scripts"],
   "files.watcherExclude": {
     "**/routeTree.gen.ts": true
   },

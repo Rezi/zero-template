@@ -1,6 +1,0 @@
-import * as v from '../../shared/src/valita.ts';
-export declare const pingBodySchema: v.ObjectType<{}, undefined>;
-export declare const pingMessageSchema: v.TupleType<[v.Type<"ping">, v.ObjectType<{}, undefined>]>;
-export type PingBody = v.Infer<typeof pingBodySchema>;
-export type PingMessage = v.Infer<typeof pingMessageSchema>;
-//# sourceMappingURL=ping.d.ts.map
