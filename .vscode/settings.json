@@ -1,6 +1,8 @@
 {
   "deno.enable": false,
-  "deno.enablePaths": ["scripts"],
+  "deno.enablePaths": [
+    "scripts"
+  ],
   "files.watcherExclude": {
     "**/routeTree.gen.ts": true
   },
@@ -9,5 +11,8 @@
   },
   "files.readonlyInclude": {
     "**/routeTree.gen.ts": true
-  }
+  },
+  "oxc.fmt.configPath": ".oxfmtrc.json",
+  "editor.defaultFormatter": "oxc.oxc-vscode",
+  "editor.formatOnSave": true
 }

@@ -64,10 +64,7 @@ function makeWriter(file: Deno.FsFile) {
   };
 }
 
-async function pump(
-  stream: ReadableStream<Uint8Array>,
-  write: (c: Uint8Array) => unknown,
-) {
+async function pump(stream: ReadableStream<Uint8Array>, write: (c: Uint8Array) => unknown) {
   const reader = stream.getReader();
   try {
     while (true) {
@@ -87,9 +84,7 @@ async function startJob(opts: {
   args: string[];
 }): Promise<void> {
   // Warn before launching a duplicate long-running job (two dev servers, etc.).
-  const dup = jobs.find((j) =>
-    j.status === "running" && j.key === (opts.key ?? opts.label)
-  );
+  const dup = jobs.find((j) => j.status === "running" && j.key === (opts.key ?? opts.label));
   if (dup) {
     const go = await p.confirm({
       message: `"${dup.label}" is already running. Start another anyway?`,
@@ -100,9 +95,7 @@ async function startJob(opts: {
 
   await Deno.mkdir(LOG_DIR, { recursive: true });
   const id = ++counter;
-  const logFile = `${LOG_DIR}/${id}-${
-    (opts.key ?? opts.label).replace(/[^a-z0-9]+/gi, "-")
-  }.log`;
+  const logFile = `${LOG_DIR}/${id}-${(opts.key ?? opts.label).replace(/[^a-z0-9]+/gi, "-")}.log`;
   const file = await Deno.open(logFile, {
     create: true,
     write: true,
@@ -119,11 +112,7 @@ async function startJob(opts: {
     }).spawn();
   } catch (err) {
     file.close();
-    p.log.error(
-      `Failed to start ${opts.label}: ${
-        err instanceof Error ? err.message : err
-      }`,
-    );
+    p.log.error(`Failed to start ${opts.label}: ${err instanceof Error ? err.message : err}`);
     return;
   }
 
@@ -145,26 +134,27 @@ async function startJob(opts: {
   jobs.push(job);
 
   // Drain both streams into the log file.
-  Promise.all([pump(child.stdout, write), pump(child.stderr, write)]).catch(
-    () => {},
-  );
+  Promise.all([pump(child.stdout, write), pump(child.stderr, write)]).catch(() => {});
 
   // Track completion without blocking the menu.
-  child.status.then((s) => {
-    if (job.status === "running") {
-      job.status = s.success ? "done" : "failed";
-      job.code = s.code;
-    }
-    file.close();
-  }).catch(() => file.close());
+  child.status
+    .then((s) => {
+      if (job.status === "running") {
+        job.status = s.success ? "done" : "failed";
+        job.code = s.code;
+      }
+      file.close();
+    })
+    .catch(() => file.close());
 
   p.log.success(`Started [${id}] ${opts.label} → ${display}`);
 }
 
 function formatJobRow(j: Job): string {
-  const meta = j.status === "running"
-    ? fmtElapsed(Date.now() - j.startedAt)
-    : `${j.status}${j.code != null ? ` (${j.code})` : ""}`;
+  const meta =
+    j.status === "running"
+      ? fmtElapsed(Date.now() - j.startedAt)
+      : `${j.status}${j.code != null ? ` (${j.code})` : ""}`;
   return `${sym[j.status]} [${j.id}] ${j.label}  ·  ${meta}`;
 }
 
@@ -244,9 +234,7 @@ function loadProjects(): Project[] {
         targets?: Record<string, unknown>;
       };
       try {
-        json = JSON.parse(
-          Deno.readTextFileSync(`${ROOT}${base}/${entry.name}/project.json`),
-        );
+        json = JSON.parse(Deno.readTextFileSync(`${ROOT}${base}/${entry.name}/project.json`));
       } catch {
         continue; // no/invalid project.json — skip
       }
@@ -261,7 +249,7 @@ function loadProjects(): Project[] {
   }
   // apps first, then libs; alphabetical within each group.
   found.sort((a, b) =>
-    a.type === b.type ? a.name.localeCompare(b.name) : a.type === "app" ? -1 : 1
+    a.type === b.type ? a.name.localeCompare(b.name) : a.type === "app" ? -1 : 1,
   );
   return found;
 }
@@ -326,11 +314,7 @@ async function runMany(target: string, candidates: string[]) {
     await startJob({
       label: `${target}:${projects.join(",")}`,
       key: `${target}:${projects.join(",")}`,
-      ...denoTask("nx", [
-        "run-many",
-        `--target=${target}`,
-        `--projects=${projects.join(",")}`,
-      ]),
+      ...denoTask("nx", ["run-many", `--target=${target}`, `--projects=${projects.join(",")}`]),
     });
   }
 }
@@ -355,11 +339,11 @@ async function dockerMenu() {
   if (p.isCancel(action) || action === "back") return;
   const map: Record<string, { label: string; args: string[] }> = {
     "up-d": { label: "docker up -d", args: ["compose", "up", "-d"] },
-    "up": { label: "docker up", args: ["compose", "up"] },
-    "logs": { label: "docker logs", args: ["compose", "logs", "-f"] },
-    "ps": { label: "docker ps", args: ["compose", "ps"] },
-    "restart": { label: "docker restart", args: ["compose", "restart"] },
-    "down": { label: "docker down", args: ["compose", "down"] },
+    up: { label: "docker up", args: ["compose", "up"] },
+    logs: { label: "docker logs", args: ["compose", "logs", "-f"] },
+    ps: { label: "docker ps", args: ["compose", "ps"] },
+    restart: { label: "docker restart", args: ["compose", "restart"] },
+    down: { label: "docker down", args: ["compose", "down"] },
   };
   const cmd = map[action as string];
   await startJob({
@@ -417,9 +401,7 @@ const LOG_HEIGHT = 15; // lines of log shown when hovering a job in the menu
  * key or fast input can deliver several sequences in a single stdin read).
  * Returns the direction and how many times it was pressed, or null.
  */
-function navKey(
-  s: string,
-): { dir: "up" | "down" | "left" | "right"; count: number } | null {
+function navKey(s: string): { dir: "up" | "down" | "left" | "right"; count: number } | null {
   const map: Record<string, "up" | "down" | "left" | "right"> = {
     "\x1b[A": "up",
     k: "up",
@@ -431,10 +413,7 @@ function navKey(
     l: "right",
   };
   for (const [seq, dir] of Object.entries(map)) {
-    if (
-      s.length && s.length % seq.length === 0 &&
-      s.split(seq).every((x) => x === "")
-    ) {
+    if (s.length && s.length % seq.length === 0 && s.split(seq).every((x) => x === "")) {
       return { dir, count: s.length / seq.length };
     }
   }
@@ -442,6 +421,14 @@ function navKey(
 }
 
 /** All log lines of a job, ANSI/CR stripped for stable layout. */
+function cols(): number {
+  try {
+    return Deno.consoleSize().columns;
+  } catch {
+    return 80;
+  }
+}
+
 function readLogLines(job: Job): string[] {
   let text: string;
   try {
@@ -449,6 +436,8 @@ function readLogLines(job: Job): string[] {
   } catch {
     return [];
   }
+  // Strip ANSI escape sequences (ESC = U+001B) so the log tail renders as plain text.
+  // oxlint-disable-next-line no-control-regex
   const clean = text.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "").replace(/\r/g, "");
   let lines = clean.split("\n");
   if (lines.length && lines[lines.length - 1] === "") {
@@ -470,10 +459,7 @@ function readLogLines(job: Job): string[] {
  * (run action / follow job); on a job, s stops a running one and c clears a
  * finished one. q / Esc / Ctrl+C cancel.
  */
-async function liveMenu(
-  message: string,
-  options: MenuOption[],
-): Promise<MenuResult> {
+async function liveMenu(message: string, options: MenuOption[]): Promise<MenuResult> {
   const jobList = jobs; // length is stable for this invocation (jobs are only added between menus)
   const total = jobList.length + options.length;
   let index = jobList.length; // start on the first action, not a job
@@ -482,14 +468,6 @@ async function liveMenu(
   // same lines as new output arrives; scroll back to 0 to resume following.
   let logScroll = 0;
   let lastTotal = -1;
-
-  const cols = () => {
-    try {
-      return Deno.consoleSize().columns;
-    } catch {
-      return 80;
-    }
-  };
 
   const build = (): string[] => {
     const width = cols();
@@ -500,20 +478,14 @@ async function liveMenu(
     lines.push(`\x1b[1m🎛  zero-music dev dashboard\x1b[0m`);
     lines.push("");
 
-    lines.push(
-      `\x1b[36m┌─ Jobs (${runningJobs().length} running) ─────────────────────\x1b[0m`,
-    );
+    lines.push(`\x1b[36m┌─ Jobs (${runningJobs().length} running) ─────────────────────\x1b[0m`);
     if (jobList.length === 0) {
-      lines.push(
-        `\x1b[36m│\x1b[0m \x1b[2mNo jobs yet — pick an action below.\x1b[0m`,
-      );
+      lines.push(`\x1b[36m│\x1b[0m \x1b[2mNo jobs yet — pick an action below.\x1b[0m`);
     } else {
       jobList.forEach((j, i) => {
         const sel = index === i;
         const ptr = sel ? "\x1b[36m❯\x1b[0m" : " ";
-        const row = `${sel ? "\x1b[1m" : ""}${statusColor[j.status]}${
-          formatJobRow(j)
-        }\x1b[0m`;
+        const row = `${sel ? "\x1b[1m" : ""}${statusColor[j.status]}${formatJobRow(j)}\x1b[0m`;
         lines.push(`\x1b[36m│\x1b[0m ${ptr} ${row}`);
       });
     }
@@ -534,15 +506,14 @@ async function liveMenu(
       const end = lineCount - logScroll;
       const start = Math.max(0, end - LOG_HEIGHT);
       const view = all.slice(start, end);
-      const clip = (
-        s: string,
-      ) => (s.length > width - 2 ? s.slice(0, width - 3) + "…" : s);
+      const clip = (s: string) => (s.length > width - 2 ? s.slice(0, width - 3) + "…" : s);
 
-      const pos = lineCount === 0
-        ? "\x1b[2m(no output yet)\x1b[0m"
-        : logScroll === 0
-        ? `\x1b[2m[${end}/${lineCount} · live]\x1b[0m`
-        : `\x1b[33m[${start + 1}-${end}/${lineCount} ↑${logScroll}]\x1b[0m`;
+      const pos =
+        lineCount === 0
+          ? "\x1b[2m(no output yet)\x1b[0m"
+          : logScroll === 0
+            ? `\x1b[2m[${end}/${lineCount} · live]\x1b[0m`
+            : `\x1b[33m[${start + 1}-${end}/${lineCount} ↑${logScroll}]\x1b[0m`;
       const jobAction = job.status === "running" ? " · s stop" : " · c clear";
       lines.push(
         `\x1b[1mLog — [${job.id}] ${job.label}\x1b[0m  \x1b[2m(↑/↓ move · ←/→ scroll · enter follow${jobAction} · q quit)\x1b[0m  ${pos}`,
@@ -553,9 +524,7 @@ async function liveMenu(
         lines.push(`\x1b[2m│\x1b[0m`); // pad to stable height
       }
     } else {
-      lines.push(
-        `\x1b[1m${message}\x1b[0m  \x1b[2m(↑/↓ move · enter select · q quit)\x1b[0m`,
-      );
+      lines.push(`\x1b[1m${message}\x1b[0m  \x1b[2m(↑/↓ move · enter select · q quit)\x1b[0m`);
       options.forEach((o, k) => {
         const sel = index === jobList.length + k;
         const ptr = sel ? "\x1b[36m❯\x1b[0m" : " ";
@@ -615,10 +584,7 @@ async function liveMenu(
       } else if (index < jobList.length) {
         // left → older, right → newer (one page per press; render clamps)
         const step = (LOG_HEIGHT - 2) * nav.count;
-        logScroll = Math.max(
-          0,
-          logScroll + (nav.dir === "left" ? step : -step),
-        );
+        logScroll = Math.max(0, logScroll + (nav.dir === "left" ? step : -step));
         render();
       }
     }
@@ -711,25 +677,19 @@ async function main() {
         case "build":
           await runMany(
             "build",
-            PROJECTS.filter((p) => p.targets.includes("build")).map((p) =>
-              p.name
-            ),
+            PROJECTS.filter((proj) => proj.targets.includes("build")).map((proj) => proj.name),
           );
           break;
         case "test":
           await runMany(
             "test",
-            PROJECTS.filter((p) => p.targets.includes("test")).map((p) =>
-              p.name
-            ),
+            PROJECTS.filter((proj) => proj.targets.includes("test")).map((proj) => proj.name),
           );
           break;
         case "lint":
           await runMany(
             "lint",
-            PROJECTS.filter((p) => p.targets.includes("lint")).map((p) =>
-              p.name
-            ),
+            PROJECTS.filter((proj) => proj.targets.includes("lint")).map((proj) => proj.name),
           );
           break;
         case "e2e":
@@ -769,8 +729,7 @@ async function main() {
     const running = runningJobs();
     if (running.length > 0) {
       const stop = await p.confirm({
-        message:
-          `${running.length} job(s) still running. Stop them before exiting?`,
+        message: `${running.length} job(s) still running. Stop them before exiting?`,
         initialValue: true,
       });
       // Children die with this process regardless; stop cleanly either way.

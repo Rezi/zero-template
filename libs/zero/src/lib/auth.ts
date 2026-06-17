@@ -4,7 +4,7 @@ export type Context =
     }
   | undefined;
 
-declare module '@rocicorp/zero' {
+declare module "@rocicorp/zero" {
   interface DefaultTypes {
     context: Context;
   }

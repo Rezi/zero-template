@@ -1,0 +1,37 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["eslint", "typescript", "react", "jsx-a11y", "import", "unicorn", "oxc", "vitest"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "perf": "warn"
+  },
+  "env": {
+    "browser": true,
+    "node": true,
+    "es2024": true
+  },
+  "rules": {
+    // Automatic JSX runtime (tsconfig `jsx: react-jsx`) — `React` need not be in scope.
+    "react/react-in-jsx-scope": "off",
+    // Sequential awaits are intentional throughout the interactive dev wizard.
+    "no-await-in-loop": "off"
+  },
+  "ignorePatterns": [
+    "**/node_modules",
+    "**/dist",
+    "**/.nitro",
+    "**/.tanstack",
+    "**/.output",
+    "**/.vinxi",
+    "**/playwright-report",
+    "**/test-results",
+    "**/routeTree.gen.ts"
+  ],
+  "overrides": [
+    {
+      "files": ["**/*.{test,spec}.{ts,tsx}", "**/*.e2e.ts"],
+      "env": { "vitest": true }
+    }
+  ]
+}

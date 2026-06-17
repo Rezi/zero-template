@@ -1,5 +1,5 @@
-import {drizzleZeroConfig} from 'drizzle-zero'
-import * as drizzleSchema from './src/lib/schema'
+import { drizzleZeroConfig } from "drizzle-zero";
+import * as drizzleSchema from "./src/lib/schema";
 
 export default drizzleZeroConfig(drizzleSchema, {
   tables: {
@@ -31,4 +31,4 @@ export default drizzleZeroConfig(drizzleSchema, {
       createdAt: true,
     },
   },
-})
+});

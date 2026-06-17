@@ -1,30 +1,28 @@
-import {useState} from 'react'
+import { useState } from "react";
 import {
   authClient,
   loginWithEmail,
   loginWithGithub,
   logout,
   signUpWithEmail,
-} from '@zero-app/auth'
-import { useZero } from '@rocicorp/zero/react'
+} from "@zero-app/auth";
+import { useZero } from "@rocicorp/zero/react";
 
 export function LoginButton() {
-  const session = authClient.useSession()
-  const zero = useZero()
-  const [open, setOpen] = useState(false)
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin')
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
+  const session = authClient.useSession();
+  const zero = useZero();
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   if (session.data?.user) {
     return (
       <div className="flex items-center gap-2 text-sm">
-        <span className="text-[var(--sea-ink-soft)]">
-          {session.data.user.email}
-        </span>
+        <span className="text-[var(--sea-ink-soft)]">{session.data.user.email}</span>
         <button
           type="button"
           onClick={() => logout(zero)}
@@ -33,36 +31,36 @@ export function LoginButton() {
           Sign out
         </button>
       </div>
-    )
+    );
   }
 
   const submit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-    setSubmitting(true)
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
     try {
       const res =
-        mode === 'signin'
+        mode === "signin"
           ? await loginWithEmail(email, password)
-          : await signUpWithEmail(name, email, password)
+          : await signUpWithEmail(name, email, password);
       if (res?.error) {
-        setError(res.error.message ?? 'Authentication failed')
+        setError(res.error.message ?? "Authentication failed");
       } else {
-        setOpen(false)
-        setPassword('')
+        setOpen(false);
+        setPassword("");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Authentication failed')
+      setError(err instanceof Error ? err.message : "Authentication failed");
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
-  }
+  };
 
   return (
     <div className="relative">
       <button
         type="button"
-        onClick={() => setOpen(v => !v)}
+        onClick={() => setOpen((v) => !v)}
         className="rounded-md border border-[var(--chip-line)] bg-[var(--chip-bg)] px-3 py-1.5 text-sm font-medium hover:bg-[var(--link-bg-hover)]"
       >
         Sign in
@@ -85,12 +83,12 @@ export function LoginButton() {
           </div>
 
           <form onSubmit={submit} className="flex flex-col gap-2">
-            {mode === 'signup' && (
+            {mode === "signup" && (
               <input
                 type="text"
                 placeholder="Name"
                 value={name}
-                onChange={e => setName(e.target.value)}
+                onChange={(e) => setName(e.target.value)}
                 className="rounded-md border border-[var(--line)] bg-transparent px-2 py-1.5 text-sm"
                 required
               />
@@ -99,7 +97,7 @@ export function LoginButton() {
               type="email"
               placeholder="Email"
               value={email}
-              onChange={e => setEmail(e.target.value)}
+              onChange={(e) => setEmail(e.target.value)}
               className="rounded-md border border-[var(--line)] bg-transparent px-2 py-1.5 text-sm"
               required
               autoComplete="email"
@@ -108,12 +106,10 @@ export function LoginButton() {
               type="password"
               placeholder="Password"
               value={password}
-              onChange={e => setPassword(e.target.value)}
+              onChange={(e) => setPassword(e.target.value)}
               className="rounded-md border border-[var(--line)] bg-transparent px-2 py-1.5 text-sm"
               required
-              autoComplete={
-                mode === 'signin' ? 'current-password' : 'new-password'
-              }
+              autoComplete={mode === "signin" ? "current-password" : "new-password"}
             />
             {error && <div className="text-xs text-red-500">{error}</div>}
             <button
@@ -121,25 +117,19 @@ export function LoginButton() {
               disabled={submitting}
               className="rounded-md bg-[var(--chip-bg)] px-3 py-1.5 text-sm font-medium hover:bg-[var(--link-bg-hover)] disabled:opacity-50"
             >
-              {submitting
-                ? '…'
-                : mode === 'signin'
-                  ? 'Sign in'
-                  : 'Create account'}
+              {submitting ? "…" : mode === "signin" ? "Sign in" : "Create account"}
             </button>
           </form>
 
           <button
             type="button"
-            onClick={() => setMode(m => (m === 'signin' ? 'signup' : 'signin'))}
+            onClick={() => setMode((m) => (m === "signin" ? "signup" : "signin"))}
             className="mt-3 w-full text-center text-xs text-[var(--sea-ink-soft)] hover:underline"
           >
-            {mode === 'signin'
-              ? "Don't have an account? Sign up"
-              : 'Have an account? Sign in'}
+            {mode === "signin" ? "Don't have an account? Sign up" : "Have an account? Sign in"}
           </button>
         </div>
       )}
     </div>
-  )
+  );
 }

@@ -10,105 +10,105 @@
  * Run with `deno task db:seed` (see deno.json) or directly:
  *   deno run -A --env-file=.env libs/db/src/lib/seed.ts
  */
-import {db} from './db.ts'
-import {albums, artists, fans, favorites} from './schema.ts'
+import { db } from "./db.ts";
+import { albums, artists, fans, favorites } from "./schema.ts";
 
-const now = new Date()
+const now = new Date();
 
 // Stable ids so favorites can reference albums without juggling returned rows,
 // and so re-seeding produces identical primary keys.
-const id = (prefix: string, n: number) => `${prefix}_${String(n).padStart(3, '0')}`
+const id = (prefix: string, n: number) => `${prefix}_${String(n).padStart(3, "0")}`;
 
 interface ArtistSeed {
-  name: string
-  genre: string
-  bio: string
-  albums: {title: string; releaseYear: number}[]
+  name: string;
+  genre: string;
+  bio: string;
+  albums: { title: string; releaseYear: number }[];
 }
 
 const ARTISTS: ArtistSeed[] = [
   {
-    name: 'Neon Tigers',
-    genre: 'Synthwave',
-    bio: 'A retro-futurist trio chasing the glow of 1984.',
+    name: "Neon Tigers",
+    genre: "Synthwave",
+    bio: "A retro-futurist trio chasing the glow of 1984.",
     albums: [
-      {title: 'Midnight Circuit', releaseYear: 2019},
-      {title: 'Chrome Hearts', releaseYear: 2021},
-      {title: 'Afterglow', releaseYear: 2023},
+      { title: "Midnight Circuit", releaseYear: 2019 },
+      { title: "Chrome Hearts", releaseYear: 2021 },
+      { title: "Afterglow", releaseYear: 2023 },
     ],
   },
   {
-    name: 'River Holloway',
-    genre: 'Folk',
-    bio: 'Songwriter from the Appalachian foothills.',
+    name: "River Holloway",
+    genre: "Folk",
+    bio: "Songwriter from the Appalachian foothills.",
     albums: [
-      {title: 'Paper Boats', releaseYear: 2018},
-      {title: 'Stones & Rivers', releaseYear: 2022},
+      { title: "Paper Boats", releaseYear: 2018 },
+      { title: "Stones & Rivers", releaseYear: 2022 },
     ],
   },
   {
-    name: 'Kaiju Sound System',
-    genre: 'Drum & Bass',
-    bio: 'Bass-heavy collective born in the warehouse scene.',
+    name: "Kaiju Sound System",
+    genre: "Drum & Bass",
+    bio: "Bass-heavy collective born in the warehouse scene.",
     albums: [
-      {title: 'Low End Theory', releaseYear: 2020},
-      {title: 'Pressure Drop', releaseYear: 2024},
+      { title: "Low End Theory", releaseYear: 2020 },
+      { title: "Pressure Drop", releaseYear: 2024 },
     ],
   },
   {
-    name: 'Saoirse Quinn',
-    genre: 'Indie Pop',
-    bio: 'Dublin-based artist blending shimmer and melancholy.',
+    name: "Saoirse Quinn",
+    genre: "Indie Pop",
+    bio: "Dublin-based artist blending shimmer and melancholy.",
     albums: [
-      {title: 'Glass Gardens', releaseYear: 2021},
-      {title: 'Tiny Revolutions', releaseYear: 2023},
+      { title: "Glass Gardens", releaseYear: 2021 },
+      { title: "Tiny Revolutions", releaseYear: 2023 },
     ],
   },
   {
-    name: 'The Brass Verdict',
-    genre: 'Jazz',
-    bio: 'Seven-piece outfit reviving hard bop for a new decade.',
+    name: "The Brass Verdict",
+    genre: "Jazz",
+    bio: "Seven-piece outfit reviving hard bop for a new decade.",
     albums: [
-      {title: 'After Hours', releaseYear: 2017},
-      {title: 'Blue Testimony', releaseYear: 2020},
-      {title: 'Night Court', releaseYear: 2025},
+      { title: "After Hours", releaseYear: 2017 },
+      { title: "Blue Testimony", releaseYear: 2020 },
+      { title: "Night Court", releaseYear: 2025 },
     ],
   },
-]
+];
 
 const FAN_NAMES = [
-  'Ava Bennett',
-  'Liam Castellanos',
-  'Mei Tanaka',
-  'Noah Okafor',
-  'Sofia Rossi',
-  'Elias Wagner',
-  'Priya Nair',
-  'Daniel Kim',
-]
+  "Ava Bennett",
+  "Liam Castellanos",
+  "Mei Tanaka",
+  "Noah Okafor",
+  "Sofia Rossi",
+  "Elias Wagner",
+  "Priya Nair",
+  "Daniel Kim",
+];
 
 async function seed() {
-  console.log('🌱 Seeding database…')
+  console.log("🌱 Seeding database…");
 
   // Clear in FK-dependency order (children first).
-  await db.delete(favorites)
-  await db.delete(albums)
-  await db.delete(artists)
-  await db.delete(fans)
+  await db.delete(favorites);
+  await db.delete(albums);
+  await db.delete(artists);
+  await db.delete(fans);
 
   // Artists + albums.
-  const artistRows: (typeof artists.$inferInsert)[] = []
-  const albumRows: (typeof albums.$inferInsert)[] = []
-  let artistN = 0
-  let albumN = 0
-  const albumIds: string[] = []
+  const artistRows: (typeof artists.$inferInsert)[] = [];
+  const albumRows: (typeof albums.$inferInsert)[] = [];
+  let artistN = 0;
+  let albumN = 0;
+  const albumIds: string[] = [];
 
   for (const a of ARTISTS) {
-    const artistId = id('artist', ++artistN)
-    artistRows.push({id: artistId, name: a.name, genre: a.genre, bio: a.bio, createdAt: now})
+    const artistId = id("artist", ++artistN);
+    artistRows.push({ id: artistId, name: a.name, genre: a.genre, bio: a.bio, createdAt: now });
     for (const al of a.albums) {
-      const albumId = id('album', ++albumN)
-      albumIds.push(albumId)
+      const albumId = id("album", ++albumN);
+      albumIds.push(albumId);
       albumRows.push({
         id: albumId,
         title: al.title,
@@ -116,48 +116,48 @@ async function seed() {
         releaseYear: al.releaseYear,
         coverArtUrl: `https://picsum.photos/seed/${albumId}/400/400`,
         createdAt: now,
-      })
+      });
     }
   }
 
-  await db.insert(artists).values(artistRows)
-  await db.insert(albums).values(albumRows)
+  await db.insert(artists).values(artistRows);
+  await db.insert(albums).values(albumRows);
 
   // Fans.
   const fanRows: (typeof fans.$inferInsert)[] = FAN_NAMES.map((name, i) => ({
-    id: id('fan', i + 1),
+    id: id("fan", i + 1),
     name,
-    email: `${name.toLowerCase().replace(/[^a-z]+/g, '.')}@example.com`,
+    email: `${name.toLowerCase().replace(/[^a-z]+/g, ".")}@example.com`,
     createdAt: now,
-  }))
-  await db.insert(fans).values(fanRows)
+  }));
+  await db.insert(fans).values(fanRows);
 
   // Favorites — each fan favorites a deterministic spread of albums.
-  const favoriteRows: (typeof favorites.$inferInsert)[] = []
-  let favN = 0
+  const favoriteRows: (typeof favorites.$inferInsert)[] = [];
+  let favN = 0;
   fanRows.forEach((fan, fi) => {
     // 3 albums per fan, picked by a stride so it varies across fans.
     for (let k = 0; k < 3; k++) {
-      const albumId = albumIds[(fi * 3 + k * 2 + 1) % albumIds.length]
+      const albumId = albumIds[(fi * 3 + k * 2 + 1) % albumIds.length];
       favoriteRows.push({
-        id: id('favorite', ++favN),
+        id: id("favorite", ++favN),
         fanId: fan.id,
         albumId,
         createdAt: now,
-      })
+      });
     }
-  })
-  await db.insert(favorites).values(favoriteRows)
+  });
+  await db.insert(favorites).values(favoriteRows);
 
   console.log(
     `✅ Seeded ${artistRows.length} artists, ${albumRows.length} albums, ` +
       `${fanRows.length} fans, ${favoriteRows.length} favorites.`,
-  )
+  );
 }
 
 seed()
   .then(() => process.exit(0))
-  .catch(err => {
-    console.error('❌ Seed failed:', err)
-    process.exit(1)
-  })
+  .catch((err) => {
+    console.error("❌ Seed failed:", err);
+    process.exit(1);
+  });

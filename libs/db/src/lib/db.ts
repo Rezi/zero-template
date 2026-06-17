@@ -1,8 +1,8 @@
-import {drizzle} from 'drizzle-orm/node-postgres'
+import { drizzle } from "drizzle-orm/node-postgres";
 
-const pgURL = process.env.ZERO_UPSTREAM_DB
+const pgURL = process.env.ZERO_UPSTREAM_DB;
 if (!pgURL) {
-  throw new Error('ZERO_UPSTREAM_DB is not set')
+  throw new Error("ZERO_UPSTREAM_DB is not set");
 }
 
-export const db = drizzle(pgURL)
+export const db = drizzle(pgURL);

@@ -1,10 +1,10 @@
-import {Outlet, createFileRoute} from '@tanstack/react-router'
-import {ZeroInit, SiteLayout} from '@zero-app/zero-app-components'
+import { Outlet, createFileRoute } from "@tanstack/react-router";
+import { ZeroInit, SiteLayout } from "@zero-app/zero-app-components";
 
-export const Route = createFileRoute('/_layout')({
+export const Route = createFileRoute("/_layout")({
   component: RouteComponent,
   staleTime: Infinity,
-})
+});
 
 function RouteComponent() {
   return (
@@ -13,5 +13,5 @@ function RouteComponent() {
         <Outlet />
       </SiteLayout>
     </ZeroInit>
-  )
+  );
 }

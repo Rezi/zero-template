@@ -1,13 +1,13 @@
-import {betterAuth} from 'better-auth'
-import {drizzleAdapter} from 'better-auth/adapters/drizzle'
-import {db, authSchema} from '@zero-app/db'
+import { betterAuth } from "better-auth";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { db, authSchema } from "@zero-app/db";
 
-const clientId = process.env.GITHUB_CLIENT_ID
-const clientSecret = process.env.GITHUB_CLIENT_SECRET
+const clientId = process.env.GITHUB_CLIENT_ID;
+const clientSecret = process.env.GITHUB_CLIENT_SECRET;
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
-    provider: 'pg',
+    provider: "pg",
     schema: authSchema,
   }),
   emailAndPassword: {
@@ -30,4 +30,4 @@ export const auth = betterAuth({
         },
       }
     : undefined,
-})
+});

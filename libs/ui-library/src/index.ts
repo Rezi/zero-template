@@ -4,4 +4,5 @@
 // zero, routing, etc.) live in `@zero-app/zero-app-components`. This library
 // is reserved for generic, dependency-free building blocks and usage
 // guidelines to be added later.
-export {}
+// oxlint-disable-next-line require-module-specifiers -- intentional empty-module placeholder
+export {};
