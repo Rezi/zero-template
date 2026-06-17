@@ -7,6 +7,8 @@
     "dev": "nx serve zero-app",
     "build": "nx build zero-app",
     "preview": "nx preview zero-app",
+    "storybook": "storybook dev -p 6006 -c libs/ui-library/.storybook",
+    "build-storybook": "storybook build -c libs/ui-library/.storybook -o dist/storybook/ui-library",
     "test": "nx run-many --target=test",
     "lint": "deno task lint:oxlint && deno task lint:boundaries",
     "lint:oxlint": "oxlint",

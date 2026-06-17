@@ -382,6 +382,48 @@ async function dbMenu() {
   });
 }
 
+async function buildTestLintMenu() {
+  const action = await p.select({
+    message: "Build / Test / Lint",
+    options: [
+      { value: "build", label: "🔨 Build", hint: "compile projects" },
+      { value: "test", label: "🧪 Test", hint: "run unit tests" },
+      { value: "lint", label: "✓  Lint", hint: "lint projects" },
+      { value: "back", label: "← Back" },
+    ],
+  });
+  if (p.isCancel(action) || action === "back") return;
+  const target = action as string;
+  await runMany(
+    target,
+    PROJECTS.filter((proj) => proj.targets.includes(target)).map((proj) => proj.name),
+  );
+}
+
+async function toolsMenu() {
+  const action = await p.select({
+    message: "Tools",
+    options: [
+      { value: "graph", label: "📊 Nx graph", hint: "deno task graph" },
+      { value: "storybook", label: "📖 Storybook", hint: "deno task storybook (ui-library)" },
+      {
+        value: "build-storybook",
+        label: "📦 Build Storybook",
+        hint: "deno task build-storybook",
+      },
+      { value: "back", label: "← Back" },
+    ],
+  });
+  if (p.isCancel(action) || action === "back") return;
+  const map: Record<string, string> = {
+    graph: "graph",
+    storybook: "storybook",
+    "build-storybook": "build-storybook",
+  };
+  const task = map[action as string];
+  await startJob({ label: task, key: task, ...denoTask(task) });
+}
+
 interface MenuOption {
   value: string;
   label: string;
@@ -608,23 +650,22 @@ async function main() {
   try {
     while (true) {
       const result = await liveMenu("What do you want to run?", [
-        {
-          value: "dev",
-          label: "💻  Dev server",
-          hint: "deno task dev (zero-app)",
-        },
+        { value: "docker", label: "🐳 Docker…" },
         {
           value: "zero-cache",
           label: "🌍  Zero cache (backend)",
           hint: "deno task zero-cache",
         },
-        { value: "run-target", label: "🏃  Run a target on an app/library…" },
-        { value: "build", label: "🔨 Build…" },
-        { value: "test", label: "🧪 Test…" },
-        { value: "lint", label: "✓  Lint…" },
+        {
+          value: "dev",
+          label: "💻  Dev server",
+          hint: "deno task dev (zero-app)",
+        },
+        { value: "run-target", label: "🏃  Run a target by app/library…" },
+        { value: "tasks", label: "🔨 Build / Test / Lint…" },
         { value: "e2e", label: "🎭 E2E tests", hint: "deno task e2e" },
-        { value: "docker", label: "🐳 Docker…" },
         { value: "db", label: "🗄  Database…" },
+        { value: "tools", label: "🧰 Tools…", hint: "nx graph, storybook" },
         {
           value: "native",
           label: "🔧 Rebuild native deps",
@@ -674,23 +715,11 @@ async function main() {
         case "run-target":
           await pickProjectTarget();
           break;
-        case "build":
-          await runMany(
-            "build",
-            PROJECTS.filter((proj) => proj.targets.includes("build")).map((proj) => proj.name),
-          );
+        case "tasks":
+          await buildTestLintMenu();
           break;
-        case "test":
-          await runMany(
-            "test",
-            PROJECTS.filter((proj) => proj.targets.includes("test")).map((proj) => proj.name),
-          );
-          break;
-        case "lint":
-          await runMany(
-            "lint",
-            PROJECTS.filter((proj) => proj.targets.includes("lint")).map((proj) => proj.name),
-          );
+        case "tools":
+          await toolsMenu();
           break;
         case "e2e":
           await startJob({ label: "e2e", key: "e2e", ...denoTask("e2e") });
