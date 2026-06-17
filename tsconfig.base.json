@@ -17,10 +17,12 @@
     "noUncheckedSideEffectImports": true,
     "types": ["vite/client", "node"],
     "paths": {
+      "@/*": ["./apps/zero-app/src/*"],
       "@zero-app/auth": ["./libs/auth/src/index.ts"],
       "@zero-app/auth/server": ["./libs/auth/src/server.ts"],
       "@zero-app/db": ["./libs/db/src/index.ts"],
       "@zero-app/ui-library": ["./libs/ui-library/src/index.ts"],
+      "@zero-app/ui-library/*": ["./libs/ui-library/src/*"],
       "@zero-app/zero-app-components": ["./libs/zero-app-components/src/index.ts"],
       "@zero-app/zero": ["./libs/zero/src/index.ts"],
       "@zero-app/zero/server": ["./libs/zero/src/server.ts"]

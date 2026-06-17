@@ -475,7 +475,7 @@ async function liveMenu(message: string, options: MenuOption[]): Promise<MenuRes
     const lines: string[] = [];
 
     // Title stays at the very top of the screen on every frame.
-    lines.push(`\x1b[1m🎛  zero-music dev dashboard\x1b[0m`);
+    lines.push(`\x1b[1m🎛  Zero dev Dashboard\x1b[0m`);
     lines.push("");
 
     lines.push(`\x1b[36m┌─ Jobs (${runningJobs().length} running) ─────────────────────\x1b[0m`);
