@@ -6,7 +6,7 @@ export default function Header({ rightSlot }: { rightSlot?: ReactNode }) {
   return (
     <header>
       <nav>
-        <Link to="/" activeProps={{ className: "nav-link is-active" }}>
+        <Link to="/" className="flex" activeProps={{ className: "nav-link is-active" }}>
           Home
         </Link>
 

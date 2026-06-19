@@ -162,6 +162,26 @@ function runningJobs(): Job[] {
   return jobs.filter((j) => j.status === "running");
 }
 
+/** Send SIGTERM to every process matching `zero-cache` and wait until none remain. */
+async function killZeroCache(): Promise<void> {
+  const pkill = await new Deno.Command("pkill", {
+    args: ["-f", "zero-cache"],
+    stdout: "null",
+    stderr: "null",
+  }).output();
+  if (pkill.code !== 0) return; // nothing was running — done immediately
+  // Poll until all matching processes have exited.
+  while (true) {
+    const pgrep = await new Deno.Command("pgrep", {
+      args: ["-f", "zero-cache"],
+      stdout: "null",
+      stderr: "null",
+    }).output();
+    if (pgrep.code !== 0) break;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+}
+
 function stopJob(job: Job) {
   if (job.status !== "running") return;
   try {
@@ -405,23 +425,40 @@ async function toolsMenu() {
     message: "Tools",
     options: [
       { value: "graph", label: "📊 Nx graph", hint: "deno task graph" },
-      { value: "storybook", label: "📖 Storybook", hint: "deno task storybook (ui-library)" },
       {
-        value: "build-storybook",
-        label: "📦 Build Storybook",
-        hint: "deno task build-storybook",
+        value: "storybook:ui-library",
+        label: "📖 Storybook (ui-library)",
+        hint: "nx storybook ui-library  · port 6006",
+      },
+      {
+        value: "storybook:zero-app-components",
+        label: "📖 Storybook (zero-app-components)",
+        hint: "nx storybook zero-app-components  · port 6007",
+      },
+      {
+        value: "build-storybook:ui-library",
+        label: "📦 Build Storybook (ui-library)",
+        hint: "nx build-storybook ui-library",
+      },
+      {
+        value: "build-storybook:zero-app-components",
+        label: "📦 Build Storybook (zero-app-components)",
+        hint: "nx build-storybook zero-app-components",
       },
       { value: "back", label: "← Back" },
     ],
   });
   if (p.isCancel(action) || action === "back") return;
-  const map: Record<string, string> = {
-    graph: "graph",
-    storybook: "storybook",
-    "build-storybook": "build-storybook",
-  };
-  const task = map[action as string];
-  await startJob({ label: task, key: task, ...denoTask(task) });
+  if (action === "graph") {
+    await startJob({ label: "graph", key: "graph", ...denoTask("graph") });
+    return;
+  }
+  const [target, project] = (action as string).split(":");
+  await startJob({
+    label: `${target}:${project}`,
+    key: `${target}:${project}`,
+    ...nxTarget(target, project),
+  });
 }
 
 interface MenuOption {
@@ -706,6 +743,7 @@ async function main() {
           await startJob({ label: "dev", key: "dev", ...denoTask("dev") });
           break;
         case "zero-cache":
+          await killZeroCache();
           await startJob({
             label: "zero-cache",
             key: "zero-cache",

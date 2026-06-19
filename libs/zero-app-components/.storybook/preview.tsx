@@ -1,0 +1,53 @@
+import * as React from "react";
+import type { Decorator, Preview } from "@storybook/react-vite";
+
+// Single source of truth for the design tokens, Tailwind, fonts and the
+// `tw-animate-css` keyframes. Importing the app stylesheet keeps Storybook in
+// sync with what the real app renders.
+// oxlint-disable-next-line no-unassigned-import -- CSS side-effect import
+import "../../../apps/zero-app/src/styles.css";
+
+const withTheme: Decorator = (Story, context) => {
+  const theme = context.globals.theme ?? "light";
+  React.useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle("dark", theme === "dark");
+    root.style.colorScheme = theme;
+  }, [theme]);
+  return (
+    <div className="bg-background text-foreground font-sans">
+      <Story />
+    </div>
+  );
+};
+
+const preview: Preview = {
+  parameters: {
+    layout: "centered",
+    controls: {
+      matchers: {
+        color: /(background|color)$/i,
+        date: /Date$/i,
+      },
+    },
+    a11y: { test: "todo" },
+  },
+  globalTypes: {
+    theme: {
+      description: "Color theme",
+      defaultValue: "light",
+      toolbar: {
+        title: "Theme",
+        icon: "circlehollow",
+        items: [
+          { value: "light", title: "Light", icon: "sun" },
+          { value: "dark", title: "Dark", icon: "moon" },
+        ],
+        dynamicTitle: true,
+      },
+    },
+  },
+  decorators: [withTheme],
+};
+
+export default preview;

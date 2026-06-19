@@ -9,7 +9,13 @@
       "Bash(npx prebuild-install *)",
       "Bash(echo \"exit: $?\")",
       "Bash(ZERO_QUERY_URL=http://localhost:3000/api/query ZERO_MUTATE_URL=http://localhost:3000/api/mutate timeout 15 deno task zero-cache)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(sbx --version)",
+      "Bash(docker network *)",
+      "Bash(sbx create *)",
+      "Bash(sbx --help)",
+      "Bash(sbx ls *)",
+      "Bash(sbx diagnose *)"
     ]
   }
 }
