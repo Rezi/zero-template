@@ -1,0 +1,632 @@
+/* MIT License
+
+Copyright (c) 2024 Tomáš Řezáč
+
+https://github.com/Rezi/sugar-css
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+ */
+
+/*
+
+SUGAR.CSS
+
+Your can visit: 
+https://sugar-css.com/customize?seed=eyJiYXNlIjp7InJvdW5kbmVzcyI6MSwibGluZUhlaWdodCI6MS42LCJzcGFyc2l0eSI6MSwiZmF0bmVzcyI6MCwic2hhZG93IjoxLCJmb250RmFtaWx5Ijoic3lzdGVtLXVpIiwiaXNEYXJrVGhlbWUiOmZhbHNlfSwidGhlbWUiOnsibGlnaHQiOnsiYmdDb2xvciI6IiNmZmZmZmYiLCJmZ0NvbG9yIjoiIzAwMDAwMCIsInByaW1hcnlDb2xvciI6IiNiMTAyNGUiLCJwcmltYXJ5LWNvbnRyYXN0IjoiI2ZmZmZmZiJ9LCJkYXJrIjp7ImJnQ29sb3IiOiIjMWExYTFhIiwiZmdDb2xvciI6IiNmZmZmZmYiLCJwcmltYXJ5Q29sb3IiOiIjZmY3NWIxIiwicHJpbWFyeS1jb250cmFzdCI6IiMwMDAwMDAifX19
+in order to modify this specific build of sugar.css.
+*/
+
+@layer sugar;
+
+/* VARIABLES
+========================================================================
+*/
+@layer sugar {
+  :root {
+    /* 0.3 - 2 */
+    --s-multiplier-sparsity: 1;
+    --s-multiplier-shadow: 1;
+
+    --s-gap-default: calc(0.75rem + (0.25rem * var(--s-multiplier-sparsity)));
+    --s-line-height: 1.6;
+
+    --sugar-spacing-block: calc(2.5rem * var(--s-multiplier-sparsity));
+    --sugar-base-spacing-inline: calc(0.25rem + (0.75rem * var(--s-multiplier-sparsity)));
+    --sugar-spacing-inline: var(--sugar-base-spacing-inline);
+    --container-width-number: 65;
+    --container-width: calc(1rem * var(--container-width-number));
+
+    --color-shadow-half: color-mix(in srgb, var(--color-foreground) 8%, transparent);
+
+    --s-box-shadow-half: 0 0 calc(1rem * var(--s-multiplier-shadow)) var(--color-shadow-half);
+  }
+  @media screen and (min-width: 20rem) {
+    :root {
+      --sugar-spacing-inline: calc(
+        var(--sugar-base-spacing-inline) +
+          (1.5 * ((100vw - 20rem) / var(--container-width-number)) * var(--s-multiplier-sparsity))
+      );
+    }
+  }
+}
+
+/* CORE 
+========================================================================
+*/
+@layer sugar {
+  /**
+  * 1. Add border box sizing in all browsers (opinionated).
+  * 2. Backgrounds do not repeat by default (opinionated).
+  */
+  *,
+  ::before,
+  ::after {
+    box-sizing: border-box; /* 1 */
+    background-repeat: no-repeat; /* 2 */
+  }
+  /**
+   * 1. Add text decoration inheritance in all browsers (opinionated).
+   * 2. Add vertical alignment inheritance in all browsers (opinionated).
+   */
+  ::before,
+  ::after {
+    text-decoration: inherit; /* 1 */
+    vertical-align: inherit; /* 2 */
+  }
+  /**
+    * 1. Use the default cursor in all browsers (opinionated).
+    * 2. Change the line height in all browsers (opinionated).
+    * 3. Breaks words to prevent overflow in all browsers (opinionated).
+    * 4. Use a 4-space tab width in all browsers (opinionated).
+    * 5. Remove the grey highlight on links in iOS (opinionated).
+    * 6. Prevent adjustments of font size after orientation changes in iOS.
+    */
+  :root {
+    cursor: default; /* 1 */
+    line-height: var(--s-line-height); /* 2 */
+    overflow-wrap: break-word; /* 3 */
+    -moz-tab-size: 4; /* 4 */
+    tab-size: 4; /* 4 */
+    -webkit-tap-highlight-color: transparent; /* 5 */
+    -webkit-text-size-adjust: 100%; /* 6 */
+    text-size-adjust: 100%; /* 6 */
+  }
+  /**
+   * Remove the margin in all browsers (opinionated).
+   */
+  body {
+    margin: 0;
+    color: var(---color-foreground);
+    background-color: var(--color-background);
+  }
+  p {
+    text-wrap: pretty;
+  }
+  /**
+  * Restrict sizing to the page width in all browsers (opinionated).
+  */
+  iframe,
+  img,
+  input,
+  video,
+  select,
+  textarea {
+    height: auto;
+    max-width: 100%;
+  }
+  /*
+   * Change the display on visually hidden accessible elements
+   * in all browsers (opinionated).
+   */
+  [aria-hidden="false" i][hidden] {
+    display: initial;
+  }
+  [aria-hidden="false" i][hidden]:not(:focus) {
+    clip: rect(0, 0, 0, 0);
+    position: absolute;
+  }
+  /* Embedded content
+   * ========================================================================== */
+  /*
+   * Change the alignment on media elements in all browsers (opinionated).
+   */
+  audio,
+  canvas,
+  iframe,
+  img,
+  svg,
+  video {
+    vertical-align: middle;
+  }
+  /**
+   * Remove the border on iframes in all browsers (opinionated).
+   */
+  iframe {
+    border-style: none;
+  }
+  /**
+   * Change the fill color to match the text color in all browsers (opinionated).
+   */
+  svg:not([fill]) {
+    fill: currentColor;
+  }
+}
+
+/* GRID
+========================================================================
+*/
+@layer sugar {
+  :where(*:has(> .s-grid)) {
+    /* This is a fix for negative margin-block of the grid, 
+    which could be visible when background is applied to grid's wrapper */
+    padding-block-start: 0.02px;
+  }
+  .s-grid {
+    --c-span: 1;
+    --c-padding: 0rem;
+    --gap: var(--s-gap-default);
+    --gap-half: calc(var(--gap) / 2);
+    --span: 1;
+    --offset: 0;
+    --padding: 0rem;
+    /* In case of nested grids, it is necessary to reset spans and offsets so they don't inherit them */
+    --span-2: initial;
+    --offset-2: initial;
+    --c-span-2: initial;
+    --span-3: initial;
+    --offset-3: initial;
+    --c-span-3: initial;
+    --span-4: initial;
+    --offset-4: initial;
+    --c-span-4: initial;
+    --span-5: initial;
+    --offset-5: initial;
+    --c-span-5: initial;
+    --span-6: initial;
+    --offset-6: initial;
+    --c-span-6: initial;
+    --span-7: initial;
+    --offset-7: initial;
+    --c-span-7: initial;
+    --span-8: initial;
+    --offset-8: initial;
+    --c-span-8: initial;
+    --span-9: initial;
+    --offset-9: initial;
+    --c-span-9: initial;
+    --span-10: initial;
+    --offset-10: initial;
+    --c-span-10: initial;
+    --span-11: initial;
+    --offset-11: initial;
+    --c-span-11: initial;
+    --span-12: initial;
+    --offset-12: initial;
+    --c-span-12: initial;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(5rem, 1fr));
+    container-type: inline-size;
+    container-name: s-grid;
+  }
+  .s-grid.s-fixed {
+    grid-template-columns: repeat(auto-fill, minmax(5rem, 1fr));
+  }
+  .s-grid > * {
+    --max-span: 1;
+    --span-1f: var(--span);
+    --offset-1f: var(--offset);
+    --span-result: 1;
+    --span-plus-offset: calc(var(--span-result) + var(--offset-result));
+    grid-column: span min(var(--max-span), var(--span-plus-offset));
+    padding: var(--padding);
+  }
+  .s-grid:has(+ .s-grid) {
+    margin-bottom: calc(var(--gap) / 2);
+  }
+  @container s-grid (min-width: 10rem) {
+    .s-grid > * {
+      --max-span: 2;
+      --span-2f: var(--span-2, var(--span-1f));
+      --offset-2f: var(--offset-2, var(--offset-1f));
+      --span-result: var(--span-2f);
+      --offset-result: var(--offset-2f);
+    }
+  }
+  @container s-grid (min-width: 15rem) {
+    .s-grid > * {
+      --max-span: 3;
+      --span-3f: var(--span-3, var(--span-2f));
+      --offset-3f: var(--offset-3, var(--offset-2f));
+      --span-result: var(--span-3f);
+      --offset-result: var(--offset-3f);
+    }
+  }
+  @container s-grid (min-width: 20rem) {
+    .s-grid > * {
+      --max-span: 4;
+      --span-4f: var(--span-4, var(--span-3f));
+      --offset-4f: var(--offset-4, var(--offset-3f));
+      --span-result: var(--span-4f);
+      --offset-result: var(--offset-4f);
+    }
+  }
+  @container s-grid (min-width: 25rem) {
+    .s-grid > * {
+      --max-span: 5;
+      --span-5f: var(--span-5, var(--span-4f));
+      --offset-5f: var(--offset-5, var(--offset-4f));
+      --span-result: var(--span-5f);
+      --offset-result: var(--offset-5f);
+    }
+  }
+  @container s-grid (min-width: 30rem) {
+    .s-grid > * {
+      --max-span: 6;
+      --span-6f: var(--span-6, var(--span-5f));
+      --offset-6f: var(--offset-6, var(--offset-5f));
+      --span-result: var(--span-6f);
+      --offset-result: var(--offset-6f);
+    }
+  }
+  @container s-grid (min-width: 35rem) {
+    .s-grid > * {
+      --max-span: 7;
+      --span-7f: var(--span-7, var(--span-6f));
+      --offset-7f: var(--offset-7, var(--offset-6f));
+      --span-result: var(--span-7f);
+      --offset-result: var(--offset-7f);
+    }
+  }
+  @container s-grid (min-width: 40rem) {
+    .s-grid > * {
+      --max-span: 8;
+      --span-8f: var(--span-8, var(--span-7f));
+      --offset-8f: var(--offset-8, var(--offset-7f));
+      --span-result: var(--span-8f);
+      --offset-result: var(--offset-8f);
+    }
+  }
+  @container s-grid (min-width: 45rem) {
+    .s-grid > * {
+      --max-span: 9;
+      --span-9f: var(--span-9, var(--span-8f));
+      --offset-9f: var(--offset-9, var(--offset-8f));
+      --span-result: var(--span-9f);
+      --offset-result: var(--offset-9f);
+    }
+  }
+  @container s-grid (min-width: 50rem) {
+    .s-grid > * {
+      --max-span: 10;
+      --span-10f: var(--span-10, var(--span-9f));
+      --offset-10f: var(--offset-10, var(--offset-9f));
+      --span-result: var(--span-10f);
+      --offset-result: var(--offset-10f);
+    }
+  }
+  @container s-grid (min-width: 55rem) {
+    .s-grid > * {
+      --max-span: 11;
+      --span-11f: var(--span-11, var(--span-10f));
+      --offset-11f: var(--offset-11, var(--offset-10f));
+      --span-result: var(--span-11f);
+      --offset-result: var(--offset-11f);
+    }
+  }
+  @container s-grid (min-width: 60rem) {
+    .s-grid > * {
+      --max-span: 12;
+      --span-12f: var(--span-12, var(--span-11f));
+      --offset-12f: var(--offset-12, var(--offset-11f));
+      --span-result: var(--span-12f);
+      --offset-result: var(--offset-12f);
+    }
+  }
+  /* GAPS of non nested grids */
+  /* add negatrive margin to not nested grid to serve as a base for the grid's gap */
+  :not(.s-grid) > .s-grid {
+    margin: calc(var(--gap-half) * -1);
+  }
+  .s-grid > :not(.s-grid) {
+    margin: var(--gap-half);
+    margin-inline-start: calc(
+      100% / var(--span-plus-offset) * var(--offset-result) + var(--gap-half)
+    );
+  }
+  /* EVEN ODD GRIDs */
+  :not(.s-grid):has(> .s-grid) {
+    --is-odd: 0;
+  }
+  @container style(--is-odd: 0) {
+    /* grid, which is child of even grid */
+    .s-grid {
+      --is-odd: 1;
+      --parent-odd-span: var(--c-span);
+      --parent-odd-gap: var(--gap);
+      --parent-odd-gap-half: var(--gap-half);
+      --parent-odd-padding: var(--c-padding);
+      --parent-odd-span-2: var(--c-span-2);
+      --parent-odd-span-3: var(--c-span-3);
+      --parent-odd-span-4: var(--c-span-4);
+      --parent-odd-span-5: var(--c-span-5);
+      --parent-odd-span-6: var(--c-span-6);
+      --parent-odd-span-7: var(--c-span-7);
+      --parent-odd-span-8: var(--c-span-8);
+      --parent-odd-span-9: var(--c-span-9);
+      --parent-odd-span-10: var(--c-span-10);
+      --parent-odd-span-11: var(--c-span-11);
+      --parent-odd-span-12: var(--c-span-12);
+    }
+    /* grid or non grid, which is child of even grid */
+    .s-grid,
+    * {
+      --span: var(--parent-even-span, 1);
+      --gap: var(--parent-even-gap, var(--s-gap-default));
+      --padding: var(--parent-even-padding, 0rem);
+      --gap-half: calc(var(--gap) / 2);
+      --span-2: var(--parent-even-span-2);
+      --span-3: var(--parent-even-span-3);
+      --span-4: var(--parent-even-span-4);
+      --span-5: var(--parent-even-span-5);
+      --span-6: var(--parent-even-span-6);
+      --span-7: var(--parent-even-span-7);
+      --span-8: var(--parent-even-span-8);
+      --span-9: var(--parent-even-span-9);
+      --span-10: var(--parent-even-span-10);
+      --span-11: var(--parent-even-span-11);
+      --span-12: var(--parent-even-span-12);
+      margin: calc(var(--parent-even-gap-half) - var(--gap-half));
+      margin-inline-start: calc(
+        100% / var(--span-plus-offset) * var(--offset-result) + var(--parent-even-gap-half) -
+          var(--gap-half)
+      );
+    }
+  }
+  @container style(--is-odd: 1) {
+    /* grid, which is child of odd grid */
+    .s-grid {
+      --is-odd: 0;
+      --parent-even-span: var(--c-span);
+      --parent-even-gap: var(--gap);
+      --parent-even-gap-half: var(--gap-half);
+      --parent-even-padding: var(--c-padding);
+      --parent-even-span-2: var(--c-span-2);
+      --parent-even-span-3: var(--c-span-3);
+      --parent-even-span-4: var(--c-span-4);
+      --parent-even-span-5: var(--c-span-5);
+      --parent-even-span-6: var(--c-span-6);
+      --parent-even-span-7: var(--c-span-7);
+      --parent-even-span-8: var(--c-span-8);
+      --parent-even-span-9: var(--c-span-9);
+      --parent-even-span-10: var(--c-span-10);
+      --parent-even-span-11: var(--c-span-11);
+      --parent-even-span-12: var(--c-span-12);
+    }
+    /* grid or non grid, which is child of odd grid */
+    .s-grid,
+    * {
+      --span: var(--parent-odd-span, 1);
+      --gap: var(--parent-odd-gap, var(--s-gap-default));
+      --padding: var(--parent-odd-padding, 0rem);
+      --gap-half: calc(var(--gap) / 2);
+      --span-2: var(--parent-odd-span-2);
+      --span-3: var(--parent-odd-span-3);
+      --span-4: var(--parent-odd-span-4);
+      --span-5: var(--parent-odd-span-5);
+      --span-6: var(--parent-odd-span-6);
+      --span-7: var(--parent-odd-span-7);
+      --span-8: var(--parent-odd-span-8);
+      --span-9: var(--parent-odd-span-9);
+      --span-10: var(--parent-odd-span-10);
+      --span-11: var(--parent-odd-span-11);
+      --span-12: var(--parent-odd-span-12);
+      margin: calc(var(--parent-odd-gap-half) - var(--gap-half));
+      margin-inline-start: calc(
+        100% / var(--span-plus-offset) * var(--offset-result) + var(--parent-odd-gap-half) -
+          var(--gap-half)
+      );
+    }
+  }
+  /* AUTO GRID */
+  @property --_x {
+    syntax: "<number>";
+    inherits: true;
+    initial-value: 0;
+  }
+  @property --_x-divided {
+    syntax: "<number>";
+    inherits: true;
+    initial-value: 0;
+  }
+  @property --w {
+    syntax: "<integer>";
+    inherits: true;
+    initial-value: 0;
+  }
+  @property --w-divided {
+    syntax: "<integer>";
+    inherits: true;
+    initial-value: 0;
+  }
+  /* 
+   The following font only includes set of numbers.
+   There are no vector designs of the the numbers,
+   each number only has set its width:
+   (0 is one unit wide; 1 is two units wide, 2 is three units wide)
+   Ligatures are added for numbers 10-20.
+   At the end numbers 0-20 are displayed as white space with width from 1 to 21.
+
+   The font is used to set width of an element based on its text content (number 0-20) 
+
+   font generated with https://www.glyphrstudio.com/app/ 
+   Then turned to base64 with https://www.fontsquirrel.com/tools/webfont-generator 
+   ('keep all features' needs to be turned on)
+   */
+  @font-face {
+    font-family: "sugar_counter";
+    src: url(data:application/font-woff2;charset=utf-8;base64,d09GMgABAAAAAAM8AA8AAAAACJwAAALjAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP0ZGVE0cGiQbIByBJgZgAIJaEQgKOHgLNgABNgIkA2gEIAWEdgeCBhudB8ieA27TPJKUoRNemiNt6yGhHn/kx8P/7/dtn3vfF5M0g2qzUEUzlECdxKIFlayrw0QWpX/7fk33XgqA9A85wpRUpcrUyUqyaQjC2/23imhkGUYSDqg4ooklsng1/e9/f9/4/vkX6H+QpcOtYDs2CQfSu9YyHnDj60Y7WBhoICtnYZPFRTvxB6G8QXdzsO/86ygE/Ls7V4D/1/O3ehcvOjg0sQRJEtpCxwwpkBCoW6rBHStbR0hTwC5UpV7revRAnJJwjzQEQqFAqAqPkbpHMoxVadCmx5AJc1ZsKUOaJkjDGKkbITVDpGqAVPSRsh5S0kUKHUkWCjPFSgql4rn4QKFFPsvPeL42Pv1B6ImB7t005vTVeJlP8FDq2kBA3sEWISNjiQO3RASWklwBdVVJwlXzNb4LzkTufGf3+7AAHADERgAischNQC6lcuWHh18c0ILcbYhZB8wBF0BGDV0ABUgwfBxWlHiaH+2edtLbodSbFShJsRED9Pj6wfP/d9uZ+quZVWvoVJDb+h1UJRCU+vwDuaF4B5CfF/4l0otAQkaBEsqooIoa6kAMQANNtNBGB13QA30wAEMwAoG5NAkkhMA1AIwjRxalhkSEMEdI2pbIzuhA4ZgLlJQdoGzPOyqSF1TlV1TjN1Tnd9TgD9TkT9TiL9Tmb+iq8ImeHIf4rsQXfuiTwE9pccrzS1mMXPTvgnnsoM4hj+Cerc4jg0fnYmwHGIFHrRh/ouFiHW5UjVb69eiDwyyg0xjVwutPMQ94BirUTUdHJabORpNsXZFY5x0wYdC4Cf2G1BnQZ8AwBcOYTLYn3QIGWy63dRu0MnT1IYtHYhvpZ1TEVecQGdlAkWIlSpUpV6FSlaZIilKUoxLVqEU9GtGMVrSjU36iRk2x3z0wkOrp0sDwys1sQ2e3zwmrkyiblchYHaLhBoaWI4e2cFq2OtE7sDr1O7okOVIod5kOJNeTDsnUJX0p2w2MZQAA)
+      format("woff2");
+    font-weight: normal;
+    font-style: normal;
+  }
+  .s-grid.s-auto {
+    overflow: auto;
+    position: relative;
+    --w: calc(1 / (1 - var(--_x)));
+    --w-divided: calc(1 / (1 - var(--_x-divided)));
+    timeline-scope: --cx, --cw-divided;
+    counter-reset: span-count 0;
+    animation:
+      x-grid linear,
+      x-divided linear;
+    animation-timeline: --cx, --cw-divided;
+    animation-range: entry 100% exit 100%;
+  }
+  .s-grid.s-auto:before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1px;
+    aspect-ratio: 1;
+    view-timeline: --cx inline;
+  }
+  @keyframes x-grid {
+    to {
+      --_x: 1;
+    }
+  }
+  @keyframes x-divided {
+    to {
+      --_x-divided: 1;
+    }
+  }
+  .s-grid.s-auto:after {
+    content: counter(span-count);
+    visibility: hidden;
+    font-family: "sugar_counter";
+    position: absolute;
+    left: 0;
+    width: max-content;
+    height: 1px;
+    overflow: hidden;
+    view-timeline: --cw-divided inline;
+    font-size: 2048px;
+    user-select: none;
+  }
+  .s-grid.s-auto > *:last-child:after {
+    /* This is needed to avoid safari bug with counter. 
+    Counter needs to be used in children's :after to materialize the counter-increase */
+    content: counter(span-count);
+    visibility: hidden;
+  }
+  .s-grid.s-auto > *:last-child {
+    /* the --total-span-count-in-grid is set to value,
+    same as the counter, but as regular integer variable, not string like counter value */
+    --total-span-count-in-grid: calc(var(--w) / var(--w-divided) - 1);
+    /* --is-first-row return 1 if first row, otherwise 0 */
+    --is-first-row: clamp(0, calc(var(--max-span) - var(--total-span-count-in-grid)), 1);
+    /* only return non zero value if we are in first row */
+    --this-row-spans: calc(var(--is-first-row) * var(--total-span-count-in-grid));
+    /* How many spans are missing to the end of the row */
+    --this-row-spans-missing: calc(var(--is-first-row) * var(--max-span) - var(--this-row-spans));
+    /* this span count + left offset span count + missing span count to the end */
+    --span-plus-offset-and-span-missing: calc(
+      var(--span-plus-offset) + var(--this-row-spans-missing)
+    );
+    margin-inline-end: calc(
+      100% / var(--span-plus-offset-and-span-missing) * var(--this-row-spans-missing) +
+        var(--gap-half)
+    );
+    grid-column: span var(--span-plus-offset-and-span-missing);
+  }
+  .s-grid.s-auto > * {
+    counter-increment: span-count var(--span-plus-offset);
+  }
+}
+
+/* MARGINS
+========================================================================
+*/
+@layer sugar {
+  section {
+    margin-bottom: var(--sugar-spacing-block);
+  }
+  /* Don't apply margin top for following */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  hgroup,
+  dl,
+  article,
+  section,
+  table,
+  p {
+    margin-block-start: 0;
+  }
+  /* Don't apply margin bottom if the element is the last of its parent */
+  :is(h1, h2, h3, h4, h5, h6, hgroup, dl, article, section, table, p):last-child {
+    margin-block-end: 0;
+  }
+}
+
+/* LAYOUT
+========================================================================
+*/
+@layer sugar {
+  .s-container {
+    padding-inline: var(--sugar-spacing-inline);
+    margin-inline: calc((100dvw - min(100dvw, var(--container-width))) / 2);
+    /* this way  the container is still the same width,
+    no matter whether there is a scrollbar or not */
+  }
+  body > header {
+    background-color: var(--color-background);
+  }
+  body > footer {
+    padding: var(--sugar-spacing-block) 0;
+    box-shadow: var(--s-box-shadow-half);
+    margin-top: auto;
+  }
+  body > header {
+    position: sticky;
+    width: 100%;
+    z-index: 1;
+    top: 0;
+    /* padding-top added in order to avoid margin collapsing, 
+      In case of child with margin would define height of the header */
+    padding-top: 0.02px;
+    box-shadow: var(--s-box-shadow-half);
+  }
+  body > header + * {
+    padding-top: var(--sugar-spacing-block);
+  }
+  body > :has(+ footer) {
+    padding-bottom: var(--sugar-spacing-block);
+  }
+  body:has(> footer) {
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+}

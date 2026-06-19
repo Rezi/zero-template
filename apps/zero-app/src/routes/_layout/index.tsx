@@ -38,7 +38,7 @@ function Home() {
   };
 
   return (
-    <main className="p-4">
+    <>
       <div className="flex items-center gap-3">
         <button
           type="button"
@@ -68,6 +68,6 @@ function Home() {
           <li key={album.id}>{album.title}</li>
         ))}
       </ul>
-    </main>
+    </>
   );
 }

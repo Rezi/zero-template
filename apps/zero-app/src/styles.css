@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/oxanium";
+@import "./sugar.css";
 
 /* shadcn/ui dark variant: components toggle the `.dark` class on <html>
    (the existing ThemeToggle adds it), so this drives the dark tokens. */

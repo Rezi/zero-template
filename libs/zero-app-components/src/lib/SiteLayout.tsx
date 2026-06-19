@@ -1,12 +1,18 @@
 import type { ReactNode } from "react";
 import Header from "./Header";
-import { LoginButton } from "./LoginButton";
 
-export function SiteLayout({ children }: { children: ReactNode }) {
+export function SiteLayout({ children, rightSlot }: { children: ReactNode; rightSlot?: ReactNode }) {
   return (
-    <div className="flex min-h-screen flex-col">
-      <Header rightSlot={<LoginButton />} />
-      <main className="flex-1">{children}</main>
-    </div>
+    <>
+      <header>
+        <div className="s-container">
+          <Header rightSlot={rightSlot} />
+        </div>
+      </header>
+      <main className="s-container">{children}</main>
+      <footer>
+        <div className="s-container">asd</div>
+      </footer>
+    </>
   );
 }

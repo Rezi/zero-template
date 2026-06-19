@@ -1,6 +1,7 @@
 import { HeadContent, Scripts, createRootRouteWithContext } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import type { RouterContext } from "../router";
+import "../styles.css";
 
 export const Route = createRootRouteWithContext<RouterContext>()({
   head: () => ({

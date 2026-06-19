@@ -653,15 +653,15 @@ async function main() {
         { value: "docker", label: "🐳 Docker…" },
         {
           value: "zero-cache",
-          label: "🌍  Zero cache (backend)",
+          label: "🌍 Zero cache (backend)",
           hint: "deno task zero-cache",
         },
         {
           value: "dev",
-          label: "💻  Dev server",
+          label: "💻 Dev server",
           hint: "deno task dev (zero-app)",
         },
-        { value: "run-target", label: "🏃  Run a target by app/library…" },
+        { value: "run-target", label: "🏃 Run a target by app/library…" },
         { value: "tasks", label: "🔨 Build / Test / Lint…" },
         { value: "e2e", label: "🎭 E2E tests", hint: "deno task e2e" },
         { value: "db", label: "🗄  Database…" },

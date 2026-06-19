@@ -1,5 +1,7 @@
 import { Outlet, createFileRoute } from "@tanstack/react-router";
-import { ZeroInit, SiteLayout } from "@zero-app/zero-app-components";
+import { SiteLayout } from "@zero-app/zero-app-components";
+import { ZeroInit } from "../../components/ZeroInit";
+import { LoginButton } from "../../components/LoginButton";
 
 export const Route = createFileRoute("/_layout")({
   component: RouteComponent,
@@ -9,7 +11,7 @@ export const Route = createFileRoute("/_layout")({
 function RouteComponent() {
   return (
     <ZeroInit>
-      <SiteLayout>
+      <SiteLayout rightSlot={<LoginButton />}>
         <Outlet />
       </SiteLayout>
     </ZeroInit>
