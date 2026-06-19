@@ -3,6 +3,7 @@
 import * as React from "react";
 import { AlertDialog as AlertDialogPrimitive } from "@base-ui/react/alert-dialog";
 
+import { css, cx } from "@zero-app/styled-system/css";
 import { cn } from "../../lib/utils";
 import { Button } from "./button";
 
@@ -23,7 +24,29 @@ function AlertDialogOverlay({ className, ...props }: AlertDialogPrimitive.Backdr
     <AlertDialogPrimitive.Backdrop
       data-slot="alert-dialog-overlay"
       className={cn(
-        "fixed inset-0 isolate z-50 bg-black/30 duration-100 supports-backdrop-filter:backdrop-blur-sm data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        css({
+          position: 'fixed',
+          inset: '0',
+          isolation: 'isolate',
+          zIndex: 50,
+          bg: 'black/30',
+          transitionDuration: '100ms',
+          '@supports (backdrop-filter: blur(0))': { backdropFilter: 'blur(4px)' },
+          _dataOpen: {
+            animationName: 'enter',
+            animationDuration: '100ms',
+            animationTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)',
+            animationFillMode: 'both',
+            '--enter-opacity': '0',
+          },
+          _dataClosed: {
+            animationName: 'exit',
+            animationDuration: '100ms',
+            animationTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)',
+            animationFillMode: 'both',
+            '--exit-opacity': '0',
+          },
+        }),
         className,
       )}
       {...props}
@@ -45,7 +68,49 @@ function AlertDialogContent({
         data-slot="alert-dialog-content"
         data-size={size}
         className={cn(
-          "group/alert-dialog-content fixed top-1/2 left-1/2 z-50 grid w-full -translate-x-1/2 -translate-y-1/2 gap-6 rounded-[min(var(--radius-4xl),24px)] bg-popover p-6 text-popover-foreground shadow-xl ring-1 ring-foreground/5 duration-100 outline-none data-[size=default]:max-w-xs data-[size=sm]:max-w-xs data-[size=default]:sm:max-w-md dark:ring-foreground/10 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          cx(
+            "group/alert-dialog-content",
+            css({
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              zIndex: 50,
+              display: 'grid',
+              width: 'full',
+              translateX: '-50%',
+              translateY: '-50%',
+              gap: '6',
+              borderRadius: 'min(var(--radius-4xl), 24px)',
+              bg: 'popover',
+              p: '6',
+              color: 'popover-foreground',
+              boxShadow: 'xl',
+              outline: 'none',
+              transitionDuration: '100ms',
+              '&[data-size="default"]': { maxWidth: 'xs', '@media (min-width: 640px)': { maxWidth: 'md' } },
+              '&[data-size="sm"]': { maxWidth: 'xs' },
+              _dark: {
+                boxShadow: '0 0 0 1px color-mix(in oklch, var(--foreground) 10%, transparent)',
+              },
+              boxShadow: '0 0 0 1px color-mix(in oklch, var(--foreground) 5%, transparent)',
+              _dataOpen: {
+                animationName: 'enter',
+                animationDuration: '100ms',
+                animationTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)',
+                animationFillMode: 'both',
+                '--enter-opacity': '0',
+                '--enter-scale': '.95',
+              },
+              _dataClosed: {
+                animationName: 'exit',
+                animationDuration: '100ms',
+                animationTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)',
+                animationFillMode: 'both',
+                '--exit-opacity': '0',
+                '--exit-scale': '.95',
+              },
+            }),
+          ),
           className,
         )}
         {...props}
@@ -59,7 +124,26 @@ function AlertDialogHeader({ className, ...props }: React.ComponentProps<"div">)
     <div
       data-slot="alert-dialog-header"
       className={cn(
-        "grid grid-rows-[auto_1fr] place-items-center gap-1.5 text-center has-data-[slot=alert-dialog-media]:grid-rows-[auto_auto_1fr] has-data-[slot=alert-dialog-media]:gap-x-6 sm:group-data-[size=default]/alert-dialog-content:place-items-start sm:group-data-[size=default]/alert-dialog-content:text-left sm:group-data-[size=default]/alert-dialog-content:has-data-[slot=alert-dialog-media]:grid-rows-[auto_1fr]",
+        css({
+          display: 'grid',
+          gridTemplateRows: 'auto 1fr',
+          placeItems: 'center',
+          gap: '1.5',
+          textAlign: 'center',
+          '&:has([data-slot="alert-dialog-media"])': {
+            gridTemplateRows: 'auto auto 1fr',
+            columnGap: '6',
+          },
+          '.group\\/alert-dialog-content[data-size="default"] &': {
+            '@media (min-width: 640px)': {
+              placeItems: 'start',
+              textAlign: 'left',
+              '&:has([data-slot="alert-dialog-media"])': {
+                gridTemplateRows: 'auto 1fr',
+              },
+            },
+          },
+        }),
         className,
       )}
       {...props}
@@ -72,7 +156,19 @@ function AlertDialogFooter({ className, ...props }: React.ComponentProps<"div">)
     <div
       data-slot="alert-dialog-footer"
       className={cn(
-        "flex flex-col-reverse gap-2 group-data-[size=sm]/alert-dialog-content:grid group-data-[size=sm]/alert-dialog-content:grid-cols-2 sm:flex-row sm:justify-end",
+        css({
+          display: 'flex',
+          flexDirection: 'column-reverse',
+          gap: '2',
+          '.group\\/alert-dialog-content[data-size="sm"] &': {
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, 1fr)',
+          },
+          '@media (min-width: 640px)': {
+            flexDirection: 'row',
+            justifyContent: 'flex-end',
+          },
+        }),
         className,
       )}
       {...props}
@@ -85,7 +181,20 @@ function AlertDialogMedia({ className, ...props }: React.ComponentProps<"div">) 
     <div
       data-slot="alert-dialog-media"
       className={cn(
-        "mb-2 inline-flex size-16 items-center justify-center rounded-full bg-muted sm:group-data-[size=default]/alert-dialog-content:row-span-2 *:[svg:not([class*='size-'])]:size-8",
+        css({
+          mb: '2',
+          display: 'inline-flex',
+          width: '16',
+          height: '16',
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderRadius: 'full',
+          bg: 'muted',
+          '.group\\/alert-dialog-content[data-size="default"] &': {
+            '@media (min-width: 640px)': { gridRowSpan: 2 },
+          },
+          '& svg:not([class*="size-"])': { width: '8', height: '8' },
+        }),
         className,
       )}
       {...props}
@@ -101,7 +210,13 @@ function AlertDialogTitle({
     <AlertDialogPrimitive.Title
       data-slot="alert-dialog-title"
       className={cn(
-        "font-heading text-lg font-medium sm:group-data-[size=default]/alert-dialog-content:group-has-data-[slot=alert-dialog-media]/alert-dialog-content:col-start-2",
+        css({
+          fontSize: 'lg',
+          fontWeight: 'medium',
+          '.group\\/alert-dialog-content[data-size="default"]:has([data-slot="alert-dialog-media"]) &': {
+            '@media (min-width: 640px)': { gridColumnStart: 2 },
+          },
+        }),
         className,
       )}
       {...props}
@@ -117,7 +232,17 @@ function AlertDialogDescription({
     <AlertDialogPrimitive.Description
       data-slot="alert-dialog-description"
       className={cn(
-        "text-sm text-balance text-muted-foreground md:text-pretty *:[a]:underline *:[a]:underline-offset-3 *:[a]:hover:text-foreground",
+        css({
+          fontSize: 'sm',
+          textWrap: 'balance',
+          color: 'muted-foreground',
+          '@media (min-width: 768px)': { textWrap: 'pretty' },
+          '& a': {
+            textDecoration: 'underline',
+            textUnderlineOffset: '3px',
+            _hover: { color: 'foreground' },
+          },
+        }),
         className,
       )}
       {...props}

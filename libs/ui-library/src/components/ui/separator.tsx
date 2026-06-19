@@ -1,5 +1,6 @@
 import { Separator as SeparatorPrimitive } from "@base-ui/react/separator";
 
+import { css } from "@zero-app/styled-system/css";
 import { cn } from "../../lib/utils";
 
 function Separator({ className, orientation = "horizontal", ...props }: SeparatorPrimitive.Props) {
@@ -8,7 +9,12 @@ function Separator({ className, orientation = "horizontal", ...props }: Separato
       data-slot="separator"
       orientation={orientation}
       className={cn(
-        "shrink-0 bg-border data-horizontal:h-px data-horizontal:w-full data-vertical:w-px data-vertical:self-stretch",
+        css({
+          flexShrink: 0,
+          bg: 'border',
+          _dataHorizontal: { height: '1px', width: 'full' },
+          _dataVertical: { width: '1px', alignSelf: 'stretch' },
+        }),
         className,
       )}
       {...props}

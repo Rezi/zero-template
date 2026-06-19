@@ -1,5 +1,6 @@
 import { Slider as SliderPrimitive } from "@base-ui/react/slider";
 
+import { css, cx } from "@zero-app/styled-system/css";
 import { cn } from "../../lib/utils";
 
 function Slider({
@@ -18,7 +19,13 @@ function Slider({
 
   return (
     <SliderPrimitive.Root
-      className={cn("data-horizontal:w-full data-vertical:h-full", className)}
+      className={cn(
+        css({
+          _dataHorizontal: { width: 'full' },
+          _dataVertical: { height: 'full' },
+        }),
+        className
+      )}
       data-slot="slider"
       defaultValue={defaultValue}
       value={value}
@@ -27,21 +34,78 @@ function Slider({
       thumbAlignment="edge"
       {...props}
     >
-      <SliderPrimitive.Control className="relative flex w-full touch-none items-center select-none data-disabled:opacity-50 data-vertical:h-full data-vertical:min-h-40 data-vertical:w-auto data-vertical:flex-col">
+      <SliderPrimitive.Control
+        className={css({
+          position: 'relative',
+          display: 'flex',
+          width: 'full',
+          touchAction: 'none',
+          alignItems: 'center',
+          userSelect: 'none',
+          _dataDisabled: { opacity: 0.5 },
+          _dataVertical: {
+            height: 'full',
+            minHeight: '40',
+            width: 'auto',
+            flexDirection: 'column',
+          },
+        })}
+      >
         <SliderPrimitive.Track
           data-slot="slider-track"
-          className="relative grow overflow-hidden rounded-2xl bg-input/90 select-none data-horizontal:h-1 data-horizontal:w-full data-vertical:h-full data-vertical:w-1"
+          className={css({
+            position: 'relative',
+            flexGrow: 1,
+            overflow: 'hidden',
+            borderRadius: '2xl',
+            bg: 'input/90',
+            userSelect: 'none',
+            _dataHorizontal: { height: '1', width: 'full' },
+            _dataVertical: { height: 'full', width: '1' },
+          })}
         >
           <SliderPrimitive.Indicator
             data-slot="slider-range"
-            className="bg-primary select-none data-horizontal:h-full data-vertical:w-full"
+            className={css({
+              bg: 'primary',
+              userSelect: 'none',
+              _dataHorizontal: { height: 'full' },
+              _dataVertical: { width: 'full' },
+            })}
           />
         </SliderPrimitive.Track>
         {Array.from({ length: _values.length }, (_, index) => (
           <SliderPrimitive.Thumb
             data-slot="slider-thumb"
             key={index}
-            className="block size-4 shrink-0 rounded-2xl bg-white shadow-md ring-1 ring-black/10 transition-[color,box-shadow] duration-200 select-none not-dark:bg-clip-padding hover:ring-4 hover:ring-ring/30 focus-visible:ring-4 focus-visible:ring-ring/30 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
+            className={css({
+              display: 'block',
+              width: '4',
+              height: '4',
+              flexShrink: 0,
+              borderRadius: '2xl',
+              bg: 'white',
+              boxShadow: 'md',
+              transitionProperty: 'color, box-shadow',
+              transitionDuration: '200ms',
+              transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)',
+              userSelect: 'none',
+              backgroundClip: 'padding-box',
+              _dark: {
+                backgroundClip: 'unset',
+              },
+              _hover: {
+                boxShadow: '0 0 0 4px color-mix(in oklch, var(--ring) 30%, transparent)',
+              },
+              _focusVisible: {
+                outline: 'none',
+                boxShadow: '0 0 0 4px color-mix(in oklch, var(--ring) 30%, transparent)',
+              },
+              _disabled: {
+                pointerEvents: 'none',
+                opacity: 0.5,
+              },
+            })}
           />
         ))}
       </SliderPrimitive.Control>

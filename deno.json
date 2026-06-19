@@ -17,6 +17,8 @@
     "fmt:check": "oxfmt --check",
     "e2e": "nx e2e zero-app-e2e",
     "graph": "nx graph",
+    "panda": "node node_modules/.bin/panda cssgen --config panda.config.mjs --outfile apps/zero-app/src/panda.css --silent",
+    "panda:watch": "node node_modules/.bin/panda cssgen --config panda.config.mjs --outfile apps/zero-app/src/panda.css --watch --silent",
     "zero-cache": "ZERO_QUERY_URL=http://localhost:3000/api/query ZERO_MUTATE_URL=http://localhost:3000/api/mutate zero-cache-dev",
     "db:generate": "drizzle-kit generate --config libs/db/drizzle.config.ts",
     "db:migrate": "drizzle-kit migrate --config libs/db/drizzle.config.ts",

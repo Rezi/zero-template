@@ -1,3 +1,4 @@
+import { css } from "@zero-app/styled-system/css";
 import { cn } from "../../lib/utils";
 
 function Kbd({ className, ...props }: React.ComponentProps<"kbd">) {
@@ -5,7 +6,40 @@ function Kbd({ className, ...props }: React.ComponentProps<"kbd">) {
     <kbd
       data-slot="kbd"
       className={cn(
-        "pointer-events-none inline-flex h-5 w-fit min-w-5 items-center justify-center gap-1 rounded-lg bg-muted px-1 font-sans text-xs font-medium text-muted-foreground select-none in-data-[slot=input-group]:bg-input in-data-[slot=tooltip-content]:bg-background/20 in-data-[slot=tooltip-content]:text-background dark:in-data-[slot=tooltip-content]:bg-background/10 [&_svg:not([class*='size-'])]:size-3",
+        css({
+          pointerEvents: "none",
+          display: "inline-flex",
+          height: "5",
+          width: "fit-content",
+          minWidth: "5",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "1",
+          borderRadius: "lg",
+          bg: "muted",
+          px: "1",
+          fontFamily: "sans",
+          fontSize: "xs",
+          fontWeight: "medium",
+          color: "muted-foreground",
+          userSelect: "none",
+          '[data-slot="input-group"] &': {
+            bg: "input",
+          },
+          '[data-slot="tooltip-content"] &': {
+            bg: "background/20",
+            color: "background",
+          },
+          _dark: {
+            '[data-slot="tooltip-content"] &': {
+              bg: "background/10",
+            },
+          },
+          "& svg:not([class*='size-'])": {
+            width: "3",
+            height: "3",
+          },
+        }),
         className,
       )}
       {...props}
@@ -17,7 +51,14 @@ function KbdGroup({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <kbd
       data-slot="kbd-group"
-      className={cn("inline-flex items-center gap-1", className)}
+      className={cn(
+        css({
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "1",
+        }),
+        className,
+      )}
       {...props}
     />
   );

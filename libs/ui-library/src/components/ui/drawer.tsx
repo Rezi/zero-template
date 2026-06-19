@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Drawer as DrawerPrimitive } from "vaul";
+import { css, cx } from "@zero-app/styled-system/css";
 
 import { cn } from "../../lib/utils";
 
@@ -29,7 +30,29 @@ function DrawerOverlay({
     <DrawerPrimitive.Overlay
       data-slot="drawer-overlay"
       className={cn(
-        "fixed inset-0 z-50 bg-black/30 supports-backdrop-filter:backdrop-blur-sm data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        css({
+          position: "fixed",
+          inset: "0",
+          zIndex: 50,
+          bg: "black/30",
+          "@supports (backdrop-filter: blur(0))": {
+            backdropFilter: "blur(4px)",
+          },
+          _dataOpen: {
+            animationName: "enter",
+            animationDuration: "150ms",
+            animationTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
+            animationFillMode: "both",
+            "--enter-opacity": "0",
+          },
+          _dataClosed: {
+            animationName: "exit",
+            animationDuration: "150ms",
+            animationTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
+            animationFillMode: "both",
+            "--exit-opacity": "0",
+          },
+        }),
         className,
       )}
       {...props}
@@ -48,12 +71,77 @@ function DrawerContent({
       <DrawerPrimitive.Content
         data-slot="drawer-content"
         className={cn(
-          "group/drawer-content fixed z-50 flex h-auto flex-col bg-transparent p-4 text-sm before:absolute before:inset-2 before:-z-10 before:rounded-[min(var(--radius-4xl),24px)] before:border before:border-border before:bg-popover before:shadow-xl data-[vaul-drawer-direction=bottom]:inset-x-0 data-[vaul-drawer-direction=bottom]:bottom-0 data-[vaul-drawer-direction=bottom]:mt-24 data-[vaul-drawer-direction=bottom]:max-h-[80vh] data-[vaul-drawer-direction=left]:inset-y-0 data-[vaul-drawer-direction=left]:left-0 data-[vaul-drawer-direction=left]:w-3/4 data-[vaul-drawer-direction=right]:inset-y-0 data-[vaul-drawer-direction=right]:right-0 data-[vaul-drawer-direction=right]:w-3/4 data-[vaul-drawer-direction=top]:inset-x-0 data-[vaul-drawer-direction=top]:top-0 data-[vaul-drawer-direction=top]:mb-24 data-[vaul-drawer-direction=top]:max-h-[80vh] data-[vaul-drawer-direction=left]:sm:max-w-sm data-[vaul-drawer-direction=right]:sm:max-w-sm",
+          cx(
+            "group/drawer-content",
+            css({
+              position: "fixed",
+              zIndex: 50,
+              display: "flex",
+              height: "auto",
+              flexDirection: "column",
+              bg: "transparent",
+              p: "4",
+              fontSize: "sm",
+              _before: {
+                content: '""',
+                position: "absolute",
+                inset: "2",
+                zIndex: -10,
+                borderRadius: "min(2rem, 24px)",
+                borderWidth: "1px",
+                borderColor: "border",
+                bg: "popover",
+                boxShadow: "xl",
+              },
+              '&[data-vaul-drawer-direction="bottom"]': {
+                insetX: "0",
+                bottom: "0",
+                mt: "24",
+                maxHeight: "80vh",
+              },
+              '&[data-vaul-drawer-direction="left"]': {
+                insetY: "0",
+                left: "0",
+                width: "3/4",
+                "@media (min-width: 640px)": {
+                  maxWidth: "sm",
+                },
+              },
+              '&[data-vaul-drawer-direction="right"]': {
+                insetY: "0",
+                right: "0",
+                width: "3/4",
+                "@media (min-width: 640px)": {
+                  maxWidth: "sm",
+                },
+              },
+              '&[data-vaul-drawer-direction="top"]': {
+                insetX: "0",
+                top: "0",
+                mb: "24",
+                maxHeight: "80vh",
+              },
+            }),
+          ),
           className,
         )}
         {...props}
       >
-        <div className="mx-auto mt-4 hidden h-1.5 w-[100px] shrink-0 rounded-full bg-muted group-data-[vaul-drawer-direction=bottom]/drawer-content:block" />
+        <div
+          className={css({
+            mx: "auto",
+            mt: "4",
+            display: "none",
+            height: "1.5",
+            width: "100px",
+            flexShrink: 0,
+            borderRadius: "full",
+            bg: "muted",
+            '.group\/drawer-content[data-vaul-drawer-direction="bottom"] &': {
+              display: "block",
+            },
+          })}
+        />
         {children}
       </DrawerPrimitive.Content>
     </DrawerPortal>
@@ -65,7 +153,22 @@ function DrawerHeader({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="drawer-header"
       className={cn(
-        "flex flex-col gap-0.5 p-4 group-data-[vaul-drawer-direction=bottom]/drawer-content:text-center group-data-[vaul-drawer-direction=top]/drawer-content:text-center md:gap-1.5 md:text-left",
+        css({
+          display: "flex",
+          flexDirection: "column",
+          gap: "0.5",
+          p: "4",
+          '.group\/drawer-content[data-vaul-drawer-direction="bottom"] &': {
+            textAlign: "center",
+          },
+          '.group\/drawer-content[data-vaul-drawer-direction="top"] &': {
+            textAlign: "center",
+          },
+          "@media (min-width: 768px)": {
+            gap: "1.5",
+            textAlign: "left",
+          },
+        }),
         className,
       )}
       {...props}
@@ -77,7 +180,16 @@ function DrawerFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="drawer-footer"
-      className={cn("mt-auto flex flex-col gap-2 p-4", className)}
+      className={cn(
+        css({
+          mt: "auto",
+          display: "flex",
+          flexDirection: "column",
+          gap: "2",
+          p: "4",
+        }),
+        className,
+      )}
       {...props}
     />
   );
@@ -87,7 +199,15 @@ function DrawerTitle({ className, ...props }: React.ComponentProps<typeof Drawer
   return (
     <DrawerPrimitive.Title
       data-slot="drawer-title"
-      className={cn("font-heading text-base font-medium text-foreground", className)}
+      className={cn(
+        css({
+          fontFamily: "heading",
+          fontSize: "md",
+          fontWeight: "medium",
+          color: "foreground",
+        }),
+        className,
+      )}
       {...props}
     />
   );
@@ -100,7 +220,13 @@ function DrawerDescription({
   return (
     <DrawerPrimitive.Description
       data-slot="drawer-description"
-      className={cn("text-sm text-muted-foreground", className)}
+      className={cn(
+        css({
+          fontSize: "sm",
+          color: "muted-foreground",
+        }),
+        className,
+      )}
       {...props}
     />
   );

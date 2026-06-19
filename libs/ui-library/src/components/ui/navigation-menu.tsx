@@ -1,5 +1,5 @@
 import { NavigationMenu as NavigationMenuPrimitive } from "@base-ui/react/navigation-menu";
-import { cva } from "class-variance-authority";
+import { css, cva, cx } from "@zero-app/styled-system/css";
 
 import { cn } from "../../lib/utils";
 import { ChevronDownIcon } from "lucide-react";
@@ -14,7 +14,17 @@ function NavigationMenu({
     <NavigationMenuPrimitive.Root
       data-slot="navigation-menu"
       className={cn(
-        "group/navigation-menu relative flex max-w-max flex-1 items-center justify-center",
+        cx(
+          "group/navigation-menu",
+          css({
+            position: "relative",
+            display: "flex",
+            maxWidth: "max-content",
+            flex: "1",
+            alignItems: "center",
+            justifyContent: "center",
+          }),
+        ),
         className,
       )}
       {...props}
@@ -32,7 +42,20 @@ function NavigationMenuList({
   return (
     <NavigationMenuPrimitive.List
       data-slot="navigation-menu-list"
-      className={cn("group flex flex-1 list-none items-center justify-center gap-0", className)}
+      className={cn(
+        cx(
+          "group",
+          css({
+            display: "flex",
+            flex: "1",
+            listStyle: "none",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "0",
+          }),
+        ),
+        className,
+      )}
       {...props}
     />
   );
@@ -45,15 +68,65 @@ function NavigationMenuItem({
   return (
     <NavigationMenuPrimitive.Item
       data-slot="navigation-menu-item"
-      className={cn("relative", className)}
+      className={cn(
+        css({
+          position: "relative",
+        }),
+        className,
+      )}
       {...props}
     />
   );
 }
 
-const navigationMenuTriggerStyle = cva(
-  "group/navigation-menu-trigger inline-flex h-9 w-max items-center justify-center rounded-2xl px-2.5 py-1.5 text-sm font-medium transition-all outline-none hover:bg-muted focus:bg-muted focus-visible:ring-3 focus-visible:ring-ring/30 focus-visible:outline-1 disabled:pointer-events-none disabled:opacity-50 data-popup-open:bg-muted/50 data-popup-open:hover:bg-muted data-open:bg-muted/50 data-open:hover:bg-muted data-open:focus:bg-muted",
-);
+const navigationMenuTriggerStyle = cva({
+  base: {
+    display: "inline-flex",
+    height: "9",
+    width: "max-content",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: "2xl",
+    px: "2.5",
+    py: "1.5",
+    fontSize: "sm",
+    fontWeight: "medium",
+    transitionProperty: "all",
+    transitionDuration: "150ms",
+    transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
+    outline: "none",
+    _hover: {
+      bg: "muted",
+    },
+    _focus: {
+      bg: "muted",
+    },
+    _focusVisible: {
+      boxShadow: "0 0 0 3px color-mix(in oklch, var(--ring) 30%, transparent)",
+      outlineWidth: "1px",
+      outlineColor: "ring",
+    },
+    _disabled: {
+      pointerEvents: "none",
+      opacity: 0.5,
+    },
+    "&[data-popup-open]": {
+      bg: "muted/50",
+      _hover: {
+        bg: "muted",
+      },
+    },
+    _dataOpen: {
+      bg: "muted/50",
+      _hover: {
+        bg: "muted",
+      },
+      _focus: {
+        bg: "muted",
+      },
+    },
+  },
+});
 
 function NavigationMenuTrigger({
   className,
@@ -63,12 +136,34 @@ function NavigationMenuTrigger({
   return (
     <NavigationMenuPrimitive.Trigger
       data-slot="navigation-menu-trigger"
-      className={cn(navigationMenuTriggerStyle(), "group", className)}
+      className={cn(
+        cx(
+          "group/navigation-menu-trigger",
+          "group",
+          navigationMenuTriggerStyle(),
+        ),
+        className,
+      )}
       {...props}
     >
       {children}{" "}
       <ChevronDownIcon
-        className="relative top-px ml-1 size-3 transition duration-300 group-data-popup-open/navigation-menu-trigger:rotate-180 group-data-open/navigation-menu-trigger:rotate-180"
+        className={css({
+          position: "relative",
+          top: "px",
+          ml: "1",
+          width: "3",
+          height: "3",
+          transitionProperty: "transform",
+          transitionDuration: "300ms",
+          transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
+          ".group\\/navigation-menu-trigger[data-popup-open] &": {
+            transform: "rotate(180deg)",
+          },
+          ".group\\/navigation-menu-trigger[data-open] &": {
+            transform: "rotate(180deg)",
+          },
+        })}
         aria-hidden="true"
       />
     </NavigationMenuPrimitive.Trigger>
@@ -80,7 +175,99 @@ function NavigationMenuContent({ className, ...props }: NavigationMenuPrimitive.
     <NavigationMenuPrimitive.Content
       data-slot="navigation-menu-content"
       className={cn(
-        "data-ending-style:data-activation-direction=left:translate-x-[50%] data-ending-style:data-activation-direction=right:translate-x-[-50%] data-starting-style:data-activation-direction=left:translate-x-[-50%] data-starting-style:data-activation-direction=right:translate-x-[50%] h-full w-auto p-1.5 transition-[opacity,transform,translate] duration-[0.35s] ease-[cubic-bezier(0.22,1,0.36,1)] group-data-[viewport=false]/navigation-menu:rounded-2xl group-data-[viewport=false]/navigation-menu:bg-popover group-data-[viewport=false]/navigation-menu:text-popover-foreground group-data-[viewport=false]/navigation-menu:shadow-lg group-data-[viewport=false]/navigation-menu:ring-1 group-data-[viewport=false]/navigation-menu:ring-foreground/5 group-data-[viewport=false]/navigation-menu:duration-300 data-ending-style:opacity-0 data-starting-style:opacity-0 data-[motion=from-end]:slide-in-from-right-52 data-[motion=from-start]:slide-in-from-left-52 data-[motion=to-end]:slide-out-to-right-52 data-[motion=to-start]:slide-out-to-left-52 data-[motion^=from-]:animate-in data-[motion^=from-]:fade-in data-[motion^=to-]:animate-out data-[motion^=to-]:fade-out **:data-[slot=navigation-menu-link]:focus:ring-0 **:data-[slot=navigation-menu-link]:focus:outline-none group-data-[viewport=false]/navigation-menu:dark:ring-foreground/10 group-data-[viewport=false]/navigation-menu:data-open:animate-in group-data-[viewport=false]/navigation-menu:data-open:fade-in-0 group-data-[viewport=false]/navigation-menu:data-open:zoom-in-95 group-data-[viewport=false]/navigation-menu:data-closed:animate-out group-data-[viewport=false]/navigation-menu:data-closed:fade-out-0 group-data-[viewport=false]/navigation-menu:data-closed:zoom-out-95",
+        css({
+          height: "full",
+          width: "auto",
+          p: "1.5",
+          transitionProperty: "opacity, transform, translate",
+          transitionDuration: "0.35s",
+          transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
+          "&[data-ending-style][data-activation-direction='left']": {
+            transform: "translateX(50%)",
+          },
+          "&[data-ending-style][data-activation-direction='right']": {
+            transform: "translateX(-50%)",
+          },
+          "&[data-starting-style][data-activation-direction='left']": {
+            transform: "translateX(-50%)",
+          },
+          "&[data-starting-style][data-activation-direction='right']": {
+            transform: "translateX(50%)",
+          },
+          ".group\\/navigation-menu[data-viewport='false'] &": {
+            borderRadius: "2xl",
+            bg: "popover",
+            color: "popover-foreground",
+            // shadow-lg + ring-1 ring-foreground/5
+            boxShadow: "lg, 0 0 0 1px color-mix(in oklch, var(--foreground) 5%, transparent)",
+            transitionDuration: "300ms",
+          },
+          ".group\\/navigation-menu[data-viewport='false'] &[data-ending-style]": {
+            animationName: "exit",
+            animationDuration: "150ms",
+            animationTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
+            animationFillMode: "both",
+            "--exit-opacity": "0",
+            "--exit-scale": ".95",
+          },
+          ".group\\/navigation-menu[data-viewport='false'] &[data-open]": {
+            animationName: "enter",
+            animationDuration: "150ms",
+            animationTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
+            animationFillMode: "both",
+            "--enter-opacity": "0",
+            "--enter-scale": ".95",
+          },
+          ".group\\/navigation-menu[data-viewport='false'] &[data-closed]": {
+            animationName: "exit",
+            animationDuration: "150ms",
+            animationTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
+            animationFillMode: "both",
+            "--exit-opacity": "0",
+            "--exit-scale": ".95",
+          },
+          _dataEndingStyle: {
+            opacity: 0,
+          },
+          _dataStartingStyle: {
+            opacity: 0,
+          },
+          "&[data-motion='from-end']": {
+            "--enter-translate-x": "-13rem",
+          },
+          "&[data-motion='from-start']": {
+            "--enter-translate-x": "13rem",
+          },
+          "&[data-motion='to-end']": {
+            "--exit-translate-x": "13rem",
+          },
+          "&[data-motion='to-start']": {
+            "--exit-translate-x": "-13rem",
+          },
+          "&[data-motion^='from-']": {
+            animationName: "enter",
+            animationDuration: "150ms",
+            animationTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
+            animationFillMode: "both",
+            "--enter-opacity": "0",
+          },
+          "&[data-motion^='to-']": {
+            animationName: "exit",
+            animationDuration: "150ms",
+            animationTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
+            animationFillMode: "both",
+            "--exit-opacity": "0",
+          },
+          "& * [data-slot='navigation-menu-link']:focus": {
+            boxShadow: "none",
+            outline: "none",
+          },
+          _dark: {
+            ".group\\/navigation-menu[data-viewport='false'] &": {
+              boxShadow: "lg, 0 0 0 1px color-mix(in oklch, var(--foreground) 10%, transparent)",
+            },
+          },
+        }),
         className,
       )}
       {...props}
@@ -104,13 +291,66 @@ function NavigationMenuPositioner({
         align={align}
         alignOffset={alignOffset}
         className={cn(
-          "isolate z-50 h-(--positioner-height) w-(--positioner-width) max-w-(--available-width) transition-[top,left,right,bottom] duration-[0.35s] ease-[cubic-bezier(0.22,1,0.36,1)] data-instant:transition-none data-[side=bottom]:before:top-[-10px] data-[side=bottom]:before:right-0 data-[side=bottom]:before:left-0",
+          css({
+            isolation: "isolate",
+            zIndex: 50,
+            height: "var(--positioner-height)",
+            width: "var(--positioner-width)",
+            maxWidth: "var(--available-width)",
+            transitionProperty: "top, left, right, bottom",
+            transitionDuration: "0.35s",
+            transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
+            "&[data-instant]": {
+              transitionProperty: "none",
+            },
+            "&[data-side='bottom']::before": {
+              top: "-10px",
+              right: "0",
+              left: "0",
+            },
+          }),
           className,
         )}
         {...props}
       >
-        <NavigationMenuPrimitive.Popup className="data-[ending-style]:easing-[ease] xs:w-(--popup-width) relative h-(--popup-height) w-(--popup-width) origin-(--transform-origin) rounded-3xl bg-popover text-popover-foreground shadow-lg ring-1 ring-foreground/5 transition-[opacity,transform,width,height,scale,translate] duration-[0.35s] ease-[cubic-bezier(0.22,1,0.36,1)] outline-none data-ending-style:scale-90 data-ending-style:opacity-0 data-ending-style:duration-150 data-starting-style:scale-90 data-starting-style:opacity-0 dark:ring-foreground/10">
-          <NavigationMenuPrimitive.Viewport className="relative size-full overflow-hidden" />
+        <NavigationMenuPrimitive.Popup
+          className={css({
+            position: "relative",
+            height: "var(--popup-height)",
+            width: "var(--popup-width)",
+            transformOrigin: "var(--transform-origin)",
+            borderRadius: "3xl",
+            bg: "popover",
+            color: "popover-foreground",
+            // shadow-lg + ring-1 ring-foreground/5
+            boxShadow: "lg, 0 0 0 1px color-mix(in oklch, var(--foreground) 5%, transparent)",
+            outline: "none",
+            transitionProperty: "opacity, transform, width, height, scale, translate",
+            transitionDuration: "0.35s",
+            transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
+            _dataEndingStyle: {
+              scale: "0.9",
+              opacity: 0,
+              transitionDuration: "150ms",
+              transitionTimingFunction: "ease",
+            },
+            _dataStartingStyle: {
+              scale: "0.9",
+              opacity: 0,
+            },
+            _dark: {
+              boxShadow: "lg, 0 0 0 1px color-mix(in oklch, var(--foreground) 10%, transparent)",
+            },
+          })}
+        >
+          <NavigationMenuPrimitive.Viewport
+            className={css({
+              position: "relative",
+              width: "full",
+              height: "full",
+              overflow: "hidden",
+            })}
+          />
         </NavigationMenuPrimitive.Popup>
       </NavigationMenuPrimitive.Positioner>
     </NavigationMenuPrimitive.Portal>
@@ -122,7 +362,50 @@ function NavigationMenuLink({ className, ...props }: NavigationMenuPrimitive.Lin
     <NavigationMenuPrimitive.Link
       data-slot="navigation-menu-link"
       className={cn(
-        "flex items-center gap-2 rounded-2xl px-2.5 py-1.5 text-sm font-medium transition-all outline-none hover:bg-muted focus:bg-muted focus-visible:ring-3 focus-visible:ring-ring/30 focus-visible:outline-1 in-data-[slot=navigation-menu-content]:w-full in-data-[slot=navigation-menu-content]:rounded-xl in-data-[slot=navigation-menu-content]:p-2 in-data-[slot=navigation-menu-content]:font-normal data-[active=true]:bg-muted/50 data-[active=true]:hover:bg-muted data-[active=true]:focus:bg-muted [&_svg:not([class*='size-'])]:size-4",
+        css({
+          display: "flex",
+          alignItems: "center",
+          gap: "2",
+          borderRadius: "2xl",
+          px: "2.5",
+          py: "1.5",
+          fontSize: "sm",
+          fontWeight: "medium",
+          transitionProperty: "all",
+          transitionDuration: "150ms",
+          transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
+          outline: "none",
+          _hover: {
+            bg: "muted",
+          },
+          _focus: {
+            bg: "muted",
+          },
+          _focusVisible: {
+            boxShadow: "0 0 0 3px color-mix(in oklch, var(--ring) 30%, transparent)",
+            outlineWidth: "1px",
+            outlineColor: "ring",
+          },
+          "[data-slot='navigation-menu-content'] &": {
+            width: "full",
+            borderRadius: "xl",
+            p: "2",
+            fontWeight: "normal",
+          },
+          "&[data-active='true']": {
+            bg: "muted/50",
+            _hover: {
+              bg: "muted",
+            },
+            _focus: {
+              bg: "muted",
+            },
+          },
+          "& svg:not([class*='size-'])": {
+            width: "4",
+            height: "4",
+          },
+        }),
         className,
       )}
       {...props}
@@ -138,12 +421,45 @@ function NavigationMenuIndicator({
     <NavigationMenuPrimitive.Icon
       data-slot="navigation-menu-indicator"
       className={cn(
-        "top-full z-1 flex h-1.5 items-end justify-center overflow-hidden data-[state=hidden]:animate-out data-[state=hidden]:fade-out data-[state=visible]:animate-in data-[state=visible]:fade-in",
+        css({
+          top: "full",
+          zIndex: 1,
+          display: "flex",
+          height: "1.5",
+          alignItems: "flex-end",
+          justifyContent: "center",
+          overflow: "hidden",
+          "&[data-state='hidden']": {
+            animationName: "exit",
+            animationDuration: "150ms",
+            animationTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
+            animationFillMode: "both",
+            "--exit-opacity": "0",
+          },
+          "&[data-state='visible']": {
+            animationName: "enter",
+            animationDuration: "150ms",
+            animationTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
+            animationFillMode: "both",
+            "--enter-opacity": "0",
+          },
+        }),
         className,
       )}
       {...props}
     >
-      <div className="relative top-[60%] h-2 w-2 rotate-45 rounded-tl-sm bg-border shadow-md" />
+      <div
+        className={css({
+          position: "relative",
+          top: "60%",
+          height: "2",
+          width: "2",
+          transform: "rotate(45deg)",
+          borderTopLeftRadius: "sm",
+          bg: "border",
+          boxShadow: "md",
+        })}
+      />
     </NavigationMenuPrimitive.Icon>
   );
 }

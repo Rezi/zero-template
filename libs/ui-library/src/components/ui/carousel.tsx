@@ -3,6 +3,7 @@
 import * as React from "react";
 import useEmblaCarousel, { type UseEmblaCarouselType } from "embla-carousel-react";
 
+import { css, cx } from "@zero-app/styled-system/css";
 import { cn } from "../../lib/utils";
 import { Button } from "./button";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
@@ -117,7 +118,10 @@ function Carousel({
     >
       <div
         onKeyDownCapture={handleKeyDown}
-        className={cn("relative", className)}
+        className={cn(
+          css({ position: "relative" }),
+          className,
+        )}
         role="region"
         aria-roledescription="carousel"
         data-slot="carousel"
@@ -133,9 +137,21 @@ function CarouselContent({ className, ...props }: React.ComponentProps<"div">) {
   const { carouselRef, orientation } = useCarousel();
 
   return (
-    <div ref={carouselRef} className="overflow-hidden" data-slot="carousel-content">
+    <div
+      ref={carouselRef}
+      className={css({ overflow: "hidden" })}
+      data-slot="carousel-content"
+    >
       <div
-        className={cn("flex", orientation === "horizontal" ? "-ml-4" : "-mt-4 flex-col", className)}
+        className={cn(
+          css({
+            display: "flex",
+            ...(orientation === "horizontal"
+              ? { ml: "-4" }
+              : { mt: "-4", flexDirection: "column" }),
+          }),
+          className,
+        )}
         {...props}
       />
     </div>
@@ -151,8 +167,13 @@ function CarouselItem({ className, ...props }: React.ComponentProps<"div">) {
       aria-roledescription="slide"
       data-slot="carousel-item"
       className={cn(
-        "min-w-0 shrink-0 grow-0 basis-full",
-        orientation === "horizontal" ? "pl-4" : "pt-4",
+        css({
+          minWidth: "0",
+          flexShrink: 0,
+          flexGrow: 0,
+          flexBasis: "100%",
+          ...(orientation === "horizontal" ? { pl: "4" } : { pt: "4" }),
+        }),
         className,
       )}
       {...props}
@@ -174,10 +195,23 @@ function CarouselPrevious({
       variant={variant}
       size={size}
       className={cn(
-        "absolute touch-manipulation rounded-2xl",
-        orientation === "horizontal"
-          ? "top-1/2 -left-12 -translate-y-1/2"
-          : "-top-12 left-1/2 -translate-x-1/2 rotate-90",
+        css({
+          position: "absolute",
+          touchAction: "manipulation",
+          borderRadius: "2xl",
+          ...(orientation === "horizontal"
+            ? {
+                top: "1/2",
+                left: "-12",
+                translateY: "-50%",
+              }
+            : {
+                top: "-12",
+                left: "1/2",
+                translateX: "-50%",
+                rotate: "90deg",
+              }),
+        }),
         className,
       )}
       disabled={!canScrollPrev}
@@ -185,7 +219,21 @@ function CarouselPrevious({
       {...props}
     >
       <ChevronLeftIcon />
-      <span className="sr-only">Previous slide</span>
+      <span
+        className={css({
+          position: "absolute",
+          width: "1px",
+          height: "1px",
+          padding: "0",
+          margin: "-1px",
+          overflow: "hidden",
+          clip: "rect(0,0,0,0)",
+          whiteSpace: "nowrap",
+          borderWidth: "0",
+        })}
+      >
+        Previous slide
+      </span>
     </Button>
   );
 }
@@ -204,10 +252,23 @@ function CarouselNext({
       variant={variant}
       size={size}
       className={cn(
-        "absolute touch-manipulation rounded-2xl",
-        orientation === "horizontal"
-          ? "top-1/2 -right-12 -translate-y-1/2"
-          : "-bottom-12 left-1/2 -translate-x-1/2 rotate-90",
+        css({
+          position: "absolute",
+          touchAction: "manipulation",
+          borderRadius: "2xl",
+          ...(orientation === "horizontal"
+            ? {
+                top: "1/2",
+                right: "-12",
+                translateY: "-50%",
+              }
+            : {
+                bottom: "-12",
+                left: "1/2",
+                translateX: "-50%",
+                rotate: "90deg",
+              }),
+        }),
         className,
       )}
       disabled={!canScrollNext}
@@ -215,7 +276,21 @@ function CarouselNext({
       {...props}
     >
       <ChevronRightIcon />
-      <span className="sr-only">Next slide</span>
+      <span
+        className={css({
+          position: "absolute",
+          width: "1px",
+          height: "1px",
+          padding: "0",
+          margin: "-1px",
+          overflow: "hidden",
+          clip: "rect(0,0,0,0)",
+          whiteSpace: "nowrap",
+          borderWidth: "0",
+        })}
+      >
+        Next slide
+      </span>
     </Button>
   );
 }

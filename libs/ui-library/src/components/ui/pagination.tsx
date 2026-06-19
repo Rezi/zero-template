@@ -1,5 +1,6 @@
 import * as React from "react";
 
+import { css, cx } from "@zero-app/styled-system/css";
 import { cn } from "../../lib/utils";
 import { Button } from "./button";
 import { ChevronLeftIcon, ChevronRightIcon, MoreHorizontalIcon } from "lucide-react";
@@ -10,7 +11,7 @@ function Pagination({ className, ...props }: React.ComponentProps<"nav">) {
       role="navigation"
       aria-label="pagination"
       data-slot="pagination"
-      className={cn("mx-auto flex w-full justify-center", className)}
+      className={cn(css({ mx: 'auto', display: 'flex', width: 'full', justifyContent: 'center' }), className)}
       {...props}
     />
   );
@@ -20,7 +21,7 @@ function PaginationContent({ className, ...props }: React.ComponentProps<"ul">) 
   return (
     <ul
       data-slot="pagination-content"
-      className={cn("flex items-center gap-1", className)}
+      className={cn(css({ display: 'flex', alignItems: 'center', gap: '1' }), className)}
       {...props}
     />
   );
@@ -63,11 +64,11 @@ function PaginationPrevious({
     <PaginationLink
       aria-label="Go to previous page"
       size="default"
-      className={cn("pl-1.5!", className)}
+      className={cn(css({ pl: '1.5 !important' }), className)}
       {...props}
     >
       <ChevronLeftIcon data-icon="inline-start" />
-      <span className="hidden sm:block">{text}</span>
+      <span className={css({ display: 'none', sm: { display: 'block' } })}>{text}</span>
     </PaginationLink>
   );
 }
@@ -81,10 +82,10 @@ function PaginationNext({
     <PaginationLink
       aria-label="Go to next page"
       size="default"
-      className={cn("pr-1.5!", className)}
+      className={cn(css({ pr: '1.5 !important' }), className)}
       {...props}
     >
-      <span className="hidden sm:block">{text}</span>
+      <span className={css({ display: 'none', sm: { display: 'block' } })}>{text}</span>
       <ChevronRightIcon data-icon="inline-end" />
     </PaginationLink>
   );
@@ -96,13 +97,20 @@ function PaginationEllipsis({ className, ...props }: React.ComponentProps<"span"
       aria-hidden
       data-slot="pagination-ellipsis"
       className={cn(
-        "flex size-8 items-center justify-center [&_svg:not([class*='size-'])]:size-4",
+        css({
+          display: 'flex',
+          width: '8',
+          height: '8',
+          alignItems: 'center',
+          justifyContent: 'center',
+          "& svg:not([class*='size-'])": { width: '4', height: '4' },
+        }),
         className,
       )}
       {...props}
     >
       <MoreHorizontalIcon />
-      <span className="sr-only">More pages</span>
+      <span className={css({ position: 'absolute', width: '1px', height: '1px', padding: '0', margin: '-1px', overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', borderWidth: '0' })}>More pages</span>
     </span>
   );
 }

@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { css } from "@zero-app/styled-system/css";
 import {
   Button,
   Card,
@@ -18,8 +19,17 @@ export const Route = createFileRoute("/forgot-password")({
 
 function ForgotPasswordPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-sm">
+    <div
+      className={css({
+        display: "flex",
+        minHeight: "100svh",
+        alignItems: "center",
+        justifyContent: "center",
+        bg: "background",
+        p: "4",
+      })}
+    >
+      <Card className={css({ width: "full", maxWidth: "sm" })}>
         <CardHeader>
           <CardTitle>Reset your password</CardTitle>
           <CardDescription>
@@ -28,7 +38,7 @@ function ForgotPasswordPage() {
         </CardHeader>
 
         <CardContent>
-          <form className="flex flex-col gap-3">
+          <form className={css({ display: "flex", flexDirection: "column", gap: "3" })}>
             <Field>
               <Label htmlFor="reset-email">Email</Label>
               <Input
@@ -39,16 +49,21 @@ function ForgotPasswordPage() {
                 required
               />
             </Field>
-            <Button type="submit" className="w-full">
+            <Button type="submit" className={css({ width: "full" })}>
               Send reset link
             </Button>
           </form>
         </CardContent>
 
-        <CardFooter className="justify-center">
+        <CardFooter className={css({ justifyContent: "center" })}>
           <Link
             to="/login"
-            className="text-xs text-muted-foreground underline-offset-4 hover:underline"
+            className={css({
+              fontSize: "xs",
+              color: "muted-foreground",
+              textUnderlineOffset: "4px",
+              _hover: { textDecoration: "underline" },
+            })}
           >
             ← Back to sign in
           </Link>

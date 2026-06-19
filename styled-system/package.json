@@ -1,0 +1,21 @@
+{
+  "name": "@zero-app/styled-system",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./css": "./css/index.mjs",
+    "./jsx": "./jsx/index.mjs",
+    "./patterns": "./patterns/index.mjs",
+    "./tokens": "./tokens/index.mjs",
+    "./helpers": "./helpers.mjs"
+  },
+  "typesVersions": {
+    "*": {
+      "css": ["./css/index.d.ts"],
+      "jsx": ["./jsx/index.d.ts"],
+      "patterns": ["./patterns/index.d.ts"],
+      "tokens": ["./tokens/index.d.ts"],
+      "helpers": ["./helpers.mjs"]
+    }
+  }
+}

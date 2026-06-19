@@ -1,4 +1,5 @@
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
+import { css } from "@zero-app/styled-system/css";
 
 import { cn } from "../../lib/utils";
 
@@ -31,18 +32,127 @@ function TooltipContent({
         alignOffset={alignOffset}
         side={side}
         sideOffset={sideOffset}
-        className="isolate z-50"
+        className={css({
+          isolation: "isolate",
+          zIndex: 50,
+        })}
       >
         <TooltipPrimitive.Popup
           data-slot="tooltip-content"
           className={cn(
-            "z-50 inline-flex w-fit max-w-xs origin-(--transform-origin) items-center gap-1.5 rounded-xl bg-foreground px-3 py-1.5 text-xs text-background has-data-[slot=kbd]:pr-1.5 data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 **:data-[slot=kbd]:relative **:data-[slot=kbd]:isolate **:data-[slot=kbd]:z-50 **:data-[slot=kbd]:rounded-lg data-[state=delayed-open]:animate-in data-[state=delayed-open]:fade-in-0 data-[state=delayed-open]:zoom-in-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+            css({
+              zIndex: 50,
+              display: "inline-flex",
+              width: "fit-content",
+              maxWidth: "xs",
+              transformOrigin: "var(--transform-origin)",
+              alignItems: "center",
+              gap: "1.5",
+              borderRadius: "xl",
+              bg: "foreground",
+              px: "3",
+              py: "1.5",
+              fontSize: "xs",
+              color: "background",
+              "&:has([data-slot='kbd'])": {
+                pr: "1.5",
+              },
+              "& * [data-slot='kbd']": {
+                position: "relative",
+                isolation: "isolate",
+                zIndex: 50,
+                borderRadius: "lg",
+              },
+              '&[data-side="bottom"]': {
+                "--enter-translate-y": "-0.5rem",
+              },
+              '&[data-side="inline-end"]': {
+                "--enter-translate-x": "-0.5rem",
+              },
+              '&[data-side="inline-start"]': {
+                "--enter-translate-x": "0.5rem",
+              },
+              '&[data-side="left"]': {
+                "--enter-translate-x": "0.5rem",
+              },
+              '&[data-side="right"]': {
+                "--enter-translate-x": "-0.5rem",
+              },
+              '&[data-side="top"]': {
+                "--enter-translate-y": "0.5rem",
+              },
+              '&[data-state="delayed-open"]': {
+                animationName: "enter",
+                animationDuration: "150ms",
+                animationTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
+                animationFillMode: "both",
+                "--enter-opacity": "0",
+                "--enter-scale": ".95",
+              },
+              _dataOpen: {
+                animationName: "enter",
+                animationDuration: "150ms",
+                animationTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
+                animationFillMode: "both",
+                "--enter-opacity": "0",
+                "--enter-scale": ".95",
+              },
+              _dataClosed: {
+                animationName: "exit",
+                animationDuration: "150ms",
+                animationTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
+                animationFillMode: "both",
+                "--exit-opacity": "0",
+                "--exit-scale": ".95",
+              },
+            }),
             className,
           )}
           {...props}
         >
           {children}
-          <TooltipPrimitive.Arrow className="z-50 size-2.5 translate-y-[calc(-50%-2px)] rotate-45 rounded-[2px] bg-foreground fill-foreground data-[side=bottom]:top-1 data-[side=inline-end]:top-1/2! data-[side=inline-end]:-left-1 data-[side=inline-end]:translate-x-[1.5px] data-[side=inline-end]:-translate-y-1/2 data-[side=inline-start]:top-1/2! data-[side=inline-start]:-right-1 data-[side=inline-start]:translate-x-[-1.5px] data-[side=inline-start]:-translate-y-1/2 data-[side=left]:top-1/2! data-[side=left]:-right-1 data-[side=left]:translate-x-[-1.5px] data-[side=left]:-translate-y-1/2 data-[side=right]:top-1/2! data-[side=right]:-left-1 data-[side=right]:translate-x-[1.5px] data-[side=right]:-translate-y-1/2 data-[side=top]:-bottom-2.5" />
+          <TooltipPrimitive.Arrow
+            className={css({
+              zIndex: 50,
+              width: "2.5",
+              height: "2.5",
+              translateY: "calc(-50% - 2px)",
+              rotate: "45deg",
+              borderRadius: "2px",
+              bg: "foreground",
+              fill: "foreground",
+              '&[data-side="bottom"]': {
+                top: "1",
+              },
+              '&[data-side="inline-end"]': {
+                top: "50% !important",
+                left: "-1",
+                translateX: "1.5px",
+                translateY: "-50%",
+              },
+              '&[data-side="inline-start"]': {
+                top: "50% !important",
+                right: "-1",
+                translateX: "-1.5px",
+                translateY: "-50%",
+              },
+              '&[data-side="left"]': {
+                top: "50% !important",
+                right: "-1",
+                translateX: "-1.5px",
+                translateY: "-50%",
+              },
+              '&[data-side="right"]': {
+                top: "50% !important",
+                left: "-1",
+                translateX: "1.5px",
+                translateY: "-50%",
+              },
+              '&[data-side="top"]': {
+                bottom: "-2.5",
+              },
+            })}
+          />
         </TooltipPrimitive.Popup>
       </TooltipPrimitive.Positioner>
     </TooltipPrimitive.Portal>

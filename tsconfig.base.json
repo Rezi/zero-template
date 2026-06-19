@@ -25,7 +25,12 @@
       "@zero-app/ui-library/*": ["./libs/ui-library/src/*"],
       "@zero-app/zero-app-components": ["./libs/zero-app-components/src/index.ts"],
       "@zero-app/zero": ["./libs/zero/src/index.ts"],
-      "@zero-app/zero/server": ["./libs/zero/src/server.ts"]
+      "@zero-app/zero/server": ["./libs/zero/src/server.ts"],
+      "@zero-app/styled-system/css": ["./styled-system/css/index.d.ts"],
+      "@zero-app/styled-system/types": ["./styled-system/types/index.d.ts"],
+      "@zero-app/styled-system/patterns": ["./styled-system/patterns/index.d.ts"],
+      "@zero-app/styled-system/tokens": ["./styled-system/tokens/index.d.ts"],
+      "@zero-app/styled-system/*": ["./styled-system/*"]
     }
   }
 }

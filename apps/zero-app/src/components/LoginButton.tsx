@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { authClient, logout } from "@zero-app/auth";
 import { useZero } from "@rocicorp/zero/react";
 import { Button, buttonVariants } from "@zero-app/ui-library";
+import { css } from "@zero-app/styled-system/css";
 
 export function LoginButton() {
   const session = authClient.useSession();
@@ -9,8 +10,8 @@ export function LoginButton() {
 
   if (session.data?.user) {
     return (
-      <div className="flex items-center gap-2 text-sm">
-        <span className="text-muted-foreground">{session.data.user.email}</span>
+      <div className={css({ display: 'flex', alignItems: 'center', gap: '2', fontSize: 'sm' })}>
+        <span className={css({ color: 'muted-foreground' })}>{session.data.user.email}</span>
         <Button variant="outline" size="sm" onClick={() => logout(zero)}>
           Sign out
         </Button>

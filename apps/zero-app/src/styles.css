@@ -1,55 +1,12 @@
-@import "tailwindcss";
-@import "tw-animate-css";
+/* Panda CSS generated utility classes — built by `deno task panda` */
+@import "./panda.css";
 
-@source "../../../libs/ui-library/src";
-@source "../../../libs/zero-app-components/src";
-@import "shadcn/tailwind.css";
 @import "@fontsource-variable/oxanium";
 @import "./sugar.css";
 
-/* shadcn/ui dark variant: components toggle the `.dark` class on <html>
-   (the existing ThemeToggle adds it), so this drives the dark tokens. */
-@custom-variant dark (&:is(.dark *));
-
-@theme inline {
-  --font-sans: "Oxanium Variable", ui-sans-serif, system-ui, sans-serif;
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
-}
-
+/* Design tokens — light and dark mode via CSS custom properties.
+   Panda CSS semantic tokens reference these via var(--*) so the
+   same CSS variable flips automatically when .dark is applied. */
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.147 0.004 49.3);
@@ -119,11 +76,42 @@
   --sidebar-ring: oklch(0.547 0.021 43.1);
 }
 
+/* Base styles */
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    border-color: var(--border);
+    outline-color: color-mix(in oklch, var(--ring) 50%, transparent);
   }
   body {
-    @apply bg-background text-foreground;
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: 'Oxanium Variable', ui-sans-serif, system-ui, sans-serif;
+  }
+}
+
+/* Animation keyframes (enter/exit, spin, pulse — used by Panda CSS components) */
+@keyframes enter {
+  from {
+    opacity: var(--enter-opacity, 1);
+    transform: translate3d(
+        var(--enter-translate-x, 0),
+        var(--enter-translate-y, 0),
+        0
+      )
+      scale3d(var(--enter-scale, 1), var(--enter-scale, 1), 1)
+      rotate(var(--enter-rotate, 0));
+  }
+}
+
+@keyframes exit {
+  to {
+    opacity: var(--exit-opacity, 1);
+    transform: translate3d(
+        var(--exit-translate-x, 0),
+        var(--exit-translate-y, 0),
+        0
+      )
+      scale3d(var(--exit-scale, 1), var(--exit-scale, 1), 1)
+      rotate(var(--exit-rotate, 0));
   }
 }

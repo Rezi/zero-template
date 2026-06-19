@@ -1,42 +1,112 @@
 "use client";
 
 import { Toggle as TogglePrimitive } from "@base-ui/react/toggle";
-import { cva, type VariantProps } from "class-variance-authority";
+import { cva, cx } from "@zero-app/styled-system/css";
+import type { RecipeVariantProps } from "@zero-app/styled-system/css";
 
 import { cn } from "../../lib/utils";
 
-const toggleVariants = cva(
-  "group/toggle inline-flex items-center justify-center gap-1 rounded-2xl text-sm font-medium whitespace-nowrap transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 aria-pressed:bg-muted dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-  {
-    variants: {
-      variant: {
-        default: "bg-transparent",
-        outline: "border border-input bg-transparent hover:bg-muted",
-      },
-      size: {
-        default:
-          "h-8 min-w-8 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
-        sm: "h-7 min-w-7 px-2.5 has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5",
-        lg: "h-9 min-w-9 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
+const toggleVariants = cva({
+  base: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '1',
+    borderRadius: '2xl',
+    fontSize: 'sm',
+    fontWeight: 'medium',
+    whiteSpace: 'nowrap',
+    transitionProperty: 'color, background-color, border-color, text-decoration-color, fill, stroke',
+    transitionDuration: '150ms',
+    transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)',
+    outline: 'none',
+    _hover: {
+      bg: 'muted',
+      color: 'foreground',
+    },
+    _focusVisible: {
+      borderColor: 'ring',
+      boxShadow: '0 0 0 3px color-mix(in oklch, var(--ring) 30%, transparent)',
+    },
+    _disabled: {
+      pointerEvents: 'none',
+      opacity: 0.5,
+    },
+    _ariaInvalid: {
+      borderColor: 'destructive',
+      boxShadow: '0 0 0 3px color-mix(in oklch, var(--destructive) 20%, transparent)',
+    },
+    _ariaPressed: {
+      bg: 'muted',
+    },
+    _dark: {
+      _ariaInvalid: {
+        boxShadow: '0 0 0 3px color-mix(in oklch, var(--destructive) 40%, transparent)',
       },
     },
-    defaultVariants: {
-      variant: "default",
-      size: "default",
+    '& svg': {
+      pointerEvents: 'none',
+      flexShrink: 0,
+    },
+    "& svg:not([class*='size-'])": {
+      width: '4',
+      height: '4',
     },
   },
-);
+  variants: {
+    variant: {
+      default: {
+        bg: 'transparent',
+      },
+      outline: {
+        borderWidth: '1px',
+        borderColor: 'input',
+        bg: 'transparent',
+        _hover: {
+          bg: 'muted',
+        },
+      },
+    },
+    size: {
+      default: {
+        height: '8',
+        minWidth: '8',
+        px: '2.5',
+        '&:has([data-icon="inline-end"])': { pr: '2' },
+        '&:has([data-icon="inline-start"])': { pl: '2' },
+      },
+      sm: {
+        height: '7',
+        minWidth: '7',
+        px: '2.5',
+        '&:has([data-icon="inline-end"])': { pr: '1.5' },
+        '&:has([data-icon="inline-start"])': { pl: '1.5' },
+      },
+      lg: {
+        height: '9',
+        minWidth: '9',
+        px: '2.5',
+        '&:has([data-icon="inline-end"])': { pr: '2' },
+        '&:has([data-icon="inline-start"])': { pl: '2' },
+      },
+    },
+  },
+  defaultVariants: {
+    variant: 'default',
+    size: 'default',
+  },
+});
 
 function Toggle({
   className,
   variant = "default",
   size = "default",
   ...props
-}: TogglePrimitive.Props & VariantProps<typeof toggleVariants>) {
+}: TogglePrimitive.Props & RecipeVariantProps<typeof toggleVariants>) {
   return (
     <TogglePrimitive
       data-slot="toggle"
-      className={cn(toggleVariants({ variant, size, className }))}
+      className={cn(toggleVariants({ variant, size }), className)}
       {...props}
     />
   );

@@ -1,9 +1,9 @@
 import * as React from "react";
 import type { Decorator, Preview } from "@storybook/react-vite";
+import { css } from "@zero-app/styled-system/css";
 
-// Single source of truth for the design tokens, Tailwind, fonts and the
-// `tw-animate-css` keyframes. Importing the app stylesheet keeps Storybook in
-// sync with what the real app renders.
+// Single source of truth for the design tokens, Panda CSS, fonts.
+// Importing the app stylesheet keeps Storybook in sync with what the real app renders.
 // oxlint-disable-next-line no-unassigned-import -- CSS side-effect import
 import "../../../apps/zero-app/src/styles.css";
 
@@ -15,7 +15,7 @@ const withTheme: Decorator = (Story, context) => {
     root.style.colorScheme = theme;
   }, [theme]);
   return (
-    <div className="bg-background text-foreground font-sans">
+    <div className={css({ bg: "background", color: "foreground", fontFamily: "sans" })}>
       <Story />
     </div>
   );

@@ -11,14 +11,15 @@ const config: StorybookConfig = {
     options: {},
   },
   async viteFinal(viteConfig) {
-    const { default: tailwindcss } = await import("@tailwindcss/vite");
-    viteConfig.plugins ??= [];
-    viteConfig.plugins.push(tailwindcss());
-    // Mirror the app's alias setup so stories can import from the package
-    // barrel (`@zero-app/ui-library`) and subpaths, just like consumers do.
+    // PostCSS is auto-discovered from postcss.config.cjs at workspace root.
     viteConfig.resolve ??= {};
     viteConfig.resolve.alias = [
       ...(Array.isArray(viteConfig.resolve.alias) ? viteConfig.resolve.alias : []),
+      {
+        find: /^@zero-app\/styled-system\/(.*)$/,
+        replacement: r("../../../styled-system/$1"),
+      },
+      { find: "@zero-app/styled-system", replacement: r("../../../styled-system") },
       {
         find: /^@zero-app\/ui-library\/(.*)$/,
         replacement: r("../src/$1"),

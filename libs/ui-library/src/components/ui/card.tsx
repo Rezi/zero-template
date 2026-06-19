@@ -1,5 +1,6 @@
 import * as React from "react";
 
+import { css, cx } from "@zero-app/styled-system/css";
 import { cn } from "../../lib/utils";
 
 function Card({
@@ -12,7 +13,29 @@ function Card({
       data-slot="card"
       data-size={size}
       className={cn(
-        "group/card flex flex-col gap-(--card-spacing) overflow-hidden rounded-[min(var(--radius-4xl),24px)] bg-card py-(--card-spacing) text-sm text-card-foreground shadow-sm ring-1 ring-foreground/5 [--card-spacing:--spacing(5)] has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(4)] dark:ring-foreground/10 *:[img:first-child]:rounded-t-[min(var(--radius-4xl),24px)] *:[img:last-child]:rounded-b-[min(var(--radius-4xl),24px)]",
+        cx(
+          "group/card",
+          css({
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--card-spacing)",
+            overflow: "hidden",
+            borderRadius: "min(var(--radius-4xl), 24px)",
+            bg: "card",
+            py: "var(--card-spacing)",
+            fontSize: "sm",
+            color: "card-foreground",
+            "--card-spacing": "var(--spacing-5)",
+            boxShadow: "0 0 0 1px color-mix(in oklch, var(--foreground) 5%, transparent)",
+            "&:has(> img:first-child)": { pt: "0" },
+            "&[data-size='sm']": { "--card-spacing": "var(--spacing-4)" },
+            _dark: {
+              boxShadow: "0 0 0 1px color-mix(in oklch, var(--foreground) 10%, transparent)",
+            },
+            "& > img:first-child": { borderTopLeftRadius: "min(var(--radius-4xl), 24px)", borderTopRightRadius: "min(var(--radius-4xl), 24px)" },
+            "& > img:last-child": { borderBottomLeftRadius: "min(var(--radius-4xl), 24px)", borderBottomRightRadius: "min(var(--radius-4xl), 24px)" },
+          }),
+        ),
         className,
       )}
       {...props}
@@ -25,7 +48,23 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card-header"
       className={cn(
-        "group/card-header @container/card-header grid auto-rows-min items-start gap-1.5 rounded-t-[min(var(--radius-4xl),24px)] px-(--card-spacing) has-data-[slot=card-action]:grid-cols-[1fr_auto] has-data-[slot=card-description]:grid-rows-[auto_auto] [.border-b]:pb-(--card-spacing)",
+        cx(
+          "group/card-header",
+          css({
+            containerType: "inline-size",
+            containerName: "card-header",
+            display: "grid",
+            gridAutoRows: "min-content",
+            alignItems: "start",
+            gap: "1.5",
+            borderTopLeftRadius: "min(var(--radius-4xl), 24px)",
+            borderTopRightRadius: "min(var(--radius-4xl), 24px)",
+            px: "var(--card-spacing)",
+            "&:has([data-slot='card-action'])": { gridTemplateColumns: "1fr auto" },
+            "&:has([data-slot='card-description'])": { gridTemplateRows: "auto auto" },
+            ".border-b &": { pb: "var(--card-spacing)" },
+          }),
+        ),
         className,
       )}
       {...props}
@@ -37,7 +76,13 @@ function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-title"
-      className={cn("font-heading text-base font-medium", className)}
+      className={cn(
+        css({
+          fontSize: "md",
+          fontWeight: "medium",
+        }),
+        className,
+      )}
       {...props}
     />
   );
@@ -47,7 +92,13 @@ function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-description"
-      className={cn("text-sm text-muted-foreground", className)}
+      className={cn(
+        css({
+          fontSize: "sm",
+          color: "muted-foreground",
+        }),
+        className,
+      )}
       {...props}
     />
   );
@@ -57,7 +108,16 @@ function CardAction({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-action"
-      className={cn("col-start-2 row-span-2 row-start-1 self-start justify-self-end", className)}
+      className={cn(
+        css({
+          gridColumnStart: 2,
+          gridRowSpan: 2,
+          gridRowStart: 1,
+          alignSelf: "flex-start",
+          justifySelf: "end",
+        }),
+        className,
+      )}
       {...props}
     />
   );
@@ -65,7 +125,16 @@ function CardAction({ className, ...props }: React.ComponentProps<"div">) {
 
 function CardContent({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <div data-slot="card-content" className={cn("px-(--card-spacing)", className)} {...props} />
+    <div
+      data-slot="card-content"
+      className={cn(
+        css({
+          px: "var(--card-spacing)",
+        }),
+        className,
+      )}
+      {...props}
+    />
   );
 }
 
@@ -74,7 +143,14 @@ function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card-footer"
       className={cn(
-        "flex items-center rounded-b-[min(var(--radius-4xl),24px)] px-(--card-spacing) [.border-t]:pt-(--card-spacing)",
+        css({
+          display: "flex",
+          alignItems: "center",
+          borderBottomLeftRadius: "min(var(--radius-4xl), 24px)",
+          borderBottomRightRadius: "min(var(--radius-4xl), 24px)",
+          px: "var(--card-spacing)",
+          ".border-t &": { pt: "var(--card-spacing)" },
+        }),
         className,
       )}
       {...props}

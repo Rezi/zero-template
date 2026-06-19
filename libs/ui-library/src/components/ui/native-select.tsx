@@ -1,5 +1,6 @@
 import * as React from "react";
 
+import { css, cx } from "@zero-app/styled-system/css";
 import { cn } from "../../lib/utils";
 import { ChevronDownIcon } from "lucide-react";
 
@@ -11,7 +12,14 @@ function NativeSelect({ className, size = "default", ...props }: NativeSelectPro
   return (
     <div
       className={cn(
-        "group/native-select relative w-fit has-[select:disabled]:opacity-50",
+        cx(
+          "group/native-select",
+          css({
+            position: "relative",
+            width: "fit-content",
+            "&:has(select:disabled)": { opacity: 0.5 },
+          }),
+        ),
         className,
       )}
       data-slot="native-select-wrapper"
@@ -20,11 +28,62 @@ function NativeSelect({ className, size = "default", ...props }: NativeSelectPro
       <select
         data-slot="native-select"
         data-size={size}
-        className="h-8 w-full min-w-0 appearance-none rounded-2xl border border-transparent bg-input/50 py-1 pr-8 pl-2.5 text-sm transition-[color,box-shadow] duration-200 outline-none select-none selection:bg-primary selection:text-primary-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:cursor-not-allowed aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-[size=sm]:h-7 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40"
+        className={css({
+          height: "8",
+          width: "full",
+          minWidth: "0",
+          appearance: "none",
+          borderRadius: "2xl",
+          borderWidth: "1px",
+          borderColor: "transparent",
+          bg: "input/50",
+          py: "1",
+          pr: "8",
+          pl: "2.5",
+          fontSize: "sm",
+          transitionProperty: "color, box-shadow",
+          transitionDuration: "200ms",
+          transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
+          outline: "none",
+          userSelect: "none",
+          "& ::selection": { bg: "primary", color: "primary-foreground" },
+          _placeholder: { color: "muted-foreground" },
+          _focusVisible: {
+            borderColor: "ring",
+            boxShadow: "0 0 0 3px color-mix(in oklch, var(--ring) 30%, transparent)",
+          },
+          _disabled: {
+            pointerEvents: "none",
+            cursor: "not-allowed",
+          },
+          _ariaInvalid: {
+            borderColor: "destructive",
+            boxShadow: "0 0 0 3px color-mix(in oklch, var(--destructive) 20%, transparent)",
+          },
+          _dataSizeSm: {
+            height: "7",
+          },
+          _dark: {
+            _ariaInvalid: {
+              borderColor: "destructive/50",
+              boxShadow: "0 0 0 3px color-mix(in oklch, var(--destructive) 40%, transparent)",
+            },
+          },
+        })}
         {...props}
       />
       <ChevronDownIcon
-        className="pointer-events-none absolute top-1/2 right-2.5 size-4 -translate-y-1/2 text-muted-foreground select-none"
+        className={css({
+          pointerEvents: "none",
+          position: "absolute",
+          top: "1/2",
+          right: "2.5",
+          width: "4",
+          height: "4",
+          translateY: "-50%",
+          color: "muted-foreground",
+          userSelect: "none",
+        })}
         aria-hidden="true"
         data-slot="native-select-icon"
       />
@@ -36,7 +95,13 @@ function NativeSelectOption({ className, ...props }: React.ComponentProps<"optio
   return (
     <option
       data-slot="native-select-option"
-      className={cn("bg-[Canvas] text-[CanvasText]", className)}
+      className={cn(
+        css({
+          bg: "Canvas",
+          color: "CanvasText",
+        }),
+        className,
+      )}
       {...props}
     />
   );
@@ -46,7 +111,13 @@ function NativeSelectOptGroup({ className, ...props }: React.ComponentProps<"opt
   return (
     <optgroup
       data-slot="native-select-optgroup"
-      className={cn("bg-[Canvas] text-[CanvasText]", className)}
+      className={cn(
+        css({
+          bg: "Canvas",
+          color: "CanvasText",
+        }),
+        className,
+      )}
       {...props}
     />
   );

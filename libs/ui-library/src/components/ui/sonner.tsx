@@ -9,6 +9,7 @@ import {
   OctagonXIcon,
   Loader2Icon,
 } from "lucide-react";
+import { css } from "@zero-app/styled-system/css";
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme();
@@ -18,11 +19,11 @@ const Toaster = ({ ...props }: ToasterProps) => {
       theme={theme as ToasterProps["theme"]}
       className="toaster group"
       icons={{
-        success: <CircleCheckIcon className="size-4" />,
-        info: <InfoIcon className="size-4" />,
-        warning: <TriangleAlertIcon className="size-4" />,
-        error: <OctagonXIcon className="size-4" />,
-        loading: <Loader2Icon className="size-4 animate-spin" />,
+        success: <CircleCheckIcon className={css({ width: '4', height: '4' })} />,
+        info: <InfoIcon className={css({ width: '4', height: '4' })} />,
+        warning: <TriangleAlertIcon className={css({ width: '4', height: '4' })} />,
+        error: <OctagonXIcon className={css({ width: '4', height: '4' })} />,
+        loading: <Loader2Icon className={css({ width: '4', height: '4', animation: 'spin 1s linear infinite' })} />,
       }}
       style={
         {
