@@ -1,5 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+
+@source "../../../libs/ui-library/src";
+@source "../../../libs/zero-app-components/src";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/oxanium";
 @import "./sugar.css";

@@ -5,13 +5,15 @@ import ThemeToggle from "./ThemeToggle";
 export default function Header({ rightSlot }: { rightSlot?: ReactNode }) {
   return (
     <header>
-      <nav>
+      <nav className="flex justify-between">
         <Link to="/" className="flex" activeProps={{ className: "nav-link is-active" }}>
           Home
         </Link>
 
-        <ThemeToggle />
-        {rightSlot}
+        <div>
+          <ThemeToggle />
+          {rightSlot}
+        </div>
       </nav>
     </header>
   );
