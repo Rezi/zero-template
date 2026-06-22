@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { authClient, loginWithEmail, loginWithGithub, signUpWithEmail } from "@zero-app/auth";
+import { css } from "@zero-app/styled-system/css";
 
 function GithubIcon() {
   return (
@@ -101,28 +102,37 @@ function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-sm">
+    <div
+      className={css({
+        display: "flex",
+        minHeight: "100vh",
+        alignItems: "center",
+        justifyContent: "center",
+        bg: "background",
+        p: "4",
+      })}
+    >
+      <Card className={css({ w: "full", maxW: "sm" })}>
         <CardHeader>
-          <CardTitle className="text-center text-xl">Zero Music</CardTitle>
+          <CardTitle className={css({ textAlign: "center", fontSize: "xl" })}>Zero Music</CardTitle>
         </CardHeader>
 
         <CardContent>
           <Tabs defaultValue="signin" onValueChange={clearForm}>
-            <TabsList className="w-full">
-              <TabsTrigger value="signin" className="flex-1">
+            <TabsList className={css({ w: "full" })}>
+              <TabsTrigger value="signin" className={css({ flex: "1" })}>
                 Sign in
               </TabsTrigger>
-              <TabsTrigger value="signup" className="flex-1">
+              <TabsTrigger value="signup" className={css({ flex: "1" })}>
                 Create account
               </TabsTrigger>
             </TabsList>
 
             <TabsContent value="signin">
-              <div className="mt-4 flex flex-col gap-3">
+              <div className={css({ mt: "4", display: "flex", flexDir: "column", gap: "3" })}>
                 <Button
                   variant="outline"
-                  className="w-full"
+                  className={css({ w: "full" })}
                   type="button"
                   onClick={() => loginWithGithub()}
                 >
@@ -130,13 +140,24 @@ function LoginPage() {
                   Continue with GitHub
                 </Button>
 
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <div className="h-px flex-1 bg-border" />
+                <div
+                  className={css({
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "2",
+                    fontSize: "xs",
+                    color: "muted.foreground",
+                  })}
+                >
+                  <div className={css({ h: "px", flex: "1", bg: "border" })} />
                   <span>or</span>
-                  <div className="h-px flex-1 bg-border" />
+                  <div className={css({ h: "px", flex: "1", bg: "border" })} />
                 </div>
 
-                <form onSubmit={handleSignIn} className="flex flex-col gap-3">
+                <form
+                  onSubmit={handleSignIn}
+                  className={css({ display: "flex", flexDir: "column", gap: "3" })}
+                >
                   <Field>
                     <Label htmlFor="signin-email">Email</Label>
                     <Input
@@ -151,11 +172,22 @@ function LoginPage() {
                   </Field>
 
                   <Field>
-                    <div className="flex items-center justify-between">
+                    <div
+                      className={css({
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      })}
+                    >
                       <Label htmlFor="signin-password">Password</Label>
                       <Link
                         to="/forgot-password"
-                        className="text-xs text-muted-foreground underline-offset-4 hover:underline"
+                        className={css({
+                          fontSize: "xs",
+                          color: "muted.foreground",
+                          textUnderlineOffset: "4px",
+                          _hover: { textDecoration: "underline" },
+                        })}
                       >
                         Forgot password?
                       </Link>
@@ -177,7 +209,7 @@ function LoginPage() {
                     </Alert>
                   )}
 
-                  <Button type="submit" className="w-full" disabled={submitting}>
+                  <Button type="submit" className={css({ w: "full" })} disabled={submitting}>
                     {submitting ? "Signing in…" : "Sign in"}
                   </Button>
                 </form>
@@ -185,10 +217,10 @@ function LoginPage() {
             </TabsContent>
 
             <TabsContent value="signup">
-              <div className="mt-4 flex flex-col gap-3">
+              <div className={css({ mt: "4", display: "flex", flexDir: "column", gap: "3" })}>
                 <Button
                   variant="outline"
-                  className="w-full"
+                  className={css({ w: "full" })}
                   type="button"
                   onClick={() => loginWithGithub()}
                 >
@@ -196,13 +228,24 @@ function LoginPage() {
                   Continue with GitHub
                 </Button>
 
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <div className="h-px flex-1 bg-border" />
+                <div
+                  className={css({
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "2",
+                    fontSize: "xs",
+                    color: "muted.foreground",
+                  })}
+                >
+                  <div className={css({ h: "px", flex: "1", bg: "border" })} />
                   <span>or</span>
-                  <div className="h-px flex-1 bg-border" />
+                  <div className={css({ h: "px", flex: "1", bg: "border" })} />
                 </div>
 
-                <form onSubmit={handleSignUp} className="flex flex-col gap-3">
+                <form
+                  onSubmit={handleSignUp}
+                  className={css({ display: "flex", flexDir: "column", gap: "3" })}
+                >
                   <Field>
                     <Label htmlFor="signup-name">Name</Label>
                     <Input
@@ -248,7 +291,7 @@ function LoginPage() {
                     </Alert>
                   )}
 
-                  <Button type="submit" className="w-full" disabled={submitting}>
+                  <Button type="submit" className={css({ w: "full" })} disabled={submitting}>
                     {submitting ? "Creating account…" : "Create account"}
                   </Button>
                 </form>
@@ -257,8 +300,22 @@ function LoginPage() {
           </Tabs>
         </CardContent>
 
-        <CardFooter className="justify-center border-t">
-          <Link to="/" className="text-xs text-muted-foreground underline-offset-4 hover:underline">
+        <CardFooter
+          className={css({
+            justifyContent: "center",
+            borderTopWidth: "1px",
+            borderColor: "border",
+          })}
+        >
+          <Link
+            to="/"
+            className={css({
+              fontSize: "xs",
+              color: "muted.foreground",
+              textUnderlineOffset: "4px",
+              _hover: { textDecoration: "underline" },
+            })}
+          >
             ← Back to home
           </Link>
         </CardFooter>

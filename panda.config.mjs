@@ -40,6 +40,70 @@ export default {
   outdir: "styled-system",
 
   theme: {
-    extend: {},
+    extend: {
+      // shadcn/ui semantic colour tokens. Each maps to a CSS variable already
+      // defined in `apps/zero-app/src/styles.css` (`:root` for light, `.dark`
+      // for dark), so light/dark switching is handled by those variables — no
+      // Panda `_dark` condition is needed here. This lets
+      // `css({ bg: "background", color: "muted.foreground" })` resolve the same
+      // tokens the Tailwind classes (`bg-background`, `text-muted-foreground`, …)
+      // used to — tw2panda drops these because they live in CSS `@theme`, not a
+      // tailwind.config it can read.
+      semanticTokens: {
+        colors: {
+          background: { value: "var(--background)" },
+          foreground: { value: "var(--foreground)" },
+          card: {
+            DEFAULT: { value: "var(--card)" },
+            foreground: { value: "var(--card-foreground)" },
+          },
+          popover: {
+            DEFAULT: { value: "var(--popover)" },
+            foreground: { value: "var(--popover-foreground)" },
+          },
+          primary: {
+            DEFAULT: { value: "var(--primary)" },
+            foreground: { value: "var(--primary-foreground)" },
+          },
+          secondary: {
+            DEFAULT: { value: "var(--secondary)" },
+            foreground: { value: "var(--secondary-foreground)" },
+          },
+          muted: {
+            DEFAULT: { value: "var(--muted)" },
+            foreground: { value: "var(--muted-foreground)" },
+          },
+          accent: {
+            DEFAULT: { value: "var(--accent)" },
+            foreground: { value: "var(--accent-foreground)" },
+          },
+          destructive: { value: "var(--destructive)" },
+          border: { value: "var(--border)" },
+          input: { value: "var(--input)" },
+          ring: { value: "var(--ring)" },
+          chart: {
+            1: { value: "var(--chart-1)" },
+            2: { value: "var(--chart-2)" },
+            3: { value: "var(--chart-3)" },
+            4: { value: "var(--chart-4)" },
+            5: { value: "var(--chart-5)" },
+          },
+          sidebar: {
+            DEFAULT: { value: "var(--sidebar)" },
+            foreground: { value: "var(--sidebar-foreground)" },
+            primary: {
+              DEFAULT: { value: "var(--sidebar-primary)" },
+              foreground: { value: "var(--sidebar-primary-foreground)" },
+            },
+            accent: {
+              DEFAULT: { value: "var(--sidebar-accent)" },
+              foreground: { value: "var(--sidebar-accent-foreground)" },
+            },
+            border: { value: "var(--sidebar-border)" },
+            ring: { value: "var(--sidebar-ring)" },
+          },
+        },
+      },
+    },
   },
 };
