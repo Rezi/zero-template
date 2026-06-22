@@ -23,14 +23,14 @@
     "storybook": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "storybook dev -p 6007 -c libs/zero-app-components/.storybook"
+        "command": "panda && storybook dev -p 6007 -c libs/zero-app-components/.storybook"
       }
     },
     "build-storybook": {
       "executor": "nx:run-commands",
       "outputs": ["{workspaceRoot}/dist/storybook/zero-app-components"],
       "options": {
-        "command": "storybook build -c libs/zero-app-components/.storybook -o dist/storybook/zero-app-components"
+        "command": "panda && storybook build -c libs/zero-app-components/.storybook -o dist/storybook/zero-app-components"
       }
     }
   }

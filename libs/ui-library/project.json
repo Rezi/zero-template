@@ -20,14 +20,14 @@
     "storybook": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "storybook dev -p 6006 -c libs/ui-library/.storybook"
+        "command": "panda && storybook dev -p 6006 -c libs/ui-library/.storybook"
       }
     },
     "build-storybook": {
       "executor": "nx:run-commands",
       "outputs": ["{workspaceRoot}/dist/storybook/ui-library"],
       "options": {
-        "command": "storybook build -c libs/ui-library/.storybook -o dist/storybook/ui-library"
+        "command": "panda && storybook build -c libs/ui-library/.storybook -o dist/storybook/ui-library"
       }
     }
   }

@@ -16,6 +16,8 @@ const config: StorybookConfig = {
     viteConfig.plugins.push(tailwindcss());
     // Mirror the app's alias setup so stories can import from the package
     // barrel (`@zero-app/ui-library`) and subpaths, just like consumers do.
+    // The styled-system alias also resolves the prebuilt Panda stylesheet the
+    // preview imports (@zero-app/styled-system/styles.css).
     viteConfig.resolve ??= {};
     viteConfig.resolve.alias = [
       ...(Array.isArray(viteConfig.resolve.alias) ? viteConfig.resolve.alias : []),
@@ -24,6 +26,7 @@ const config: StorybookConfig = {
         replacement: r("../src/$1"),
       },
       { find: "@zero-app/ui-library", replacement: r("../src/index.ts") },
+      { find: "@zero-app/styled-system", replacement: r("../../../styled-system") },
     ];
     return viteConfig;
   },

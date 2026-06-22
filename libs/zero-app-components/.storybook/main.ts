@@ -21,6 +21,7 @@ const config: StorybookConfig = {
         find: "@zero-app/zero-app-components",
         replacement: r("../src/index.ts"),
       },
+      { find: "@zero-app/styled-system", replacement: r("../../../styled-system") },
     ];
     return viteConfig;
   },

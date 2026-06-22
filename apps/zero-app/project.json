@@ -10,14 +10,14 @@
       "outputs": ["{projectRoot}/dist", "{projectRoot}/.output", "{projectRoot}/.nitro"],
       "options": {
         "cwd": "apps/zero-app",
-        "command": "vite build"
+        "command": "panda && vite build"
       }
     },
     "serve": {
       "executor": "nx:run-commands",
       "options": {
         "cwd": "apps/zero-app",
-        "command": "vite dev --port 3000"
+        "command": "panda && vite dev --port 3000"
       }
     },
     "preview": {

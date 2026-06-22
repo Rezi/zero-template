@@ -37,11 +37,18 @@ const config = defineConfig({
         find: "@zero-app/zero-app-components",
         replacement: r("../../libs/zero-app-components/src/index.ts"),
       },
+      // Panda CSS generated output (see panda.config.mjs `outdir`). The bare
+      // specifier and its subpaths (`/css`, `/jsx`, `/styles.css`, …) resolve here.
+      { find: "@zero-app/styled-system", replacement: r("../../styled-system") },
       // App-local imports. Vite matches string aliases at a path boundary, so
       // "@" never collides with "@zero-app/*".
       { find: "@", replacement: r("src") },
     ],
   },
+  // Panda's CSS is imported as a prebuilt stylesheet (@zero-app/styled-system/styles.css,
+  // produced by `panda cssgen`) rather than via the PostCSS plugin: the @tailwindcss/vite
+  // plugin owns the CSS pipeline here, so an inline css.postcss panda plugin never runs.
+  // Regenerate the stylesheet with `deno task panda` (or `deno task panda:watch` for HMR).
   plugins: [devtools(), tailwindcss(), tanstackStart(), viteReact()],
 });
 

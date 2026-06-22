@@ -698,6 +698,11 @@ async function main() {
           label: "💻 Dev server",
           hint: "deno task dev (zero-app)",
         },
+        {
+          value: "panda",
+          label: "🐼 Panda CSS dev",
+          hint: "deno task panda:watch",
+        },
         { value: "run-target", label: "🏃 Run a target by app/library…" },
         { value: "tasks", label: "🔨 Build / Test / Lint…" },
         { value: "e2e", label: "🎭 E2E tests", hint: "deno task e2e" },
@@ -741,6 +746,13 @@ async function main() {
       switch (action) {
         case "dev":
           await startJob({ label: "dev", key: "dev", ...denoTask("dev") });
+          break;
+        case "panda":
+          await startJob({
+            label: "panda:watch",
+            key: "panda:watch",
+            ...denoTask("panda:watch"),
+          });
           break;
         case "zero-cache":
           await killZeroCache();

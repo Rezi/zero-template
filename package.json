@@ -45,6 +45,7 @@
     "@nx/eslint": "^22.7.5",
     "@nx/eslint-plugin": "^22.7.5",
     "@nx/playwright": "^22.7.5",
+    "@pandacss/dev": "^1.11.3",
     "@playwright/test": "^1.60.0",
     "@storybook/addon-a11y": "^10.4.6",
     "@storybook/addon-docs": "^10.4.6",

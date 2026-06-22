@@ -3,6 +3,9 @@ import { useQuery, useZero } from "@rocicorp/zero/react";
 import { useState } from "react";
 import { authClient } from "@zero-app/auth";
 import { mutators, queries } from "@zero-app/zero";
+import { css } from "@zero-app/styled-system/css";
+import { PandaCheck as UiLibraryPandaCheck } from "@zero-app/ui-library";
+import { PandaCheck as ComponentsPandaCheck } from "@zero-app/zero-app-components";
 
 export const Route = createFileRoute("/_layout/")({
   component: Home,
@@ -39,6 +42,28 @@ function Home() {
 
   return (
     <>
+      {/* Panda CSS smoke-test: one style from each package that uses Panda. */}
+      <div className={css({ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "2", mb: "6" })}>
+        <span
+          className={css({
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "2",
+            bg: "purple.600",
+            color: "white",
+            px: "4",
+            py: "2",
+            rounded: "lg",
+            fontWeight: "semibold",
+            fontSize: "sm",
+          })}
+        >
+          🐼 Panda CSS works in zero-app
+        </span>
+        <UiLibraryPandaCheck />
+        <ComponentsPandaCheck />
+      </div>
+
       <div className="flex items-center gap-3">
         <button
           type="button"
