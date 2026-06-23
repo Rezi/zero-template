@@ -25,11 +25,11 @@ const badgeVariants = cva({
     transitionProperty: "all",
     transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
     transitionDuration: "150ms",
-    _focusVisible: { borderColor: "ring", ringWidth: "3", ringColor: "ring/50" },
+    _focusVisible: { borderColor: "ring", ringW: "3", ringC: "ring/50" },
     "&:has([data-icon='inline-end'])": { pr: "1.5" },
     "&:has([data-icon='inline-start'])": { pl: "1.5" },
-    "&[aria-invalid='true']": { borderColor: "destructive", ringColor: "destructive/20" },
-    _dark: { "&[aria-invalid='true']": { ringColor: "destructive/40" } },
+    "&[aria-invalid='true']": { borderColor: "destructive", ringC: "destructive/20" },
+    _dark: { "&[aria-invalid='true']": { ringC: "destructive/40" } },
     "& > svg": { pointerEvents: "none", size: "3" },
   },
   variants: {
@@ -47,8 +47,8 @@ const badgeVariants = cva({
       destructive: {
         bg: "destructive/10",
         color: "destructive",
-        _focusVisible: { ringColor: "destructive/20" },
-        _dark: { bg: "destructive/20", _focusVisible: { ringColor: "destructive/40" } },
+        _focusVisible: { ringC: "destructive/20" },
+        _dark: { bg: "destructive/20", _focusVisible: { ringC: "destructive/40" } },
         "&:is(a):hover": { bg: "destructive/20" },
       },
       outline: {

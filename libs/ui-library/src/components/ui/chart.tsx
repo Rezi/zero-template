@@ -1,8 +1,74 @@
 import * as React from "react";
 import * as RechartsPrimitive from "recharts";
 import type { TooltipValueType } from "recharts";
+import { css } from "@zero-app/styled-system/css";
 
 import { cn } from "../../lib/utils";
+
+const shadowLg = "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)";
+
+const chartContainerStyles = css({
+  display: "flex",
+  aspectRatio: "16 / 9",
+  justifyContent: "center",
+  fontSize: "xs",
+  "& .recharts-cartesian-axis-tick text": { fill: "muted.foreground" },
+  "& .recharts-cartesian-grid line[stroke='#ccc']": { stroke: "border/50" },
+  "& .recharts-curve.recharts-tooltip-cursor": { stroke: "border" },
+  "& .recharts-dot[stroke='#fff']": { stroke: "transparent" },
+  "& .recharts-layer": { outline: "none" },
+  "& .recharts-polar-grid [stroke='#ccc']": { stroke: "border" },
+  "& .recharts-radial-bar-background-sector": { fill: "muted" },
+  "& .recharts-rectangle.recharts-tooltip-cursor": { fill: "muted" },
+  "& .recharts-reference-line [stroke='#ccc']": { stroke: "border" },
+  "& .recharts-sector": { outline: "none" },
+  "& .recharts-sector[stroke='#fff']": { stroke: "transparent" },
+  "& .recharts-surface": { outline: "none" },
+});
+
+const chartTooltipStyles = css({
+  display: "grid",
+  minW: "32",
+  alignItems: "flex-start",
+  gap: "1.5",
+  rounded: "xl",
+  bg: "popover",
+  px: "2.5",
+  py: "1.5",
+  fontSize: "xs",
+  color: "popover.foreground",
+  // shadow-lg + ring-1 ring-foreground/5 composed into one box-shadow
+  boxShadow: `0 0 0 1px color-mix(in oklab, var(--foreground) 5%, transparent), ${shadowLg}`,
+  _dark: {
+    boxShadow: `0 0 0 1px color-mix(in oklab, var(--foreground) 10%, transparent), ${shadowLg}`,
+  },
+});
+
+const chartTooltipListStyles = css({ display: "grid", gap: "1.5" });
+const chartLabelStyles = css({ fontWeight: "medium" });
+
+const chartTooltipRowStyles = css({
+  display: "flex",
+  w: "full",
+  flexWrap: "wrap",
+  alignItems: "stretch",
+  gap: "2",
+  "& > svg": { h: "2.5", w: "2.5", color: "muted.foreground" },
+});
+
+const chartIndicatorBaseStyles = css({
+  flexShrink: "0",
+  rounded: "2px",
+  borderColor: "var(--color-border)",
+  bg: "var(--color-bg)",
+});
+
+const chartLegendItemStyles = css({
+  display: "flex",
+  alignItems: "center",
+  gap: "1.5",
+  "& > svg": { h: "3", w: "3", color: "muted.foreground" },
+});
 
 // Format: { THEME_NAME: CSS_SELECTOR }
 const THEMES = { light: "", dark: ".dark" } as const;
@@ -60,10 +126,7 @@ function ChartContainer({
       <div
         data-slot="chart"
         data-chart={chartId}
-        className={cn(
-          "flex aspect-video justify-center text-xs [&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground [&_.recharts-cartesian-grid_line[stroke='#ccc']]:stroke-border/50 [&_.recharts-curve.recharts-tooltip-cursor]:stroke-border [&_.recharts-dot[stroke='#fff']]:stroke-transparent [&_.recharts-layer]:outline-hidden [&_.recharts-polar-grid_[stroke='#ccc']]:stroke-border [&_.recharts-radial-bar-background-sector]:fill-muted [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-muted [&_.recharts-reference-line_[stroke='#ccc']]:stroke-border [&_.recharts-sector]:outline-hidden [&_.recharts-sector[stroke='#fff']]:stroke-transparent [&_.recharts-surface]:outline-hidden",
-          className,
-        )}
+        className={cn(chartContainerStyles, className)}
         {...props}
       >
         <ChartStyle id={chartId} config={config} />
@@ -146,7 +209,7 @@ function ChartTooltipContent({
 
     if (labelFormatter) {
       return (
-        <div className={cn("font-medium", labelClassName)}>{labelFormatter(value, payload)}</div>
+        <div className={cn(chartLabelStyles, labelClassName)}>{labelFormatter(value, payload)}</div>
       );
     }
 
@@ -154,7 +217,7 @@ function ChartTooltipContent({
       return null;
     }
 
-    return <div className={cn("font-medium", labelClassName)}>{value}</div>;
+    return <div className={cn(chartLabelStyles, labelClassName)}>{value}</div>;
   }, [label, labelFormatter, payload, hideLabel, labelClassName, config, labelKey]);
 
   if (!active || !payload?.length) {
@@ -164,14 +227,9 @@ function ChartTooltipContent({
   const nestLabel = payload.length === 1 && indicator !== "dot";
 
   return (
-    <div
-      className={cn(
-        "grid min-w-32 items-start gap-1.5 rounded-xl bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-lg ring-1 ring-foreground/5 dark:ring-foreground/10",
-        className,
-      )}
-    >
+    <div className={cn(chartTooltipStyles, className)}>
       {!nestLabel ? tooltipLabel : null}
-      <div className="grid gap-1.5">
+      <div className={chartTooltipListStyles}>
         {payload
           .filter((item) => item.type !== "none")
           .map((item, index) => {
@@ -183,8 +241,8 @@ function ChartTooltipContent({
               <div
                 key={index}
                 className={cn(
-                  "flex w-full flex-wrap items-stretch gap-2 [&>svg]:h-2.5 [&>svg]:w-2.5 [&>svg]:text-muted-foreground",
-                  indicator === "dot" && "items-center",
+                  chartTooltipRowStyles,
+                  indicator === "dot" && css({ alignItems: "center" }),
                 )}
               >
                 {formatter && item?.value !== undefined && item.name ? (
@@ -197,14 +255,17 @@ function ChartTooltipContent({
                       !hideIndicator && (
                         <div
                           className={cn(
-                            "shrink-0 rounded-[2px] border-(--color-border) bg-(--color-bg)",
-                            {
-                              "h-2.5 w-2.5": indicator === "dot",
-                              "w-1": indicator === "line",
-                              "w-0 border-[1.5px] border-dashed bg-transparent":
-                                indicator === "dashed",
-                              "my-0.5": nestLabel && indicator === "dashed",
-                            },
+                            chartIndicatorBaseStyles,
+                            indicator === "dot" && css({ h: "2.5", w: "2.5" }),
+                            indicator === "line" && css({ w: "1" }),
+                            indicator === "dashed" &&
+                              css({
+                                w: "0",
+                                borderWidth: "1.5px",
+                                borderStyle: "dashed",
+                                bg: "transparent",
+                              }),
+                            nestLabel && indicator === "dashed" && css({ my: "0.5" }),
                           )}
                           style={
                             {
@@ -217,18 +278,32 @@ function ChartTooltipContent({
                     )}
                     <div
                       className={cn(
-                        "flex flex-1 justify-between leading-none",
-                        nestLabel ? "items-end" : "items-center",
+                        css({
+                          display: "flex",
+                          flex: "1",
+                          justifyContent: "space-between",
+                          lineHeight: "none",
+                        }),
+                        nestLabel
+                          ? css({ alignItems: "flex-end" })
+                          : css({ alignItems: "center" }),
                       )}
                     >
-                      <div className="grid gap-1.5">
+                      <div className={chartTooltipListStyles}>
                         {nestLabel ? tooltipLabel : null}
-                        <span className="text-muted-foreground">
+                        <span className={css({ color: "muted.foreground" })}>
                           {itemConfig?.label ?? item.name}
                         </span>
                       </div>
                       {item.value != null && (
-                        <span className="font-mono font-medium text-foreground tabular-nums">
+                        <span
+                          className={css({
+                            fontFamily: "var(--font-mono)",
+                            fontWeight: "medium",
+                            color: "foreground",
+                            fontVariantNumeric: "tabular-nums",
+                          })}
+                        >
                           {typeof item.value === "number"
                             ? item.value.toLocaleString()
                             : String(item.value)}
@@ -266,8 +341,8 @@ function ChartLegendContent({
   return (
     <div
       className={cn(
-        "flex items-center justify-center gap-4",
-        verticalAlign === "top" ? "pb-3" : "pt-3",
+        css({ display: "flex", alignItems: "center", justifyContent: "center", gap: "4" }),
+        verticalAlign === "top" ? css({ pb: "3" }) : css({ pt: "3" }),
         className,
       )}
     >
@@ -278,17 +353,12 @@ function ChartLegendContent({
           const itemConfig = getPayloadConfigFromPayload(config, item, key);
 
           return (
-            <div
-              key={index}
-              className={cn(
-                "flex items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-muted-foreground",
-              )}
-            >
+            <div key={index} className={chartLegendItemStyles}>
               {itemConfig?.icon && !hideIcon ? (
                 <itemConfig.icon />
               ) : (
                 <div
-                  className="h-2 w-2 shrink-0 rounded-[2px]"
+                  className={css({ h: "2", w: "2", flexShrink: "0", rounded: "2px" })}
                   style={{
                     backgroundColor: item.color,
                   }}

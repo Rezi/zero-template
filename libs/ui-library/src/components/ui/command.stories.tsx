@@ -9,6 +9,8 @@ import {
   UserIcon,
 } from "lucide-react";
 
+import { css } from "@zero-app/styled-system/css";
+
 import {
   Button,
   Command,
@@ -33,7 +35,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
   render: () => (
-    <Command className="w-80 border shadow-md">
+    <Command className={css({ w: "80", borderWidth: "1px", boxShadow: "md" })}>
       <CommandInput placeholder="Type a command or search..." />
       <CommandList>
         <CommandEmpty>No results found.</CommandEmpty>

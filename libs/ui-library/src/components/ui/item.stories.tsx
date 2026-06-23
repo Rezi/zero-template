@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { ChevronRightIcon, MusicIcon } from "lucide-react";
+import { css } from "@zero-app/styled-system/css";
 
 import {
   Button,
@@ -32,10 +33,12 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+const w96 = css({ w: "96" });
+
 export const Default: Story = {
   args: { variant: "outline" },
   render: (args) => (
-    <Item {...args} className="w-96">
+    <Item {...args} className={w96}>
       <ItemMedia variant="icon">
         <MusicIcon />
       </ItemMedia>
@@ -54,7 +57,7 @@ export const Default: Story = {
 
 export const Variants: Story = {
   render: () => (
-    <div className="flex w-96 flex-col gap-3">
+    <div className={css({ display: "flex", w: "96", flexDirection: "column", gap: "3" })}>
       <Item variant="default">
         <ItemContent>
           <ItemTitle>Default</ItemTitle>
@@ -79,7 +82,7 @@ export const Variants: Story = {
 
 export const Group: Story = {
   render: () => (
-    <ItemGroup className="w-96">
+    <ItemGroup className={w96}>
       <Item variant="outline">
         <ItemMedia variant="icon">
           <MusicIcon />
@@ -107,7 +110,7 @@ export const AsLink: Story = {
   render: () => (
     <Item
       variant="outline"
-      className="w-96"
+      className={w96}
       render={<a href="#item" aria-label="Rendered as an anchor" />}
     >
       <ItemContent>
@@ -115,7 +118,7 @@ export const AsLink: Story = {
         <ItemDescription>Uses Base UI's render prop to become a link.</ItemDescription>
       </ItemContent>
       <ItemActions>
-        <ChevronRightIcon className="size-4" />
+        <ChevronRightIcon className={css({ size: "4" })} />
       </ItemActions>
     </Item>
   ),

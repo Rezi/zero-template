@@ -1,13 +1,65 @@
 import { Radio as RadioPrimitive } from "@base-ui/react/radio";
 import { RadioGroup as RadioGroupPrimitive } from "@base-ui/react/radio-group";
+import { css } from "@zero-app/styled-system/css";
 
 import { cn } from "../../lib/utils";
+
+const radioGroupStyles = css({ display: "grid", w: "full", gap: "3" });
+
+const radioGroupItemStyles = css({
+  position: "relative",
+  display: "flex",
+  aspectRatio: "square",
+  size: "4",
+  flexShrink: "0",
+  rounded: "2xl",
+  borderWidth: "1px",
+  borderColor: "transparent",
+  bg: "input/90",
+  outline: "none",
+  "&::after": { content: '""', position: "absolute", insetInline: "-3", insetBlock: "-2" },
+  _focusVisible: { borderColor: "ring", ringW: "3", ringC: "ring/30" },
+  _disabled: { cursor: "not-allowed", opacity: "0.5" },
+  "&[aria-invalid='true']": {
+    borderColor: "destructive",
+    ringW: "3",
+    ringC: "destructive/20",
+  },
+  "&:where([data-state='checked'], [data-checked]:not([data-checked='false']))": {
+    bg: "primary",
+    color: "primary.foreground",
+  },
+  _dark: {
+    "&[aria-invalid='true']": { borderColor: "destructive/50", ringC: "destructive/40" },
+    "&:where([data-state='checked'], [data-checked]:not([data-checked='false']))": {
+      bg: "primary",
+    },
+  },
+});
+
+const radioGroupIndicatorStyles = css({
+  display: "flex",
+  size: "4",
+  alignItems: "center",
+  justifyContent: "center",
+});
+
+const radioGroupDotStyles = css({
+  position: "absolute",
+  top: "50%",
+  left: "50%",
+  size: "2",
+  transform: "translate(-50%, -50%)",
+  rounded: "full",
+  bg: "primary.foreground",
+  _dark: { size: "2.5" },
+});
 
 function RadioGroup({ className, ...props }: RadioGroupPrimitive.Props) {
   return (
     <RadioGroupPrimitive
       data-slot="radio-group"
-      className={cn("grid w-full gap-3", className)}
+      className={cn(radioGroupStyles, className)}
       {...props}
     />
   );
@@ -17,17 +69,14 @@ function RadioGroupItem({ className, ...props }: RadioPrimitive.Root.Props) {
   return (
     <RadioPrimitive.Root
       data-slot="radio-group-item"
-      className={cn(
-        "group/radio-group-item peer relative flex aspect-square size-4 shrink-0 rounded-2xl border border-transparent bg-input/90 outline-none after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-checked:bg-primary data-checked:text-primary-foreground dark:data-checked:bg-primary",
-        className,
-      )}
+      className={cn("group/radio-group-item peer", radioGroupItemStyles, className)}
       {...props}
     >
       <RadioPrimitive.Indicator
         data-slot="radio-group-indicator"
-        className="flex size-4 items-center justify-center"
+        className={radioGroupIndicatorStyles}
       >
-        <span className="absolute top-1/2 left-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary-foreground dark:size-2.5" />
+        <span className={radioGroupDotStyles} />
       </RadioPrimitive.Indicator>
     </RadioPrimitive.Root>
   );

@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { PlusIcon } from "lucide-react";
+import { css } from "@zero-app/styled-system/css";
 
 import {
   Button,
@@ -49,7 +50,7 @@ export const IconButton: Story = {
 export const Sides: Story = {
   render: () => (
     <TooltipProvider>
-      <div className="flex items-center gap-4">
+      <div className={css({ display: "flex", alignItems: "center", gap: "4" })}>
         <Tooltip>
           <TooltipTrigger render={<Button variant="outline">Top</Button>} />
           <TooltipContent side="top">Top tooltip</TooltipContent>

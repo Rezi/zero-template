@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import * as React from "react";
 import { CreditCardIcon, LogOutIcon, SettingsIcon, UserIcon } from "lucide-react";
+import { css } from "@zero-app/styled-system/css";
 
 import {
   Button,
@@ -29,11 +30,14 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+const w56 = css({ w: "56" });
+const w48 = css({ w: "48" });
+
 export const Default: Story = {
   render: () => (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="outline">Open menu</Button>} />
-      <DropdownMenuContent className="w-56">
+      <DropdownMenuContent className={w56}>
         <DropdownMenuLabel>My Account</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
@@ -62,7 +66,7 @@ export const WithSubmenu: Story = {
   render: () => (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="outline">Actions</Button>} />
-      <DropdownMenuContent className="w-48">
+      <DropdownMenuContent className={w48}>
         <DropdownMenuItem>New file</DropdownMenuItem>
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>Share</DropdownMenuSubTrigger>
@@ -86,7 +90,7 @@ export const CheckboxesAndRadios: Story = {
     return (
       <DropdownMenu>
         <DropdownMenuTrigger render={<Button variant="outline">View options</Button>} />
-        <DropdownMenuContent className="w-56">
+        <DropdownMenuContent className={w56}>
           <DropdownMenuLabel>Panels</DropdownMenuLabel>
           <DropdownMenuCheckboxItem checked={showStatus} onCheckedChange={setShowStatus}>
             Status bar

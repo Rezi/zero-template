@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { css } from "@zero-app/styled-system/css";
 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@zero-app/ui-library";
 
@@ -11,9 +12,11 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+const w96 = css({ w: "96" });
+
 export const Default: Story = {
   render: (args) => (
-    <Accordion {...args} className="w-96">
+    <Accordion {...args} className={w96}>
       <AccordionItem value="item-1">
         <AccordionTrigger>Is it accessible?</AccordionTrigger>
         <AccordionContent>Yes. It adheres to the WAI-ARIA design pattern.</AccordionContent>
@@ -36,7 +39,7 @@ export const Default: Story = {
 
 export const Multiple: Story = {
   render: (args) => (
-    <Accordion {...args} multiple className="w-96">
+    <Accordion {...args} multiple className={w96}>
       <AccordionItem value="item-1">
         <AccordionTrigger>First section</AccordionTrigger>
         <AccordionContent>Multiple panels can be open at the same time.</AccordionContent>

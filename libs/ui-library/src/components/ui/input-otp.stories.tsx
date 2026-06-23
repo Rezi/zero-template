@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import * as React from "react";
+import { css } from "@zero-app/styled-system/css";
 
 import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from "@zero-app/ui-library";
 
@@ -55,7 +56,9 @@ export const Controlled: Story = {
   render: () => {
     const [value, setValue] = React.useState("");
     return (
-      <div className="flex flex-col items-start gap-3">
+      <div
+        className={css({ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "3" })}
+      >
         <InputOTP maxLength={4} value={value} onChange={setValue}>
           <InputOTPGroup>
             <InputOTPSlot index={0} />
@@ -64,7 +67,9 @@ export const Controlled: Story = {
             <InputOTPSlot index={3} />
           </InputOTPGroup>
         </InputOTP>
-        <p className="text-sm text-muted-foreground">Entered value: {value || "(empty)"}</p>
+        <p className={css({ fontSize: "sm", color: "muted.foreground" })}>
+          Entered value: {value || "(empty)"}
+        </p>
       </div>
     );
   },

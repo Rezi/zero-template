@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import * as React from "react";
+import { css } from "@zero-app/styled-system/css";
 
 import {
   Combobox,
@@ -23,10 +24,12 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+const w64 = css({ w: "64" });
+
 export const Default: Story = {
   render: () => (
     <Combobox items={frameworks}>
-      <ComboboxInput placeholder="Select framework..." className="w-64" />
+      <ComboboxInput placeholder="Select framework..." className={w64} />
       <ComboboxContent>
         <ComboboxEmpty>No framework found.</ComboboxEmpty>
         <ComboboxList>
@@ -45,9 +48,9 @@ export const Controlled: Story = {
   render: () => {
     const [value, setValue] = React.useState<string | null>("Astro");
     return (
-      <div className="space-y-3">
+      <div className={css({ "& > * + *": { mt: "3" } })}>
         <Combobox items={frameworks} value={value} onValueChange={setValue}>
-          <ComboboxInput placeholder="Select framework..." className="w-64" />
+          <ComboboxInput placeholder="Select framework..." className={w64} />
           <ComboboxContent>
             <ComboboxEmpty>No framework found.</ComboboxEmpty>
             <ComboboxList>
@@ -59,7 +62,7 @@ export const Controlled: Story = {
             </ComboboxList>
           </ComboboxContent>
         </Combobox>
-        <p className="text-sm text-muted-foreground">Selected: {value ?? "none"}</p>
+        <p className={css({ fontSize: "sm", color: "muted.foreground" })}>Selected: {value ?? "none"}</p>
       </div>
     );
   },
@@ -68,7 +71,7 @@ export const Controlled: Story = {
 export const Grouped: Story = {
   render: () => (
     <Combobox items={frameworks}>
-      <ComboboxInput placeholder="Select framework..." className="w-64" />
+      <ComboboxInput placeholder="Select framework..." className={w64} />
       <ComboboxContent>
         <ComboboxEmpty>No framework found.</ComboboxEmpty>
         <ComboboxList>

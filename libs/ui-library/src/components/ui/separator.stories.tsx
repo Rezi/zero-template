@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { css } from "@zero-app/styled-system/css";
 
 import { Separator } from "@zero-app/ui-library";
 
@@ -14,19 +15,23 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+const textSm = css({ fontSize: "sm" });
+
 export const Horizontal: Story = {
   render: () => (
-    <div className="w-64">
-      <div className="space-y-1">
-        <h4 className="text-sm font-medium">UI Library</h4>
-        <p className="text-sm text-muted-foreground">A Base UI component collection.</p>
+    <div className={css({ w: "64" })}>
+      <div className={css({ "& > * + *": { mt: "1" } })}>
+        <h4 className={css({ fontSize: "sm", fontWeight: "medium" })}>UI Library</h4>
+        <p className={css({ fontSize: "sm", color: "muted.foreground" })}>
+          A Base UI component collection.
+        </p>
       </div>
-      <Separator className="my-4" />
-      <div className="flex items-center gap-3 text-sm">
+      <Separator className={css({ my: "4" })} />
+      <div className={css({ display: "flex", alignItems: "center", gap: "3", fontSize: "sm" })}>
         <span>Docs</span>
-        <Separator orientation="vertical" className="h-4" />
+        <Separator orientation="vertical" className={css({ h: "4" })} />
         <span>Source</span>
-        <Separator orientation="vertical" className="h-4" />
+        <Separator orientation="vertical" className={css({ h: "4" })} />
         <span>About</span>
       </div>
     </div>
@@ -35,12 +40,12 @@ export const Horizontal: Story = {
 
 export const Vertical: Story = {
   render: () => (
-    <div className="flex h-16 items-center gap-4">
-      <span className="text-sm">Left</span>
+    <div className={css({ display: "flex", h: "16", alignItems: "center", gap: "4" })}>
+      <span className={textSm}>Left</span>
       <Separator orientation="vertical" />
-      <span className="text-sm">Center</span>
+      <span className={textSm}>Center</span>
       <Separator orientation="vertical" />
-      <span className="text-sm">Right</span>
+      <span className={textSm}>Right</span>
     </div>
   ),
 };

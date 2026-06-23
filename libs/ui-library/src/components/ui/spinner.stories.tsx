@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { css } from "@zero-app/styled-system/css";
 
 import { Spinner } from "@zero-app/ui-library";
 
@@ -15,18 +16,26 @@ export const Default: Story = {};
 
 export const Sizes: Story = {
   render: () => (
-    <div className="flex items-center gap-4">
-      <Spinner className="size-3" />
-      <Spinner className="size-4" />
-      <Spinner className="size-6" />
-      <Spinner className="size-8" />
+    <div className={css({ display: "flex", alignItems: "center", gap: "4" })}>
+      <Spinner className={css({ size: "3" })} />
+      <Spinner className={css({ size: "4" })} />
+      <Spinner className={css({ size: "6" })} />
+      <Spinner className={css({ size: "8" })} />
     </div>
   ),
 };
 
 export const WithLabel: Story = {
   render: () => (
-    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+    <div
+      className={css({
+        display: "flex",
+        alignItems: "center",
+        gap: "2",
+        fontSize: "sm",
+        color: "muted.foreground",
+      })}
+    >
       <Spinner />
       Loading…
     </div>

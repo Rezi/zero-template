@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { css } from "@zero-app/styled-system/css";
 
 import { Checkbox, Label } from "@zero-app/ui-library";
 
@@ -23,7 +24,7 @@ export const Checked: Story = {
 
 export const Disabled: Story = {
   render: () => (
-    <div className="flex items-center gap-4">
+    <div className={css({ display: "flex", alignItems: "center", gap: "4" })}>
       <Checkbox disabled />
       <Checkbox disabled defaultChecked />
     </div>
@@ -32,7 +33,7 @@ export const Disabled: Story = {
 
 export const WithLabel: Story = {
   render: () => (
-    <Label className="flex items-center gap-2">
+    <Label className={css({ display: "flex", alignItems: "center", gap: "2" })}>
       <Checkbox defaultChecked />
       Accept terms and conditions
     </Label>

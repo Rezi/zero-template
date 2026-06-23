@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import * as React from "react";
+import { css } from "@zero-app/styled-system/css";
 
 import {
   ContextMenu,
@@ -27,8 +28,22 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+const w52 = css({ w: "52" });
+
 const Trigger = (
-  <ContextMenuTrigger className="flex h-40 w-72 items-center justify-center rounded-md border border-dashed text-sm">
+  <ContextMenuTrigger
+    className={css({
+      display: "flex",
+      h: "40",
+      w: "72",
+      alignItems: "center",
+      justifyContent: "center",
+      rounded: "md",
+      borderWidth: "1px",
+      borderStyle: "dashed",
+      fontSize: "sm",
+    })}
+  >
     Right click here
   </ContextMenuTrigger>
 );
@@ -37,7 +52,7 @@ export const Default: Story = {
   render: () => (
     <ContextMenu>
       {Trigger}
-      <ContextMenuContent className="w-52">
+      <ContextMenuContent className={w52}>
         <ContextMenuItem>
           Back
           <ContextMenuShortcut>⌘[</ContextMenuShortcut>
@@ -61,7 +76,7 @@ export const WithSubmenu: Story = {
   render: () => (
     <ContextMenu>
       {Trigger}
-      <ContextMenuContent className="w-52">
+      <ContextMenuContent className={w52}>
         <ContextMenuItem>New Tab</ContextMenuItem>
         <ContextMenuSub>
           <ContextMenuSubTrigger>More Tools</ContextMenuSubTrigger>
@@ -83,7 +98,7 @@ export const WithCheckboxAndRadio: Story = {
     return (
       <ContextMenu>
         {Trigger}
-        <ContextMenuContent className="w-52">
+        <ContextMenuContent className={w52}>
           <ContextMenuGroup>
             <ContextMenuLabel>Appearance</ContextMenuLabel>
             <ContextMenuCheckboxItem checked={bookmarks} onCheckedChange={setBookmarks}>

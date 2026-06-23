@@ -92,8 +92,8 @@ function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
           _hover: { color: "foreground" },
           _focusVisible: {
             borderColor: "ring",
-            ringWidth: "3",
-            ringColor: "ring/50",
+            ringW: "3",
+            ringC: "ring/50",
             outlineWidth: "1px",
             outlineColor: "ring",
           },

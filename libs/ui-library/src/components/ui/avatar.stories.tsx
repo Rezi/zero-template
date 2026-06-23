@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { css } from "@zero-app/styled-system/css";
 
 import {
   Avatar,
@@ -41,7 +42,7 @@ export const Fallback: Story = {
 
 export const Sizes: Story = {
   render: () => (
-    <div className="flex items-center gap-4">
+    <div className={css({ display: "flex", alignItems: "center", gap: "4" })}>
       <Avatar size="sm">
         <AvatarImage src="https://github.com/shadcn.png" alt="@shadcn" />
         <AvatarFallback>CN</AvatarFallback>

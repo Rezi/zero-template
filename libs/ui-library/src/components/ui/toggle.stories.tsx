@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { BoldIcon, ItalicIcon, UnderlineIcon } from "lucide-react";
+import { css } from "@zero-app/styled-system/css";
 
 import { Toggle } from "@zero-app/ui-library";
 
@@ -35,7 +36,7 @@ export const WithText: Story = {
 
 export const Variants: Story = {
   render: (args) => (
-    <div className="flex items-center gap-3">
+    <div className={css({ display: "flex", alignItems: "center", gap: "3" })}>
       <Toggle {...args} variant="default" aria-label="Bold">
         <BoldIcon />
       </Toggle>
@@ -48,7 +49,7 @@ export const Variants: Story = {
 
 export const Sizes: Story = {
   render: (args) => (
-    <div className="flex items-center gap-3">
+    <div className={css({ display: "flex", alignItems: "center", gap: "3" })}>
       <Toggle {...args} size="sm" aria-label="Bold">
         <BoldIcon />
       </Toggle>

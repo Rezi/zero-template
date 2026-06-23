@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import * as React from "react";
+import { css } from "@zero-app/styled-system/css";
 
 import {
   Select,
@@ -24,7 +25,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
   render: () => (
     <Select defaultValue="apple">
-      <SelectTrigger className="w-48">
+      <SelectTrigger className={css({ w: "48" })}>
         <SelectValue placeholder="Select a fruit" />
       </SelectTrigger>
       <SelectContent>
@@ -41,7 +42,7 @@ export const Default: Story = {
 export const Grouped: Story = {
   render: () => (
     <Select>
-      <SelectTrigger className="w-56">
+      <SelectTrigger className={css({ w: "56" })}>
         <SelectValue placeholder="Pick a timezone" />
       </SelectTrigger>
       <SelectContent>
@@ -66,9 +67,9 @@ export const Controlled: Story = {
   render: () => {
     const [value, setValue] = React.useState<string | null>("banana");
     return (
-      <div className="flex flex-col gap-3">
+      <div className={css({ display: "flex", flexDirection: "column", gap: "3" })}>
         <Select value={value} onValueChange={setValue}>
-          <SelectTrigger className="w-48">
+          <SelectTrigger className={css({ w: "48" })}>
             <SelectValue placeholder="Select a fruit" />
           </SelectTrigger>
           <SelectContent>
@@ -77,7 +78,7 @@ export const Controlled: Story = {
             <SelectItem value="blueberry">Blueberry</SelectItem>
           </SelectContent>
         </Select>
-        <p className="text-sm text-muted-foreground">Selected: {value ?? "none"}</p>
+        <p className={css({ fontSize: "sm", color: "muted.foreground" })}>Selected: {value ?? "none"}</p>
       </div>
     );
   },

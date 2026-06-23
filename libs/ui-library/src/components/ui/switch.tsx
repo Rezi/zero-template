@@ -1,6 +1,72 @@
 import { Switch as SwitchPrimitive } from "@base-ui/react/switch";
+import { css } from "@zero-app/styled-system/css";
 
 import { cn } from "../../lib/utils";
+
+const switchStyles = css({
+  position: "relative",
+  display: "inline-flex",
+  flexShrink: "0",
+  alignItems: "center",
+  rounded: "2xl",
+  borderWidth: "2px",
+  transitionProperty: "all",
+  transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
+  transitionDuration: "150ms",
+  outline: "none",
+  "&::after": { content: '""', position: "absolute", insetInline: "-3", insetBlock: "-2" },
+  _focusVisible: { borderColor: "ring", ringW: "3", ringC: "ring/30" },
+  "&[aria-invalid='true']": {
+    borderColor: "destructive",
+    ringW: "3",
+    ringC: "destructive/20",
+  },
+  "&[data-size='default']": { h: "5", w: "8" },
+  "&[data-size='sm']": { h: "4", w: "6" },
+  "&:where([data-state='checked'], [data-checked]:not([data-checked='false']))": {
+    borderColor: "primary",
+    bg: "primary",
+  },
+  "&:where([data-state='unchecked'], [data-unchecked]:not([data-unchecked='false']))": {
+    borderColor: "transparent",
+    bg: "input/90",
+  },
+  "&:where([data-state='disabled'], [data-disabled]:not([data-disabled='false']))": {
+    cursor: "not-allowed",
+    opacity: "0.5",
+  },
+  _dark: {
+    "&[aria-invalid='true']": { borderColor: "destructive/50", ringC: "destructive/40" },
+  },
+});
+
+const switchThumbStyles = css({
+  pointerEvents: "none",
+  display: "block",
+  rounded: "2xl",
+  bg: "background",
+  boxShadow: "sm",
+  transitionProperty: "transform",
+  transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
+  transitionDuration: "150ms",
+  "&:not(.dark *)": { backgroundClip: "padding-box" },
+  "[data-slot='switch'][data-size='default'] &": { size: "4" },
+  "[data-slot='switch'][data-size='sm'] &": { size: "3" },
+  "&:where([data-state='checked'], [data-checked]:not([data-checked='false']))": {
+    transform: "translateX(calc(100% - 4px))",
+  },
+  "&:where([data-state='unchecked'], [data-unchecked]:not([data-unchecked='false']))": {
+    transform: "translateX(0)",
+  },
+  _dark: {
+    "&:where([data-state='checked'], [data-checked]:not([data-checked='false']))": {
+      bg: "primary.foreground",
+    },
+    "&:where([data-state='unchecked'], [data-unchecked]:not([data-unchecked='false']))": {
+      bg: "foreground",
+    },
+  },
+});
 
 function Switch({
   className,
@@ -13,16 +79,10 @@ function Switch({
     <SwitchPrimitive.Root
       data-slot="switch"
       data-size={size}
-      className={cn(
-        "peer group/switch relative inline-flex shrink-0 items-center rounded-2xl border-2 transition-all outline-none after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-[size=default]:h-5 data-[size=default]:w-8 data-[size=sm]:h-4 data-[size=sm]:w-6 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-checked:border-primary data-checked:bg-primary data-unchecked:border-transparent data-unchecked:bg-input/90 data-disabled:cursor-not-allowed data-disabled:opacity-50",
-        className,
-      )}
+      className={cn("peer", switchStyles, className)}
       {...props}
     >
-      <SwitchPrimitive.Thumb
-        data-slot="switch-thumb"
-        className="pointer-events-none block rounded-2xl bg-background shadow-sm ring-0 transition-transform not-dark:bg-clip-padding group-data-[size=default]/switch:size-4 group-data-[size=sm]/switch:size-3 data-checked:translate-x-[calc(100%-4px)] dark:data-checked:bg-primary-foreground data-unchecked:translate-x-0 dark:data-unchecked:bg-foreground"
-      />
+      <SwitchPrimitive.Thumb data-slot="switch-thumb" className={switchThumbStyles} />
     </SwitchPrimitive.Root>
   );
 }

@@ -33,12 +33,10 @@ https://sugar-css.com/customize?seed=eyJiYXNlIjp7InJvdW5kbmVzcyI6MSwibGluZUhlaWd
 in order to modify this specific build of sugar.css.
 */
 
-@layer sugar;
-
 /* VARIABLES
 ========================================================================
 */
-@layer sugar {
+@layer base {
   :root {
     /* 0.3 - 2 */
     --s-multiplier-sparsity: 1;
@@ -70,7 +68,7 @@ in order to modify this specific build of sugar.css.
 /* CORE 
 ========================================================================
 */
-@layer sugar {
+@layer base {
   /**
   * 1. Add border box sizing in all browsers (opinionated).
   * 2. Backgrounds do not repeat by default (opinionated).
@@ -172,7 +170,7 @@ in order to modify this specific build of sugar.css.
 /* GRID
 ========================================================================
 */
-@layer sugar {
+@layer base {
   :where(*:has(> .s-grid)) {
     /* This is a fix for negative margin-block of the grid, 
     which could be visible when background is applied to grid's wrapper */
@@ -565,7 +563,7 @@ in order to modify this specific build of sugar.css.
 /* MARGINS
 ========================================================================
 */
-@layer sugar {
+@layer base {
   section {
     margin-bottom: var(--sugar-spacing-block);
   }
@@ -593,7 +591,7 @@ in order to modify this specific build of sugar.css.
 /* LAYOUT
 ========================================================================
 */
-@layer sugar {
+@layer base {
   .s-container {
     padding-inline: var(--sugar-spacing-inline);
     margin-inline: calc((100dvw - min(100dvw, var(--container-width))) / 2);

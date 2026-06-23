@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { css } from "@zero-app/styled-system/css";
 
 import { Skeleton } from "@zero-app/ui-library";
 
@@ -12,26 +13,37 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
-  render: () => <Skeleton className="h-6 w-48" />,
+  render: () => <Skeleton className={css({ h: "6", w: "48" })} />,
 };
 
 export const Card: Story = {
   render: () => (
-    <div className="flex w-72 flex-col gap-3 rounded-2xl border p-4">
-      <Skeleton className="h-32 w-full rounded-xl" />
-      <Skeleton className="h-4 w-3/4" />
-      <Skeleton className="h-4 w-1/2" />
+    <div
+      className={css({
+        display: "flex",
+        w: "72",
+        flexDirection: "column",
+        gap: "3",
+        rounded: "2xl",
+        borderWidth: "1px",
+        borderColor: "border",
+        p: "4",
+      })}
+    >
+      <Skeleton className={css({ h: "32", w: "full", rounded: "xl" })} />
+      <Skeleton className={css({ h: "4", w: "75%" })} />
+      <Skeleton className={css({ h: "4", w: "50%" })} />
     </div>
   ),
 };
 
 export const Profile: Story = {
   render: () => (
-    <div className="flex items-center gap-4">
-      <Skeleton className="size-12 rounded-full" />
-      <div className="flex flex-col gap-2">
-        <Skeleton className="h-4 w-40" />
-        <Skeleton className="h-4 w-24" />
+    <div className={css({ display: "flex", alignItems: "center", gap: "4" })}>
+      <Skeleton className={css({ size: "12", rounded: "full" })} />
+      <div className={css({ display: "flex", flexDirection: "column", gap: "2" })}>
+        <Skeleton className={css({ h: "4", w: "40" })} />
+        <Skeleton className={css({ h: "4", w: "24" })} />
       </div>
     </div>
   ),

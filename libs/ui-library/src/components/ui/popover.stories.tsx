@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import * as React from "react";
+import { css } from "@zero-app/styled-system/css";
 
 import {
   Button,
@@ -31,7 +32,7 @@ export const Default: Story = {
           <PopoverTitle>Dimensions</PopoverTitle>
           <PopoverDescription>Set the dimensions for the layer.</PopoverDescription>
         </PopoverHeader>
-        <div className="flex flex-col gap-2">
+        <div className={css({ display: "flex", flexDirection: "column", gap: "2" })}>
           <Label htmlFor="width">Width</Label>
           <Input id="width" defaultValue="100%" />
         </div>
@@ -44,7 +45,9 @@ export const Controlled: Story = {
   render: () => {
     const [open, setOpen] = React.useState(false);
     return (
-      <div className="flex flex-col items-start gap-3">
+      <div
+        className={css({ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "3" })}
+      >
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger render={<Button>{open ? "Opened" : "Open"}</Button>} />
           <PopoverContent>
@@ -54,7 +57,7 @@ export const Controlled: Story = {
             </Button>
           </PopoverContent>
         </Popover>
-        <p className="text-sm text-muted-foreground">Open: {String(open)}</p>
+        <p className={css({ fontSize: "sm", color: "muted.foreground" })}>Open: {String(open)}</p>
       </div>
     );
   },

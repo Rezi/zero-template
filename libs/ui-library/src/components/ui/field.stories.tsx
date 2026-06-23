@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { css } from "@zero-app/styled-system/css";
 
 import {
   Field,
@@ -20,9 +21,11 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+const w80 = css({ w: "80" });
+
 export const Default: Story = {
   render: () => (
-    <Field className="w-80">
+    <Field className={w80}>
       <FieldLabel htmlFor="email">Email</FieldLabel>
       <Input id="email" type="email" placeholder="you@example.com" />
       <FieldDescription>We'll never share your email with anyone.</FieldDescription>
@@ -32,7 +35,7 @@ export const Default: Story = {
 
 export const Invalid: Story = {
   render: () => (
-    <Field className="w-80" data-invalid="true">
+    <Field className={w80} data-invalid="true">
       <FieldLabel htmlFor="password">Password</FieldLabel>
       <Input id="password" type="password" aria-invalid defaultValue="123" />
       <FieldError>Password must be at least 8 characters.</FieldError>
@@ -42,7 +45,7 @@ export const Invalid: Story = {
 
 export const FieldSetGroup: Story = {
   render: () => (
-    <FieldSet className="w-80">
+    <FieldSet className={w80}>
       <FieldLegend>Shipping address</FieldLegend>
       <FieldDescription>Where should we send your order?</FieldDescription>
       <FieldGroup>

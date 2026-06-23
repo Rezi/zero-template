@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import * as React from "react";
+import { css } from "@zero-app/styled-system/css";
 
 import {
   Button,
@@ -35,12 +36,12 @@ export const Default: Story = {
             Make changes to your profile here. Click save when you're done.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4">
-          <div className="grid gap-2">
+        <div className={css({ display: "grid", gap: "4" })}>
+          <div className={css({ display: "grid", gap: "2" })}>
             <Label htmlFor="name">Name</Label>
             <Input id="name" defaultValue="Ada Lovelace" />
           </div>
-          <div className="grid gap-2">
+          <div className={css({ display: "grid", gap: "2" })}>
             <Label htmlFor="username">Username</Label>
             <Input id="username" defaultValue="@ada" />
           </div>

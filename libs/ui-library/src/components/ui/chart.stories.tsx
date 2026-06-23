@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis } from "recharts";
+import { css } from "@zero-app/styled-system/css";
 
 import {
   ChartContainer,
@@ -39,9 +40,11 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+const chartBox = css({ minH: "200px", w: "480px" });
+
 export const Default: Story = {
   render: () => (
-    <ChartContainer config={chartConfig} className="min-h-[200px] w-[480px]">
+    <ChartContainer config={chartConfig} className={chartBox}>
       <BarChart accessibilityLayer data={data}>
         <CartesianGrid vertical={false} />
         <XAxis
@@ -61,7 +64,7 @@ export const Default: Story = {
 
 export const WithLegend: Story = {
   render: () => (
-    <ChartContainer config={chartConfig} className="min-h-[200px] w-[480px]">
+    <ChartContainer config={chartConfig} className={chartBox}>
       <BarChart accessibilityLayer data={data}>
         <CartesianGrid vertical={false} />
         <XAxis
@@ -82,7 +85,7 @@ export const WithLegend: Story = {
 
 export const LineChartExample: Story = {
   render: () => (
-    <ChartContainer config={chartConfig} className="min-h-[200px] w-[480px]">
+    <ChartContainer config={chartConfig} className={chartBox}>
       <LineChart accessibilityLayer data={data} margin={{ left: 12, right: 12 }}>
         <CartesianGrid vertical={false} />
         <XAxis

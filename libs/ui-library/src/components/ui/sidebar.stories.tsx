@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { CalendarIcon, HomeIcon, InboxIcon, SearchIcon, SettingsIcon } from "lucide-react";
+import { css } from "@zero-app/styled-system/css";
 
 import {
   Sidebar,
@@ -35,12 +36,17 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+const shell = css({ h: "96", w: "full" });
+const brand = css({ px: "4", py: "3", fontFamily: "var(--font-heading)", fontSize: "1rem", fontWeight: "medium" });
+const topbar = css({ display: "flex", alignItems: "center", gap: "2", borderBottomWidth: "1px", p: "4" });
+const topbarLabel = css({ fontSize: "sm", fontWeight: "medium" });
+
 export const Default: Story = {
   render: () => (
-    <div className="h-96 w-full">
+    <div className={shell}>
       <SidebarProvider>
         <Sidebar collapsible="none">
-          <SidebarHeader className="px-4 py-3 font-heading text-base font-medium">
+          <SidebarHeader className={brand}>
             Acme Inc
           </SidebarHeader>
           <SidebarContent>
@@ -65,14 +71,14 @@ export const Default: Story = {
               </SidebarGroupContent>
             </SidebarGroup>
           </SidebarContent>
-          <SidebarFooter className="px-4 py-3 text-xs text-muted-foreground">v1.0.0</SidebarFooter>
+          <SidebarFooter className={css({ px: "4", py: "3", fontSize: "xs", color: "muted.foreground" })}>v1.0.0</SidebarFooter>
         </Sidebar>
         <SidebarInset>
-          <div className="flex items-center gap-2 border-b p-4">
+          <div className={topbar}>
             <SidebarTrigger />
-            <span className="text-sm font-medium">Dashboard</span>
+            <span className={topbarLabel}>Dashboard</span>
           </div>
-          <div className="p-6 text-sm text-muted-foreground">Main content area.</div>
+          <div className={css({ p: "6", fontSize: "sm", color: "muted.foreground" })}>Main content area.</div>
         </SidebarInset>
       </SidebarProvider>
     </div>
@@ -81,10 +87,10 @@ export const Default: Story = {
 
 export const Collapsible: Story = {
   render: () => (
-    <div className="h-96 w-full">
+    <div className={shell}>
       <SidebarProvider>
         <Sidebar collapsible="icon">
-          <SidebarHeader className="px-4 py-3 font-heading text-base font-medium">
+          <SidebarHeader className={brand}>
             Acme
           </SidebarHeader>
           <SidebarContent>
@@ -111,9 +117,9 @@ export const Collapsible: Story = {
           </SidebarContent>
         </Sidebar>
         <SidebarInset>
-          <div className="flex items-center gap-2 border-b p-4">
+          <div className={topbar}>
             <SidebarTrigger />
-            <span className="text-sm font-medium">Toggle the sidebar to collapse it to icons.</span>
+            <span className={topbarLabel}>Toggle the sidebar to collapse it to icons.</span>
           </div>
         </SidebarInset>
       </SidebarProvider>

@@ -2,10 +2,100 @@
 
 import * as React from "react";
 import { Dialog as SheetPrimitive } from "@base-ui/react/dialog";
+import { css } from "@zero-app/styled-system/css";
 
 import { cn } from "../../lib/utils";
 import { Button } from "./button";
 import { XIcon } from "lucide-react";
+
+const sheetOverlayStyles = css({
+  position: "fixed",
+  inset: "0",
+  zIndex: "50",
+  bg: "black/30",
+  transitionProperty: "opacity",
+  transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
+  transitionDuration: "150ms",
+  "&[data-ending-style]": { opacity: "0" },
+  "&[data-starting-style]": { opacity: "0" },
+  "@supports ((backdrop-filter: blur(0)) or (-webkit-backdrop-filter: blur(0)))": {
+    backdropFilter: "blur(4px)",
+  },
+});
+
+const sheetContentStyles = css({
+  position: "fixed",
+  zIndex: "50",
+  display: "flex",
+  flexDirection: "column",
+  bg: "popover",
+  backgroundClip: "padding-box",
+  fontSize: "sm",
+  color: "popover.foreground",
+  boxShadow: "xl",
+  transitionProperty: "opacity, translate",
+  transitionTimingFunction: "ease-in-out",
+  transitionDuration: "200ms",
+  "&[data-ending-style]": { opacity: "0" },
+  "&[data-starting-style]": { opacity: "0" },
+  "&[data-side='bottom']": {
+    insetInline: "0",
+    bottom: "0",
+    h: "auto",
+    borderTopWidth: "1px",
+    "&[data-ending-style]": { translate: "0 2.5rem" },
+    "&[data-starting-style]": { translate: "0 2.5rem" },
+  },
+  "&[data-side='left']": {
+    insetBlock: "0",
+    left: "0",
+    h: "full",
+    w: "75%",
+    borderRightWidth: "1px",
+    sm: { maxW: "sm" },
+    "&[data-ending-style]": { translate: "-2.5rem" },
+    "&[data-starting-style]": { translate: "-2.5rem" },
+  },
+  "&[data-side='right']": {
+    insetBlock: "0",
+    right: "0",
+    h: "full",
+    w: "75%",
+    borderLeftWidth: "1px",
+    sm: { maxW: "sm" },
+    "&[data-ending-style]": { translate: "2.5rem" },
+    "&[data-starting-style]": { translate: "2.5rem" },
+  },
+  "&[data-side='top']": {
+    insetInline: "0",
+    top: "0",
+    h: "auto",
+    borderBottomWidth: "1px",
+    "&[data-ending-style]": { translate: "0 -2.5rem" },
+    "&[data-starting-style]": { translate: "0 -2.5rem" },
+  },
+});
+
+const sheetCloseButtonStyles = css({ position: "absolute", top: "4", right: "4", bg: "secondary" });
+
+const sheetHeaderStyles = css({ display: "flex", flexDirection: "column", gap: "1.5", p: "6" });
+
+const sheetFooterStyles = css({
+  mt: "auto",
+  display: "flex",
+  flexDirection: "column",
+  gap: "2",
+  p: "6",
+});
+
+const sheetTitleStyles = css({
+  fontFamily: "var(--font-heading)",
+  fontSize: "1rem",
+  fontWeight: "medium",
+  color: "foreground",
+});
+
+const sheetDescriptionStyles = css({ fontSize: "sm", color: "muted.foreground" });
 
 function Sheet({ ...props }: SheetPrimitive.Root.Props) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />;
@@ -27,10 +117,7 @@ function SheetOverlay({ className, ...props }: SheetPrimitive.Backdrop.Props) {
   return (
     <SheetPrimitive.Backdrop
       data-slot="sheet-overlay"
-      className={cn(
-        "fixed inset-0 z-50 bg-black/30 transition-opacity duration-150 data-ending-style:opacity-0 data-starting-style:opacity-0 supports-backdrop-filter:backdrop-blur-sm",
-        className,
-      )}
+      className={cn(sheetOverlayStyles, className)}
       {...props}
     />
   );
@@ -52,26 +139,17 @@ function SheetContent({
       <SheetPrimitive.Popup
         data-slot="sheet-content"
         data-side={side}
-        className={cn(
-          "fixed z-50 flex flex-col bg-popover bg-clip-padding text-sm text-popover-foreground shadow-xl transition duration-200 ease-in-out data-ending-style:opacity-0 data-starting-style:opacity-0 data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:h-auto data-[side=bottom]:border-t data-[side=bottom]:data-ending-style:translate-y-[2.5rem] data-[side=bottom]:data-starting-style:translate-y-[2.5rem] data-[side=left]:inset-y-0 data-[side=left]:left-0 data-[side=left]:h-full data-[side=left]:w-3/4 data-[side=left]:border-r data-[side=left]:data-ending-style:translate-x-[-2.5rem] data-[side=left]:data-starting-style:translate-x-[-2.5rem] data-[side=right]:inset-y-0 data-[side=right]:right-0 data-[side=right]:h-full data-[side=right]:w-3/4 data-[side=right]:border-l data-[side=right]:data-ending-style:translate-x-[2.5rem] data-[side=right]:data-starting-style:translate-x-[2.5rem] data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:h-auto data-[side=top]:border-b data-[side=top]:data-ending-style:translate-y-[-2.5rem] data-[side=top]:data-starting-style:translate-y-[-2.5rem] data-[side=left]:sm:max-w-sm data-[side=right]:sm:max-w-sm",
-          className,
-        )}
+        className={cn(sheetContentStyles, className)}
         {...props}
       >
         {children}
         {showCloseButton && (
           <SheetPrimitive.Close
             data-slot="sheet-close"
-            render={
-              <Button
-                variant="ghost"
-                className="absolute top-4 right-4 bg-secondary"
-                size="icon-sm"
-              />
-            }
+            render={<Button variant="ghost" className={sheetCloseButtonStyles} size="icon-sm" />}
           >
             <XIcon />
-            <span className="sr-only">Close</span>
+            <span className={css({ srOnly: true })}>Close</span>
           </SheetPrimitive.Close>
         )}
       </SheetPrimitive.Popup>
@@ -80,30 +158,18 @@ function SheetContent({
 }
 
 function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="sheet-header"
-      className={cn("flex flex-col gap-1.5 p-6", className)}
-      {...props}
-    />
-  );
+  return <div data-slot="sheet-header" className={cn(sheetHeaderStyles, className)} {...props} />;
 }
 
 function SheetFooter({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="sheet-footer"
-      className={cn("mt-auto flex flex-col gap-2 p-6", className)}
-      {...props}
-    />
-  );
+  return <div data-slot="sheet-footer" className={cn(sheetFooterStyles, className)} {...props} />;
 }
 
 function SheetTitle({ className, ...props }: SheetPrimitive.Title.Props) {
   return (
     <SheetPrimitive.Title
       data-slot="sheet-title"
-      className={cn("font-heading text-base font-medium text-foreground", className)}
+      className={cn(sheetTitleStyles, className)}
       {...props}
     />
   );
@@ -113,7 +179,7 @@ function SheetDescription({ className, ...props }: SheetPrimitive.Description.Pr
   return (
     <SheetPrimitive.Description
       data-slot="sheet-description"
-      className={cn("text-sm text-muted-foreground", className)}
+      className={cn(sheetDescriptionStyles, className)}
       {...props}
     />
   );

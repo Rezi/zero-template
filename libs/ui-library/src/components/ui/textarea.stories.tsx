@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { css } from "@zero-app/styled-system/css";
 
 import { Label, Textarea } from "@zero-app/ui-library";
 
@@ -17,13 +18,16 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+const w80 = css({ w: "80" });
+const fieldGroup = css({ display: "flex", w: "80", flexDirection: "column", gap: "2" });
+
 export const Default: Story = {
-  render: (args) => <Textarea {...args} className="w-80" />,
+  render: (args) => <Textarea {...args} className={w80} />,
 };
 
 export const WithLabel: Story = {
   render: (args) => (
-    <div className="flex w-80 flex-col gap-2">
+    <div className={fieldGroup}>
       <Label htmlFor="message">Your message</Label>
       <Textarea {...args} id="message" />
     </div>
@@ -32,10 +36,10 @@ export const WithLabel: Story = {
 
 export const Disabled: Story = {
   args: { disabled: true },
-  render: (args) => <Textarea {...args} className="w-80" />,
+  render: (args) => <Textarea {...args} className={w80} />,
 };
 
 export const Invalid: Story = {
   args: { "aria-invalid": true, defaultValue: "Not enough detail." },
-  render: (args) => <Textarea {...args} className="w-80" />,
+  render: (args) => <Textarea {...args} className={w80} />,
 };

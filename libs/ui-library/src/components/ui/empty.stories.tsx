@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { FolderIcon, PlusIcon, SearchIcon } from "lucide-react";
+import { css } from "@zero-app/styled-system/css";
 
 import {
   Button,
@@ -20,9 +21,11 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+const emptyBox = css({ w: "96", borderWidth: "1px" });
+
 export const Default: Story = {
   render: () => (
-    <Empty className="w-96 border">
+    <Empty className={emptyBox}>
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <FolderIcon />
@@ -43,7 +46,7 @@ export const Default: Story = {
 
 export const NoResults: Story = {
   render: () => (
-    <Empty className="w-96 border">
+    <Empty className={emptyBox}>
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <SearchIcon />

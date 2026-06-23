@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { css } from "@zero-app/styled-system/css";
 
 import {
   NavigationMenu,
@@ -25,7 +26,7 @@ export const Default: Story = {
         <NavigationMenuItem>
           <NavigationMenuTrigger>Getting started</NavigationMenuTrigger>
           <NavigationMenuContent>
-            <div className="flex w-64 flex-col gap-1">
+            <div className={css({ display: "flex", w: "64", flexDirection: "column", gap: "1" })}>
               <NavigationMenuLink href="#">Introduction</NavigationMenuLink>
               <NavigationMenuLink href="#">Installation</NavigationMenuLink>
               <NavigationMenuLink href="#">Typography</NavigationMenuLink>
@@ -35,7 +36,7 @@ export const Default: Story = {
         <NavigationMenuItem>
           <NavigationMenuTrigger>Components</NavigationMenuTrigger>
           <NavigationMenuContent>
-            <div className="flex w-64 flex-col gap-1">
+            <div className={css({ display: "flex", w: "64", flexDirection: "column", gap: "1" })}>
               <NavigationMenuLink href="#">Button</NavigationMenuLink>
               <NavigationMenuLink href="#">Dialog</NavigationMenuLink>
               <NavigationMenuLink href="#">Popover</NavigationMenuLink>

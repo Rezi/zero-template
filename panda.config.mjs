@@ -120,19 +120,35 @@ export default {
         },
       },
       // Tailwind's focus ring (`ring-3`, `ring-[3px]`) is a spread box-shadow.
-      // `ringWidth` draws it; `ringColor` sets the colour via a CSS var with a
-      // sensible fallback so the two can be set independently (as TW does).
-      ringWidth: {
+      // `ringW` draws it; `ringC` sets the colour via a CSS var with a sensible
+      // fallback so the two can be set independently (as TW does).
+      // NOTE: named `ringW`/`ringC` (not `ringWidth`/`ringColor`) on purpose —
+      // Panda has built-in `ringWidth`/`ringColor` utilities (mapped to
+      // `outline-*`) that override our `utilities.extend` and would otherwise
+      // swallow the box-shadow transform, leaving the ring invisible.
+      ringW: {
         className: "ring",
         values: { 0: "0px", 1: "1px", 2: "2px", 3: "3px", 4: "4px" },
         transform(value) {
           return { boxShadow: `0 0 0 ${value} var(--ring-shadow-color, var(--ring))` };
         },
       },
-      ringColor: {
+      ringC: {
         className: "ring-c",
         values: "colors",
         transform(value) {
+          // Panda resolves a bare token (e.g. "ring") to `var(--colors-ring)`,
+          // but it does NOT apply the `/<opacity>` modifier for a custom utility
+          // — it passes the raw "ring/30" string through. Reproduce Tailwind v4's
+          // `color-mix(in oklab, <color> N%, transparent)` by hand for that case.
+          const slash = typeof value === "string" ? value.indexOf("/") : -1;
+          if (slash !== -1) {
+            const token = value.slice(0, slash).replace(/\./g, "-");
+            const pct = value.slice(slash + 1);
+            return {
+              "--ring-shadow-color": `color-mix(in oklab, var(--colors-${token}) ${pct}%, transparent)`,
+            };
+          }
           return { "--ring-shadow-color": value };
         },
       },

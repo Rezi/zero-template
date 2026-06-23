@@ -2,6 +2,7 @@
 
 import { useTheme } from "next-themes";
 import { Toaster as Sonner, type ToasterProps } from "sonner";
+import { css } from "@zero-app/styled-system/css";
 import {
   CircleCheckIcon,
   InfoIcon,
@@ -10,19 +11,23 @@ import {
   Loader2Icon,
 } from "lucide-react";
 
+const iconSize = css({ size: "4" });
+const iconSpin = css({ size: "4", animation: "spin" });
+
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme();
 
   return (
     <Sonner
       theme={theme as ToasterProps["theme"]}
+      // `toaster`/`group` are sonner marker classes referenced by its own CSS.
       className="toaster group"
       icons={{
-        success: <CircleCheckIcon className="size-4" />,
-        info: <InfoIcon className="size-4" />,
-        warning: <TriangleAlertIcon className="size-4" />,
-        error: <OctagonXIcon className="size-4" />,
-        loading: <Loader2Icon className="size-4 animate-spin" />,
+        success: <CircleCheckIcon className={iconSize} />,
+        info: <InfoIcon className={iconSize} />,
+        warning: <TriangleAlertIcon className={iconSize} />,
+        error: <OctagonXIcon className={iconSize} />,
+        loading: <Loader2Icon className={iconSpin} />,
       }}
       style={
         {

@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { toast } from "sonner";
+import { css } from "@zero-app/styled-system/css";
 
 import { Button, Toaster } from "@zero-app/ui-library";
 
@@ -7,6 +8,13 @@ const meta = {
   title: "Components/Sonner",
   component: Toaster,
   tags: ["autodocs"],
+  // `toast()` writes to a single GLOBAL store, so every <Toaster/> mounted in the
+  // same document renders the same toast. Render each story in its own iframe so
+  // each gets an isolated document/store — a story's trigger only shows its own
+  // toast and never bleeds into the others on the docs page.
+  parameters: {
+    docs: { story: { inline: false, height: "180px" } },
+  },
 } satisfies Meta<typeof Toaster>;
 
 export default meta;
@@ -43,7 +51,7 @@ export const WithDescription: Story = {
 
 export const Variants: Story = {
   render: () => (
-    <div className="flex flex-wrap gap-3">
+    <div className={css({ display: "flex", flexWrap: "wrap", gap: "3" })}>
       <Toaster />
       <Button variant="outline" onClick={() => toast.success("Profile updated")}>
         Success
