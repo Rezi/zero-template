@@ -1,29 +1,51 @@
 import * as React from "react";
-import { cva, type VariantProps } from "class-variance-authority";
+import { css, cva, type RecipeVariantProps } from "@zero-app/styled-system/css";
 
 import { cn } from "../../lib/utils";
 
-const alertVariants = cva(
-  "group/alert relative grid w-full gap-0.5 rounded-2xl border px-4 py-3 text-left text-sm has-data-[slot=alert-action]:relative has-data-[slot=alert-action]:pr-18 has-[>svg]:grid-cols-[auto_1fr] has-[>svg]:gap-x-2.5 *:[svg]:row-span-2 *:[svg]:translate-y-0.5 *:[svg]:text-current *:[svg:not([class*='size-'])]:size-4",
-  {
-    variants: {
-      variant: {
-        default: "bg-card text-card-foreground",
-        destructive:
-          "bg-card text-destructive *:data-[slot=alert-description]:text-destructive/90 *:[svg]:text-current",
+const alertVariants = cva({
+  base: {
+    position: "relative",
+    display: "grid",
+    w: "full",
+    gap: "0.5",
+    rounded: "2xl",
+    borderWidth: "1px",
+    px: "4",
+    py: "3",
+    textAlign: "left",
+    fontSize: "sm",
+    "&:has([data-slot='alert-action'])": { position: "relative", pr: "4.5rem" },
+    "&:has(> svg)": { gridTemplateColumns: "auto 1fr", columnGap: "2.5" },
+    // *:[svg] = direct-child svg
+    "& > svg": {
+      gridRow: "span 2 / span 2",
+      transform: "translateY(0.125rem)",
+      color: "currentColor",
+    },
+    "& > svg:not([class*='size-'])": { size: "4" },
+  },
+  variants: {
+    variant: {
+      default: { bg: "card", color: "card.foreground" },
+      destructive: {
+        bg: "card",
+        color: "destructive",
+        "& > [data-slot='alert-description']": { color: "destructive/90" },
+        "& > svg": { color: "currentColor" },
       },
     },
-    defaultVariants: {
-      variant: "default",
-    },
   },
-);
+  defaultVariants: {
+    variant: "default",
+  },
+});
 
 function Alert({
   className,
   variant,
   ...props
-}: React.ComponentProps<"div"> & VariantProps<typeof alertVariants>) {
+}: React.ComponentProps<"div"> & RecipeVariantProps<typeof alertVariants>) {
   return (
     <div
       data-slot="alert"
@@ -39,7 +61,12 @@ function AlertTitle({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="alert-title"
       className={cn(
-        "font-medium group-has-[>svg]/alert:col-start-2 [&_a]:underline [&_a]:underline-offset-3 [&_a]:hover:text-foreground",
+        css({
+          fontWeight: "medium",
+          "[data-slot='alert']:has(> svg) &": { gridColumnStart: "2" },
+          "& a": { textDecoration: "underline", textUnderlineOffset: "3px" },
+          "& a:hover": { color: "foreground" },
+        }),
         className,
       )}
       {...props}
@@ -52,7 +79,15 @@ function AlertDescription({ className, ...props }: React.ComponentProps<"div">) 
     <div
       data-slot="alert-description"
       className={cn(
-        "text-sm text-balance text-muted-foreground md:text-pretty [&_a]:underline [&_a]:underline-offset-3 [&_a]:hover:text-foreground [&_p:not(:last-child)]:mb-4",
+        css({
+          fontSize: "sm",
+          textWrap: "balance",
+          color: "muted.foreground",
+          md: { textWrap: "pretty" },
+          "& a": { textDecoration: "underline", textUnderlineOffset: "3px" },
+          "& a:hover": { color: "foreground" },
+          "& p:not(:last-child)": { mb: "4" },
+        }),
         className,
       )}
       {...props}
@@ -64,7 +99,7 @@ function AlertAction({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="alert-action"
-      className={cn("absolute top-2.5 right-3", className)}
+      className={cn(css({ position: "absolute", top: "2.5", right: "3" }), className)}
       {...props}
     />
   );

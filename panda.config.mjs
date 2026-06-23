@@ -106,4 +106,36 @@ export default {
       },
     },
   },
+
+  // Custom utilities that reproduce Tailwind features the shadcn components rely
+  // on but Panda has no built-in for. Shared across all converted components.
+  utilities: {
+    extend: {
+      // Tailwind's `size-*` sets width AND height together.
+      size: {
+        className: "size",
+        values: "sizes",
+        transform(value) {
+          return { width: value, height: value };
+        },
+      },
+      // Tailwind's focus ring (`ring-3`, `ring-[3px]`) is a spread box-shadow.
+      // `ringWidth` draws it; `ringColor` sets the colour via a CSS var with a
+      // sensible fallback so the two can be set independently (as TW does).
+      ringWidth: {
+        className: "ring",
+        values: { 0: "0px", 1: "1px", 2: "2px", 3: "3px", 4: "4px" },
+        transform(value) {
+          return { boxShadow: `0 0 0 ${value} var(--ring-shadow-color, var(--ring))` };
+        },
+      },
+      ringColor: {
+        className: "ring-c",
+        values: "colors",
+        transform(value) {
+          return { "--ring-shadow-color": value };
+        },
+      },
+    },
+  },
 };
