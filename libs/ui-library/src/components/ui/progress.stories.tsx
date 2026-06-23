@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { css } from "@zero-app/styled-system/css";
 
 import { Progress, ProgressLabel, ProgressValue } from "@zero-app/ui-library";
 
@@ -17,13 +18,15 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+const w72 = css({ w: "72" });
+
 export const Default: Story = {
-  render: (args) => <Progress {...args} className="w-72" />,
+  render: (args) => <Progress {...args} className={w72} />,
 };
 
 export const Steps: Story = {
   render: () => (
-    <div className="flex w-72 flex-col gap-4">
+    <div className={css({ display: "flex", w: "72", flexDirection: "column", gap: "4" })}>
       <Progress value={0} />
       <Progress value={33} />
       <Progress value={66} />
@@ -34,8 +37,15 @@ export const Steps: Story = {
 
 export const WithLabel: Story = {
   render: (args) => (
-    <Progress {...args} className="w-72">
-      <div className="flex w-full items-center justify-between">
+    <Progress {...args} className={w72}>
+      <div
+        className={css({
+          display: "flex",
+          w: "full",
+          alignItems: "center",
+          justifyContent: "space-between",
+        })}
+      >
         <ProgressLabel>Uploading…</ProgressLabel>
         <ProgressValue />
       </div>
@@ -44,5 +54,5 @@ export const WithLabel: Story = {
 };
 
 export const Indeterminate: Story = {
-  render: () => <Progress value={null} className="w-72" />,
+  render: () => <Progress value={null} className={w72} />,
 };

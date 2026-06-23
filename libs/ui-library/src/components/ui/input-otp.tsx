@@ -1,8 +1,75 @@
 import * as React from "react";
 import { OTPInput, OTPInputContext } from "input-otp";
+import { css } from "@zero-app/styled-system/css";
 
 import { cn } from "../../lib/utils";
 import { MinusIcon } from "lucide-react";
+
+const inputOTPContainerStyles = css({
+  display: "flex",
+  alignItems: "center",
+  "&:has(:disabled)": { opacity: "0.5" },
+});
+
+const inputOTPGroupStyles = css({
+  display: "flex",
+  alignItems: "center",
+  rounded: "2xl",
+  "&:has([aria-invalid='true'])": {
+    borderColor: "destructive",
+    ringW: "3",
+    ringC: "destructive/20",
+  },
+  _dark: { "&:has([aria-invalid='true'])": { ringC: "destructive/40" } },
+});
+
+const inputOTPSlotStyles = css({
+  position: "relative",
+  display: "flex",
+  size: "8",
+  alignItems: "center",
+  justifyContent: "center",
+  borderBlockWidth: "1px",
+  borderRightWidth: "1px",
+  borderColor: "input",
+  bg: "input/50",
+  fontSize: "sm",
+  transitionProperty: "color, box-shadow",
+  transitionDuration: "200ms",
+  outline: "none",
+  "&:first-child": {
+    borderTopLeftRadius: "2xl",
+    borderBottomLeftRadius: "2xl",
+    borderLeftWidth: "1px",
+  },
+  "&:last-child": { borderTopRightRadius: "2xl", borderBottomRightRadius: "2xl" },
+  "&[aria-invalid='true']": { borderColor: "destructive" },
+  "&[data-active='true']": {
+    zIndex: "10",
+    borderColor: "ring",
+    ringW: "3",
+    ringC: "ring/30",
+  },
+  "&[data-active='true'][aria-invalid='true']": { ringC: "destructive/20" },
+  _dark: { "&[data-active='true'][aria-invalid='true']": { ringC: "destructive/40" } },
+});
+
+const inputOTPCaretWrapperStyles = css({
+  pointerEvents: "none",
+  position: "absolute",
+  inset: "0",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+});
+
+const inputOTPCaretStyles = css({ h: "4", w: "1px", bg: "foreground" });
+
+const inputOTPSeparatorStyles = css({
+  display: "flex",
+  alignItems: "center",
+  "& svg:not([class*='size-'])": { size: "4" },
+});
 
 function InputOTP({
   className,
@@ -14,12 +81,9 @@ function InputOTP({
   return (
     <OTPInput
       data-slot="input-otp"
-      containerClassName={cn(
-        "cn-input-otp flex items-center has-disabled:opacity-50",
-        containerClassName,
-      )}
+      containerClassName={cn("cn-input-otp", inputOTPContainerStyles, containerClassName)}
       spellCheck={false}
-      className={cn("disabled:cursor-not-allowed", className)}
+      className={cn(css({ _disabled: { cursor: "not-allowed" } }), className)}
       {...props}
     />
   );
@@ -27,14 +91,7 @@ function InputOTP({
 
 function InputOTPGroup({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <div
-      data-slot="input-otp-group"
-      className={cn(
-        "flex items-center rounded-2xl has-aria-invalid:border-destructive has-aria-invalid:ring-3 has-aria-invalid:ring-destructive/20 dark:has-aria-invalid:ring-destructive/40",
-        className,
-      )}
-      {...props}
-    />
+    <div data-slot="input-otp-group" className={cn(inputOTPGroupStyles, className)} {...props} />
   );
 }
 
@@ -52,16 +109,14 @@ function InputOTPSlot({
     <div
       data-slot="input-otp-slot"
       data-active={isActive}
-      className={cn(
-        "relative flex size-8 items-center justify-center border-y border-r border-input bg-input/50 text-sm transition-[color,box-shadow] duration-200 outline-none first:rounded-l-2xl first:border-l last:rounded-r-2xl aria-invalid:border-destructive data-[active=true]:z-10 data-[active=true]:border-ring data-[active=true]:ring-3 data-[active=true]:ring-ring/30 data-[active=true]:aria-invalid:ring-destructive/20 dark:data-[active=true]:aria-invalid:ring-destructive/40",
-        className,
-      )}
+      className={cn(inputOTPSlotStyles, className)}
       {...props}
     >
       {char}
       {hasFakeCaret && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div className="h-4 w-px animate-caret-blink bg-foreground duration-1000" />
+        <div className={inputOTPCaretWrapperStyles}>
+          {/* animate-caret-blink kept as literal Tailwind (tw-animate-css) — ported later */}
+          <div className={cn(inputOTPCaretStyles, "animate-caret-blink duration-1000")} />
         </div>
       )}
     </div>
@@ -72,7 +127,7 @@ function InputOTPSeparator({ ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="input-otp-separator"
-      className="flex items-center [&_svg:not([class*='size-'])]:size-4"
+      className={inputOTPSeparatorStyles}
       role="separator"
       {...props}
     >

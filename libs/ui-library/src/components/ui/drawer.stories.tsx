@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import * as React from "react";
+import { css } from "@zero-app/styled-system/css";
 
 import {
   Button,
@@ -38,7 +39,7 @@ export const Default: Story = {
             Make changes to your profile here. Click save when you are done.
           </DrawerDescription>
         </DrawerHeader>
-        <div className="px-4">
+        <div className={css({ px: "4" })}>
           <Field>
             <FieldLabel htmlFor="drawer-name">Name</FieldLabel>
             <Input id="drawer-name" defaultValue="Ada Lovelace" />
@@ -59,7 +60,9 @@ export const Controlled: Story = {
   render: () => {
     const [open, setOpen] = React.useState(false);
     return (
-      <div className="flex flex-col items-start gap-3">
+      <div
+        className={css({ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "3" })}
+      >
         <Button onClick={() => setOpen(true)}>Open controlled drawer</Button>
         <Drawer open={open} onOpenChange={setOpen}>
           <DrawerContent>

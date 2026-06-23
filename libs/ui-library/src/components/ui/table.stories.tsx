@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { css } from "@zero-app/styled-system/css";
 
 import {
   Table,
@@ -19,6 +20,8 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+
+const textRight = css({ textAlign: "right" });
 
 const invoices = [
   {
@@ -44,30 +47,30 @@ const invoices = [
 
 export const Default: Story = {
   render: (args) => (
-    <Table {...args} className="w-[640px]">
+    <Table {...args} className={css({ w: "640px" })}>
       <TableCaption>A list of your recent invoices.</TableCaption>
       <TableHeader>
         <TableRow>
           <TableHead>Invoice</TableHead>
           <TableHead>Status</TableHead>
           <TableHead>Method</TableHead>
-          <TableHead className="text-right">Amount</TableHead>
+          <TableHead className={textRight}>Amount</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {invoices.map((invoice) => (
           <TableRow key={invoice.invoice}>
-            <TableCell className="font-medium">{invoice.invoice}</TableCell>
+            <TableCell className={css({ fontWeight: "medium" })}>{invoice.invoice}</TableCell>
             <TableCell>{invoice.status}</TableCell>
             <TableCell>{invoice.method}</TableCell>
-            <TableCell className="text-right">{invoice.amount}</TableCell>
+            <TableCell className={textRight}>{invoice.amount}</TableCell>
           </TableRow>
         ))}
       </TableBody>
       <TableFooter>
         <TableRow>
           <TableCell colSpan={3}>Total</TableCell>
-          <TableCell className="text-right">$1,200.00</TableCell>
+          <TableCell className={textRight}>$1,200.00</TableCell>
         </TableRow>
       </TableFooter>
     </Table>

@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { css } from "@zero-app/styled-system/css";
 
 import {
   Label,
@@ -36,7 +37,7 @@ export const Default: Story = {
 
 export const WithLabel: Story = {
   render: (args) => (
-    <div className="flex flex-col gap-2">
+    <div className={css({ display: "flex", flexDirection: "column", gap: "2" })}>
       <Label htmlFor="country">Country</Label>
       <NativeSelect {...args} id="country" defaultValue="cz">
         <NativeSelectOption value="cz">Czechia</NativeSelectOption>

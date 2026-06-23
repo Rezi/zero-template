@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { css } from "@zero-app/styled-system/css";
 
 import { ScrollArea } from "@zero-app/ui-library";
 
@@ -13,13 +14,15 @@ type Story = StoryObj<typeof meta>;
 
 const tags = Array.from({ length: 40 }, (_, i) => `v1.0.0-tag-${i + 1}`);
 
+const mutedSm = css({ fontSize: "sm", color: "muted.foreground" });
+
 export const Default: Story = {
   render: () => (
-    <ScrollArea className="h-64 w-56 rounded-2xl border">
-      <div className="flex flex-col gap-2 p-4">
-        <h4 className="text-sm font-medium">Tags</h4>
+    <ScrollArea className={css({ h: "64", w: "56", rounded: "2xl", borderWidth: "1px" })}>
+      <div className={css({ display: "flex", flexDirection: "column", gap: "2", p: "4" })}>
+        <h4 className={css({ fontSize: "sm", fontWeight: "medium" })}>Tags</h4>
         {tags.map((tag) => (
-          <div key={tag} className="text-sm text-muted-foreground">
+          <div key={tag} className={mutedSm}>
             {tag}
           </div>
         ))}
@@ -30,8 +33,10 @@ export const Default: Story = {
 
 export const Paragraph: Story = {
   render: () => (
-    <ScrollArea className="h-48 w-80 rounded-2xl border p-4">
-      <p className="text-sm leading-relaxed text-muted-foreground">
+    <ScrollArea
+      className={css({ h: "48", w: "80", rounded: "2xl", borderWidth: "1px", p: "4" })}
+    >
+      <p className={css({ fontSize: "sm", lineHeight: "relaxed", color: "muted.foreground" })}>
         {Array.from({ length: 12 })
           .map(
             () =>

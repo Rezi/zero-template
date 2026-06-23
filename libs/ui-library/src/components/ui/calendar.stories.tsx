@@ -1,8 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import * as React from "react";
 import type { DateRange } from "react-day-picker";
+import { css } from "@zero-app/styled-system/css";
 
 import { Calendar } from "@zero-app/ui-library";
+
+const bordered = css({ rounded: "2xl", borderWidth: "1px" });
 
 const meta = {
   title: "Components/Calendar",
@@ -17,7 +20,7 @@ export const Default: Story = {
   render: () => {
     const [date, setDate] = React.useState<Date | undefined>(new Date());
     return (
-      <Calendar mode="single" selected={date} onSelect={setDate} className="rounded-2xl border" />
+      <Calendar mode="single" selected={date} onSelect={setDate} className={bordered} />
     );
   },
 };
@@ -36,7 +39,7 @@ export const Range: Story = {
         selected={range}
         onSelect={setRange}
         numberOfMonths={2}
-        className="rounded-2xl border"
+        className={bordered}
       />
     );
   },
@@ -51,7 +54,7 @@ export const WithDropdowns: Story = {
         selected={date}
         onSelect={setDate}
         captionLayout="dropdown"
-        className="rounded-2xl border"
+        className={bordered}
       />
     );
   },

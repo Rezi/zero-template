@@ -2,10 +2,37 @@
 
 import * as React from "react";
 import useEmblaCarousel, { type UseEmblaCarouselType } from "embla-carousel-react";
+import { css } from "@zero-app/styled-system/css";
 
 import { cn } from "../../lib/utils";
 import { Button } from "./button";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+
+const carouselContentInner = css({ display: "flex" });
+const carouselContentHorizontal = css({ ml: "-4" });
+const carouselContentVertical = css({ mt: "-4", flexDirection: "column" });
+
+const carouselItemBase = css({ minW: "0", flexShrink: "0", flexGrow: "0", flexBasis: "full" });
+const carouselItemHorizontal = css({ pl: "4" });
+const carouselItemVertical = css({ pt: "4" });
+
+const carouselNavBase = css({
+  position: "absolute",
+  touchAction: "manipulation",
+  rounded: "2xl",
+});
+const carouselPrevHorizontal = css({ top: "50%", left: "-12", transform: "translateY(-50%)" });
+const carouselPrevVertical = css({
+  top: "-12",
+  left: "50%",
+  transform: "translateX(-50%) rotate(90deg)",
+});
+const carouselNextHorizontal = css({ top: "50%", right: "-12", transform: "translateY(-50%)" });
+const carouselNextVertical = css({
+  bottom: "-12",
+  left: "50%",
+  transform: "translateX(-50%) rotate(90deg)",
+});
 
 type CarouselApi = UseEmblaCarouselType[1];
 type UseCarouselParameters = Parameters<typeof useEmblaCarousel>;
@@ -117,7 +144,7 @@ function Carousel({
     >
       <div
         onKeyDownCapture={handleKeyDown}
-        className={cn("relative", className)}
+        className={cn(css({ position: "relative" }), className)}
         role="region"
         aria-roledescription="carousel"
         data-slot="carousel"
@@ -133,9 +160,13 @@ function CarouselContent({ className, ...props }: React.ComponentProps<"div">) {
   const { carouselRef, orientation } = useCarousel();
 
   return (
-    <div ref={carouselRef} className="overflow-hidden" data-slot="carousel-content">
+    <div ref={carouselRef} className={css({ overflow: "hidden" })} data-slot="carousel-content">
       <div
-        className={cn("flex", orientation === "horizontal" ? "-ml-4" : "-mt-4 flex-col", className)}
+        className={cn(
+          carouselContentInner,
+          orientation === "horizontal" ? carouselContentHorizontal : carouselContentVertical,
+          className,
+        )}
         {...props}
       />
     </div>
@@ -151,8 +182,8 @@ function CarouselItem({ className, ...props }: React.ComponentProps<"div">) {
       aria-roledescription="slide"
       data-slot="carousel-item"
       className={cn(
-        "min-w-0 shrink-0 grow-0 basis-full",
-        orientation === "horizontal" ? "pl-4" : "pt-4",
+        carouselItemBase,
+        orientation === "horizontal" ? carouselItemHorizontal : carouselItemVertical,
         className,
       )}
       {...props}
@@ -174,10 +205,8 @@ function CarouselPrevious({
       variant={variant}
       size={size}
       className={cn(
-        "absolute touch-manipulation rounded-2xl",
-        orientation === "horizontal"
-          ? "top-1/2 -left-12 -translate-y-1/2"
-          : "-top-12 left-1/2 -translate-x-1/2 rotate-90",
+        carouselNavBase,
+        orientation === "horizontal" ? carouselPrevHorizontal : carouselPrevVertical,
         className,
       )}
       disabled={!canScrollPrev}
@@ -185,7 +214,7 @@ function CarouselPrevious({
       {...props}
     >
       <ChevronLeftIcon />
-      <span className="sr-only">Previous slide</span>
+      <span className={css({ srOnly: true })}>Previous slide</span>
     </Button>
   );
 }
@@ -204,10 +233,8 @@ function CarouselNext({
       variant={variant}
       size={size}
       className={cn(
-        "absolute touch-manipulation rounded-2xl",
-        orientation === "horizontal"
-          ? "top-1/2 -right-12 -translate-y-1/2"
-          : "-bottom-12 left-1/2 -translate-x-1/2 rotate-90",
+        carouselNavBase,
+        orientation === "horizontal" ? carouselNextHorizontal : carouselNextVertical,
         className,
       )}
       disabled={!canScrollNext}
@@ -215,7 +242,7 @@ function CarouselNext({
       {...props}
     >
       <ChevronRightIcon />
-      <span className="sr-only">Next slide</span>
+      <span className={css({ srOnly: true })}>Next slide</span>
     </Button>
   );
 }

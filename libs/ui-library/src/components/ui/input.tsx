@@ -29,16 +29,16 @@ const inputStyles = css({
     color: "foreground",
   },
   _placeholder: { color: "muted.foreground" },
-  _focusVisible: { borderColor: "ring", ringWidth: "3", ringColor: "ring/30" },
+  _focusVisible: { borderColor: "ring", ringW: "3", ringC: "ring/30" },
   _disabled: { pointerEvents: "none", cursor: "not-allowed", opacity: "0.5" },
   "&[aria-invalid='true']": {
     borderColor: "destructive",
-    ringWidth: "3",
-    ringColor: "destructive/20",
+    ringW: "3",
+    ringC: "destructive/20",
   },
   md: { fontSize: "sm" },
   _dark: {
-    "&[aria-invalid='true']": { borderColor: "destructive/50", ringColor: "destructive/40" },
+    "&[aria-invalid='true']": { borderColor: "destructive/50", ringC: "destructive/40" },
   },
 });
 

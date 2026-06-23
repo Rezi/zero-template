@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { MailIcon, SearchIcon, SendIcon } from "lucide-react";
+import { css } from "@zero-app/styled-system/css";
 
 import {
   InputGroup,
@@ -8,6 +9,7 @@ import {
   InputGroupInput,
   InputGroupText,
   InputGroupTextarea,
+  Kbd,
 } from "@zero-app/ui-library";
 
 const meta = {
@@ -19,9 +21,11 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+const w80 = css({ w: "80" });
+
 export const Default: Story = {
   render: () => (
-    <InputGroup className="w-80">
+    <InputGroup className={w80}>
       <InputGroupAddon>
         <SearchIcon />
       </InputGroupAddon>
@@ -32,7 +36,7 @@ export const Default: Story = {
 
 export const WithTextPrefix: Story = {
   render: () => (
-    <InputGroup className="w-80">
+    <InputGroup className={w80}>
       <InputGroupAddon>
         <InputGroupText>https://</InputGroupText>
       </InputGroupAddon>
@@ -43,7 +47,7 @@ export const WithTextPrefix: Story = {
 
 export const WithButton: Story = {
   render: () => (
-    <InputGroup className="w-80">
+    <InputGroup className={w80}>
       <InputGroupAddon>
         <MailIcon />
       </InputGroupAddon>
@@ -57,12 +61,27 @@ export const WithButton: Story = {
   ),
 };
 
+export const WithKbd: Story = {
+  render: () => (
+    <InputGroup className={w80}>
+      <InputGroupAddon>
+        <SearchIcon />
+      </InputGroupAddon>
+      <InputGroupInput placeholder="Search…" />
+      <InputGroupAddon align="inline-end">
+        <Kbd>⌘</Kbd>
+        <Kbd>K</Kbd>
+      </InputGroupAddon>
+    </InputGroup>
+  ),
+};
+
 export const WithTextarea: Story = {
   render: () => (
-    <InputGroup className="w-80">
+    <InputGroup className={w80}>
       <InputGroupTextarea placeholder="Write a message…" rows={3} />
       <InputGroupAddon align="block-end">
-        <InputGroupButton variant="default" size="sm" className="ml-auto">
+        <InputGroupButton variant="default" size="sm" className={css({ ml: "auto" })}>
           <SendIcon /> Send
         </InputGroupButton>
       </InputGroupAddon>

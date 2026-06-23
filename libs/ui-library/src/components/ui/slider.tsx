@@ -1,6 +1,68 @@
 import { Slider as SliderPrimitive } from "@base-ui/react/slider";
+import { css } from "@zero-app/styled-system/css";
 
 import { cn } from "../../lib/utils";
+
+const shadowMd = "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)";
+const thumbRingHover = `0 0 0 4px color-mix(in oklab, var(--ring) 30%, transparent), ${shadowMd}`;
+
+const sliderStyles = css({
+  "&[data-orientation='horizontal']": { w: "full" },
+  "&[data-orientation='vertical']": { h: "full" },
+});
+
+const sliderControlStyles = css({
+  position: "relative",
+  display: "flex",
+  w: "full",
+  touchAction: "none",
+  alignItems: "center",
+  userSelect: "none",
+  "&:where([data-state='disabled'], [data-disabled]:not([data-disabled='false']))": {
+    opacity: "0.5",
+  },
+  "&[data-orientation='vertical']": {
+    h: "full",
+    minH: "40",
+    w: "auto",
+    flexDirection: "column",
+  },
+});
+
+const sliderTrackStyles = css({
+  position: "relative",
+  flexGrow: "1",
+  overflow: "hidden",
+  rounded: "2xl",
+  bg: "input/90",
+  userSelect: "none",
+  "&[data-orientation='horizontal']": { h: "1", w: "full" },
+  "&[data-orientation='vertical']": { h: "full", w: "1" },
+});
+
+const sliderIndicatorStyles = css({
+  bg: "primary",
+  userSelect: "none",
+  "&[data-orientation='horizontal']": { h: "full" },
+  "&[data-orientation='vertical']": { w: "full" },
+});
+
+const sliderThumbStyles = css({
+  display: "block",
+  size: "4",
+  flexShrink: "0",
+  rounded: "2xl",
+  bg: "white",
+  // shadow-md + ring-1 ring-black/10 composed into one box-shadow
+  boxShadow: `0 0 0 1px rgb(0 0 0 / 0.1), ${shadowMd}`,
+  transitionProperty: "color, box-shadow",
+  transitionDuration: "200ms",
+  userSelect: "none",
+  "&:not(.dark *)": { backgroundClip: "padding-box" },
+  _hover: { boxShadow: thumbRingHover },
+  _focusVisible: { boxShadow: thumbRingHover, outline: "none" },
+  _disabled: { pointerEvents: "none", opacity: "0.5" },
+});
 
 function Slider({
   className,
@@ -18,7 +80,7 @@ function Slider({
 
   return (
     <SliderPrimitive.Root
-      className={cn("data-horizontal:w-full data-vertical:h-full", className)}
+      className={cn(sliderStyles, className)}
       data-slot="slider"
       defaultValue={defaultValue}
       value={value}
@@ -27,22 +89,12 @@ function Slider({
       thumbAlignment="edge"
       {...props}
     >
-      <SliderPrimitive.Control className="relative flex w-full touch-none items-center select-none data-disabled:opacity-50 data-vertical:h-full data-vertical:min-h-40 data-vertical:w-auto data-vertical:flex-col">
-        <SliderPrimitive.Track
-          data-slot="slider-track"
-          className="relative grow overflow-hidden rounded-2xl bg-input/90 select-none data-horizontal:h-1 data-horizontal:w-full data-vertical:h-full data-vertical:w-1"
-        >
-          <SliderPrimitive.Indicator
-            data-slot="slider-range"
-            className="bg-primary select-none data-horizontal:h-full data-vertical:w-full"
-          />
+      <SliderPrimitive.Control className={sliderControlStyles}>
+        <SliderPrimitive.Track data-slot="slider-track" className={sliderTrackStyles}>
+          <SliderPrimitive.Indicator data-slot="slider-range" className={sliderIndicatorStyles} />
         </SliderPrimitive.Track>
         {Array.from({ length: _values.length }, (_, index) => (
-          <SliderPrimitive.Thumb
-            data-slot="slider-thumb"
-            key={index}
-            className="block size-4 shrink-0 rounded-2xl bg-white shadow-md ring-1 ring-black/10 transition-[color,box-shadow] duration-200 select-none not-dark:bg-clip-padding hover:ring-4 hover:ring-ring/30 focus-visible:ring-4 focus-visible:ring-ring/30 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
-          />
+          <SliderPrimitive.Thumb data-slot="slider-thumb" key={index} className={sliderThumbStyles} />
         ))}
       </SliderPrimitive.Control>
     </SliderPrimitive.Root>

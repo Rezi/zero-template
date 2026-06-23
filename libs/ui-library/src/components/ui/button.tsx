@@ -21,18 +21,18 @@ const buttonVariants = cva({
     transitionDuration: "150ms",
     outline: "none",
     userSelect: "none",
-    _focusVisible: { borderColor: "ring", ringWidth: "3", ringColor: "ring/30" },
+    _focusVisible: { borderColor: "ring", ringW: "3", ringC: "ring/30" },
     // active:not-aria-[haspopup]:translate-y-px
     "&:active:not([aria-haspopup])": { transform: "translateY(1px)" },
     _disabled: { pointerEvents: "none", opacity: "0.5" },
     // aria-invalid:*
     "&[aria-invalid='true']": {
       borderColor: "destructive",
-      ringWidth: "3",
-      ringColor: "destructive/20",
+      ringW: "3",
+      ringC: "destructive/20",
     },
     _dark: {
-      "&[aria-invalid='true']": { borderColor: "destructive/50", ringColor: "destructive/40" },
+      "&[aria-invalid='true']": { borderColor: "destructive/50", ringC: "destructive/40" },
     },
     "& svg": { pointerEvents: "none", flexShrink: "0" },
     "& svg:not([class*='size-'])": { size: "4" },
@@ -66,11 +66,11 @@ const buttonVariants = cva({
         bg: "destructive/10",
         color: "destructive",
         _hover: { bg: "destructive/20" },
-        _focusVisible: { borderColor: "destructive/40", ringColor: "destructive/20" },
+        _focusVisible: { borderColor: "destructive/40", ringC: "destructive/20" },
         _dark: {
           bg: "destructive/20",
           _hover: { bg: "destructive/30" },
-          _focusVisible: { ringColor: "destructive/40" },
+          _focusVisible: { ringC: "destructive/40" },
         },
       },
       link: {

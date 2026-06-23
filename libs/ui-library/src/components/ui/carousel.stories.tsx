@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { css } from "@zero-app/styled-system/css";
 
 import {
   Card,
@@ -24,16 +25,25 @@ type Story = StoryObj<typeof meta>;
 
 const slides = [1, 2, 3, 4, 5];
 
+const px12 = css({ px: "12" });
+const cardContentSquare = css({
+  display: "flex",
+  aspectRatio: "square",
+  alignItems: "center",
+  justifyContent: "center",
+  p: "6",
+});
+
 export const Default: Story = {
   render: (args) => (
-    <div className="px-12">
-      <Carousel {...args} className="w-64">
+    <div className={px12}>
+      <Carousel {...args} className={css({ w: "64" })}>
         <CarouselContent>
           {slides.map((n) => (
             <CarouselItem key={n}>
               <Card>
-                <CardContent className="flex aspect-square items-center justify-center p-6">
-                  <span className="text-4xl font-semibold">{n}</span>
+                <CardContent className={cardContentSquare}>
+                  <span className={css({ fontSize: "4xl", fontWeight: "semibold" })}>{n}</span>
                 </CardContent>
               </Card>
             </CarouselItem>
@@ -48,14 +58,14 @@ export const Default: Story = {
 
 export const MultipleItems: Story = {
   render: (args) => (
-    <div className="px-12">
-      <Carousel {...args} opts={{ align: "start" }} className="w-80">
+    <div className={px12}>
+      <Carousel {...args} opts={{ align: "start" }} className={css({ w: "80" })}>
         <CarouselContent>
           {slides.map((n) => (
-            <CarouselItem key={n} className="basis-1/3">
+            <CarouselItem key={n} className={css({ flexBasis: "33.333333%" })}>
               <Card>
-                <CardContent className="flex aspect-square items-center justify-center p-6">
-                  <span className="text-2xl font-semibold">{n}</span>
+                <CardContent className={cardContentSquare}>
+                  <span className={css({ fontSize: "2xl", fontWeight: "semibold" })}>{n}</span>
                 </CardContent>
               </Card>
             </CarouselItem>
@@ -71,14 +81,21 @@ export const MultipleItems: Story = {
 export const Vertical: Story = {
   args: { orientation: "vertical" },
   render: (args) => (
-    <div className="py-12">
-      <Carousel {...args} className="w-64">
-        <CarouselContent className="h-64">
+    <div className={css({ py: "12" })}>
+      <Carousel {...args} className={css({ w: "64" })}>
+        <CarouselContent className={css({ h: "64" })}>
           {slides.map((n) => (
-            <CarouselItem key={n} className="basis-1/2">
+            <CarouselItem key={n} className={css({ flexBasis: "50%" })}>
               <Card>
-                <CardContent className="flex items-center justify-center p-6">
-                  <span className="text-3xl font-semibold">{n}</span>
+                <CardContent
+                  className={css({
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    p: "6",
+                  })}
+                >
+                  <span className={css({ fontSize: "3xl", fontWeight: "semibold" })}>{n}</span>
                 </CardContent>
               </Card>
             </CarouselItem>
