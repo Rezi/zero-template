@@ -19,9 +19,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
   render: () => {
     const [date, setDate] = React.useState<Date | undefined>(new Date());
-    return (
-      <Calendar mode="single" selected={date} onSelect={setDate} className={bordered} />
-    );
+    return <Calendar mode="single" selected={date} onSelect={setDate} className={bordered} />;
   },
 };
 

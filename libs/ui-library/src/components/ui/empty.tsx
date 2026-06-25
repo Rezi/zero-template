@@ -1,7 +1,7 @@
 import * as React from "react";
 import { cva, css, type RecipeVariantProps } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 
 const emptyStyles = css({
   display: "flex",
@@ -85,11 +85,11 @@ const emptyContentStyles = css({
 });
 
 function Empty({ className, ...props }: React.ComponentProps<"div">) {
-  return <div data-slot="empty" className={cn(emptyStyles, className)} {...props} />;
+  return <div data-slot="empty" className={clsx(emptyStyles, className)} {...props} />;
 }
 
 function EmptyHeader({ className, ...props }: React.ComponentProps<"div">) {
-  return <div data-slot="empty-header" className={cn(emptyHeaderStyles, className)} {...props} />;
+  return <div data-slot="empty-header" className={clsx(emptyHeaderStyles, className)} {...props} />;
 }
 
 function EmptyMedia({
@@ -101,21 +101,21 @@ function EmptyMedia({
     <div
       data-slot="empty-icon"
       data-variant={variant}
-      className={cn(emptyMediaVariants({ variant }), className)}
+      className={clsx(emptyMediaVariants({ variant }), className)}
       {...props}
     />
   );
 }
 
 function EmptyTitle({ className, ...props }: React.ComponentProps<"div">) {
-  return <div data-slot="empty-title" className={cn(emptyTitleStyles, className)} {...props} />;
+  return <div data-slot="empty-title" className={clsx(emptyTitleStyles, className)} {...props} />;
 }
 
 function EmptyDescription({ className, ...props }: React.ComponentProps<"p">) {
   return (
     <div
       data-slot="empty-description"
-      className={cn(emptyDescriptionStyles, className)}
+      className={clsx(emptyDescriptionStyles, className)}
       {...props}
     />
   );
@@ -123,7 +123,7 @@ function EmptyDescription({ className, ...props }: React.ComponentProps<"p">) {
 
 function EmptyContent({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <div data-slot="empty-content" className={cn(emptyContentStyles, className)} {...props} />
+    <div data-slot="empty-content" className={clsx(emptyContentStyles, className)} {...props} />
   );
 }
 

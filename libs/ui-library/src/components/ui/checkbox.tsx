@@ -3,7 +3,7 @@
 import { Checkbox as CheckboxPrimitive } from "@base-ui/react/checkbox";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 import { CheckIcon } from "lucide-react";
 
 const checkboxStyles = css({
@@ -56,7 +56,7 @@ function Checkbox({ className, ...props }: CheckboxPrimitive.Root.Props) {
   return (
     <CheckboxPrimitive.Root
       data-slot="checkbox"
-      className={cn("peer", checkboxStyles, className)}
+      className={clsx("peer", checkboxStyles, className)}
       {...props}
     >
       <CheckboxPrimitive.Indicator

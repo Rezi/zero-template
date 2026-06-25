@@ -3,7 +3,7 @@ import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 import { ChevronRightIcon, MoreHorizontalIcon } from "lucide-react";
 
 const breadcrumbListStyles = css({
@@ -40,19 +40,19 @@ const breadcrumbEllipsisStyles = css({
 
 function Breadcrumb({ className, ...props }: React.ComponentProps<"nav">) {
   return (
-    <nav aria-label="breadcrumb" data-slot="breadcrumb" className={cn(className)} {...props} />
+    <nav aria-label="breadcrumb" data-slot="breadcrumb" className={clsx(className)} {...props} />
   );
 }
 
 function BreadcrumbList({ className, ...props }: React.ComponentProps<"ol">) {
   return (
-    <ol data-slot="breadcrumb-list" className={cn(breadcrumbListStyles, className)} {...props} />
+    <ol data-slot="breadcrumb-list" className={clsx(breadcrumbListStyles, className)} {...props} />
   );
 }
 
 function BreadcrumbItem({ className, ...props }: React.ComponentProps<"li">) {
   return (
-    <li data-slot="breadcrumb-item" className={cn(breadcrumbItemStyles, className)} {...props} />
+    <li data-slot="breadcrumb-item" className={clsx(breadcrumbItemStyles, className)} {...props} />
   );
 }
 
@@ -61,7 +61,7 @@ function BreadcrumbLink({ className, render, ...props }: useRender.ComponentProp
     defaultTagName: "a",
     props: mergeProps<"a">(
       {
-        className: cn(breadcrumbLinkStyles, className),
+        className: clsx(breadcrumbLinkStyles, className),
       },
       props,
     ),
@@ -79,7 +79,7 @@ function BreadcrumbPage({ className, ...props }: React.ComponentProps<"span">) {
       role="link"
       aria-disabled="true"
       aria-current="page"
-      className={cn(breadcrumbPageStyles, className)}
+      className={clsx(breadcrumbPageStyles, className)}
       {...props}
     />
   );
@@ -91,7 +91,7 @@ function BreadcrumbSeparator({ children, className, ...props }: React.ComponentP
       data-slot="breadcrumb-separator"
       role="presentation"
       aria-hidden="true"
-      className={cn(breadcrumbSeparatorStyles, className)}
+      className={clsx(breadcrumbSeparatorStyles, className)}
       {...props}
     >
       {children ?? <ChevronRightIcon />}
@@ -105,7 +105,7 @@ function BreadcrumbEllipsis({ className, ...props }: React.ComponentProps<"span"
       data-slot="breadcrumb-ellipsis"
       role="presentation"
       aria-hidden="true"
-      className={cn(breadcrumbEllipsisStyles, className)}
+      className={clsx(breadcrumbEllipsisStyles, className)}
       {...props}
     >
       <MoreHorizontalIcon />

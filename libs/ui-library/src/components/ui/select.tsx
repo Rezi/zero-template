@@ -4,7 +4,7 @@ import * as React from "react";
 import { Select as SelectPrimitive } from "@base-ui/react/select";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 import { selectAnimationStyles } from "../../lib/animations";
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react";
 
@@ -148,7 +148,7 @@ function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (
     <SelectPrimitive.Group
       data-slot="select-group"
-      className={cn(selectGroupStyles, className)}
+      className={clsx(selectGroupStyles, className)}
       {...props}
     />
   );
@@ -158,7 +158,7 @@ function SelectValue({ className, ...props }: SelectPrimitive.Value.Props) {
   return (
     <SelectPrimitive.Value
       data-slot="select-value"
-      className={cn(selectValueStyles, className)}
+      className={clsx(selectValueStyles, className)}
       {...props}
     />
   );
@@ -176,7 +176,7 @@ function SelectTrigger({
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       data-size={size}
-      className={cn(selectTriggerStyles, className)}
+      className={clsx(selectTriggerStyles, className)}
       {...props}
     >
       {children}
@@ -212,7 +212,7 @@ function SelectContent({
         <SelectPrimitive.Popup
           data-slot="select-content"
           data-align-trigger={alignItemWithTrigger}
-          className={cn(selectContentStyles, selectAnimationStyles, className)}
+          className={clsx(selectContentStyles, selectAnimationStyles, className)}
           {...props}
         >
           <SelectScrollUpButton />
@@ -228,7 +228,7 @@ function SelectLabel({ className, ...props }: SelectPrimitive.GroupLabel.Props) 
   return (
     <SelectPrimitive.GroupLabel
       data-slot="select-label"
-      className={cn(selectLabelStyles, className)}
+      className={clsx(selectLabelStyles, className)}
       {...props}
     />
   );
@@ -238,7 +238,7 @@ function SelectItem({ className, children, ...props }: SelectPrimitive.Item.Prop
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
-      className={cn(selectItemStyles, className)}
+      className={clsx(selectItemStyles, className)}
       {...props}
     >
       <SelectPrimitive.ItemText className={selectItemTextStyles}>
@@ -255,7 +255,7 @@ function SelectSeparator({ className, ...props }: SelectPrimitive.Separator.Prop
   return (
     <SelectPrimitive.Separator
       data-slot="select-separator"
-      className={cn(selectSeparatorStyles, className)}
+      className={clsx(selectSeparatorStyles, className)}
       {...props}
     />
   );
@@ -268,7 +268,7 @@ function SelectScrollUpButton({
   return (
     <SelectPrimitive.ScrollUpArrow
       data-slot="select-scroll-up-button"
-      className={cn(selectScrollButtonStyles, css({ top: "0" }), className)}
+      className={clsx(selectScrollButtonStyles, css({ top: "0" }), className)}
       {...props}
     >
       <ChevronUpIcon />
@@ -283,7 +283,7 @@ function SelectScrollDownButton({
   return (
     <SelectPrimitive.ScrollDownArrow
       data-slot="select-scroll-down-button"
-      className={cn(selectScrollButtonStyles, css({ bottom: "0" }), className)}
+      className={clsx(selectScrollButtonStyles, css({ bottom: "0" }), className)}
       {...props}
     >
       <ChevronDownIcon />

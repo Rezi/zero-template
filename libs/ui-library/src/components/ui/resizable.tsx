@@ -3,7 +3,7 @@
 import * as ResizablePrimitive from "react-resizable-panels";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 
 const resizablePanelGroupStyles = css({
   display: "flex",
@@ -50,7 +50,7 @@ function ResizablePanelGroup({ className, ...props }: ResizablePrimitive.GroupPr
   return (
     <ResizablePrimitive.Group
       data-slot="resizable-panel-group"
-      className={cn(resizablePanelGroupStyles, className)}
+      className={clsx(resizablePanelGroupStyles, className)}
       {...props}
     />
   );
@@ -70,7 +70,7 @@ function ResizableHandle({
   return (
     <ResizablePrimitive.Separator
       data-slot="resizable-handle"
-      className={cn(resizableHandleStyles, className)}
+      className={clsx(resizableHandleStyles, className)}
       {...props}
     >
       {withHandle && <div className={resizableHandleGripStyles} />}

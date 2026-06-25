@@ -2,7 +2,7 @@ import * as React from "react";
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 import { popoverAnimationStyles } from "../../lib/animations";
 import { ChevronRightIcon, CheckIcon } from "lucide-react";
 
@@ -171,7 +171,7 @@ function DropdownMenuContent({
       >
         <MenuPrimitive.Popup
           data-slot="dropdown-menu-content"
-          className={cn(
+          className={clsx(
             dropdownContentStyles,
             popoverAnimationStyles,
             dropdownContentClosedOverflow,
@@ -199,7 +199,7 @@ function DropdownMenuLabel({
     <MenuPrimitive.GroupLabel
       data-slot="dropdown-menu-label"
       data-inset={inset}
-      className={cn(dropdownLabelStyles, className)}
+      className={clsx(dropdownLabelStyles, className)}
       {...props}
     />
   );
@@ -219,7 +219,7 @@ function DropdownMenuItem({
       data-slot="dropdown-menu-item"
       data-inset={inset}
       data-variant={variant}
-      className={cn(dropdownItemStyles, className)}
+      className={clsx(dropdownItemStyles, className)}
       {...props}
     />
   );
@@ -241,7 +241,7 @@ function DropdownMenuSubTrigger({
     <MenuPrimitive.SubmenuTrigger
       data-slot="dropdown-menu-sub-trigger"
       data-inset={inset}
-      className={cn(dropdownSubTriggerStyles, className)}
+      className={clsx(dropdownSubTriggerStyles, className)}
       {...props}
     >
       {children}
@@ -261,7 +261,7 @@ function DropdownMenuSubContent({
   return (
     <DropdownMenuContent
       data-slot="dropdown-menu-sub-content"
-      className={cn(dropdownSubContentStyles, className)}
+      className={clsx(dropdownSubContentStyles, className)}
       align={align}
       alignOffset={alignOffset}
       side={side}
@@ -284,7 +284,7 @@ function DropdownMenuCheckboxItem({
     <MenuPrimitive.CheckboxItem
       data-slot="dropdown-menu-checkbox-item"
       data-inset={inset}
-      className={cn(dropdownCheckRadioItemStyles, className)}
+      className={clsx(dropdownCheckRadioItemStyles, className)}
       checked={checked}
       {...props}
     >
@@ -314,7 +314,7 @@ function DropdownMenuRadioItem({
     <MenuPrimitive.RadioItem
       data-slot="dropdown-menu-radio-item"
       data-inset={inset}
-      className={cn(dropdownCheckRadioItemStyles, className)}
+      className={clsx(dropdownCheckRadioItemStyles, className)}
       {...props}
     >
       <span className={dropdownIndicatorStyles} data-slot="dropdown-menu-radio-item-indicator">
@@ -331,7 +331,7 @@ function DropdownMenuSeparator({ className, ...props }: MenuPrimitive.Separator.
   return (
     <MenuPrimitive.Separator
       data-slot="dropdown-menu-separator"
-      className={cn(dropdownSeparatorStyles, className)}
+      className={clsx(dropdownSeparatorStyles, className)}
       {...props}
     />
   );
@@ -341,7 +341,7 @@ function DropdownMenuShortcut({ className, ...props }: React.ComponentProps<"spa
   return (
     <span
       data-slot="dropdown-menu-shortcut"
-      className={cn(dropdownShortcutStyles, className)}
+      className={clsx(dropdownShortcutStyles, className)}
       {...props}
     />
   );

@@ -3,7 +3,7 @@ import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import { cva, css, type RecipeVariantProps } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 import { Separator } from "./separator";
 
 const itemGroupStyles = css({
@@ -16,7 +16,14 @@ const itemGroupStyles = css({
 });
 
 function ItemGroup({ className, ...props }: React.ComponentProps<"div">) {
-  return <div role="list" data-slot="item-group" className={cn(itemGroupStyles, className)} {...props} />;
+  return (
+    <div
+      role="list"
+      data-slot="item-group"
+      className={clsx(itemGroupStyles, className)}
+      {...props}
+    />
+  );
 }
 
 function ItemSeparator({ className, ...props }: React.ComponentProps<typeof Separator>) {
@@ -24,7 +31,7 @@ function ItemSeparator({ className, ...props }: React.ComponentProps<typeof Sepa
     <Separator
       data-slot="item-separator"
       orientation="horizontal"
-      className={cn(css({ my: "2" }), className)}
+      className={clsx(css({ my: "2" }), className)}
       {...props}
     />
   );
@@ -39,12 +46,14 @@ const itemVariants = cva({
     rounded: "2xl",
     borderWidth: "1px",
     fontSize: "sm",
-    transitionProperty: "color, background-color, border-color, text-decoration-color, fill, stroke",
+    transitionProperty:
+      "color, background-color, border-color, text-decoration-color, fill, stroke",
     transitionDuration: "100ms",
     outline: "none",
     _focusVisible: { borderColor: "ring", ringW: "3", ringC: "ring/50" },
     "&:is(a)": {
-      transitionProperty: "color, background-color, border-color, text-decoration-color, fill, stroke",
+      transitionProperty:
+        "color, background-color, border-color, text-decoration-color, fill, stroke",
       _hover: { bg: "muted" },
     },
   },
@@ -77,7 +86,7 @@ function Item({
     defaultTagName: "div",
     props: mergeProps<"div">(
       {
-        className: cn(itemVariants({ variant, size }), className),
+        className: clsx(itemVariants({ variant, size }), className),
       },
       props,
     ),
@@ -131,7 +140,7 @@ function ItemMedia({
     <div
       data-slot="item-media"
       data-variant={variant}
-      className={cn(itemMediaVariants({ variant }), className)}
+      className={clsx(itemMediaVariants({ variant }), className)}
       {...props}
     />
   );
@@ -147,7 +156,7 @@ const itemContentStyles = css({
 });
 
 function ItemContent({ className, ...props }: React.ComponentProps<"div">) {
-  return <div data-slot="item-content" className={cn(itemContentStyles, className)} {...props} />;
+  return <div data-slot="item-content" className={clsx(itemContentStyles, className)} {...props} />;
 }
 
 const itemTitleStyles = css({
@@ -163,7 +172,7 @@ const itemTitleStyles = css({
 });
 
 function ItemTitle({ className, ...props }: React.ComponentProps<"div">) {
-  return <div data-slot="item-title" className={cn(itemTitleStyles, className)} {...props} />;
+  return <div data-slot="item-title" className={clsx(itemTitleStyles, className)} {...props} />;
 }
 
 const itemDescriptionStyles = css({
@@ -177,13 +186,15 @@ const itemDescriptionStyles = css({
 });
 
 function ItemDescription({ className, ...props }: React.ComponentProps<"p">) {
-  return <p data-slot="item-description" className={cn(itemDescriptionStyles, className)} {...props} />;
+  return (
+    <p data-slot="item-description" className={clsx(itemDescriptionStyles, className)} {...props} />
+  );
 }
 
 const itemActionsStyles = css({ display: "flex", alignItems: "center", gap: "2" });
 
 function ItemActions({ className, ...props }: React.ComponentProps<"div">) {
-  return <div data-slot="item-actions" className={cn(itemActionsStyles, className)} {...props} />;
+  return <div data-slot="item-actions" className={clsx(itemActionsStyles, className)} {...props} />;
 }
 
 const itemHeaderFooterStyles = css({
@@ -195,11 +206,15 @@ const itemHeaderFooterStyles = css({
 });
 
 function ItemHeader({ className, ...props }: React.ComponentProps<"div">) {
-  return <div data-slot="item-header" className={cn(itemHeaderFooterStyles, className)} {...props} />;
+  return (
+    <div data-slot="item-header" className={clsx(itemHeaderFooterStyles, className)} {...props} />
+  );
 }
 
 function ItemFooter({ className, ...props }: React.ComponentProps<"div">) {
-  return <div data-slot="item-footer" className={cn(itemHeaderFooterStyles, className)} {...props} />;
+  return (
+    <div data-slot="item-footer" className={clsx(itemHeaderFooterStyles, className)} {...props} />
+  );
 }
 
 export {

@@ -3,7 +3,7 @@
 import { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 import { popoverAnimationStyles } from "../../lib/animations";
 
 const shadowLg = "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)";
@@ -55,7 +55,7 @@ function HoverCardContent({
       >
         <PreviewCardPrimitive.Popup
           data-slot="hover-card-content"
-          className={cn(hoverCardContentStyles, popoverAnimationStyles, className)}
+          className={clsx(hoverCardContentStyles, popoverAnimationStyles, className)}
           {...props}
         />
       </PreviewCardPrimitive.Positioner>

@@ -2,7 +2,7 @@ import * as React from "react";
 import { DayPicker, getDefaultClassNames, type DayButton, type Locale } from "react-day-picker";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 import { Button, buttonVariants } from "./button";
 import { ChevronLeftIcon, ChevronRightIcon, ChevronDownIcon } from "lucide-react";
 
@@ -24,7 +24,7 @@ function Calendar({
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
-      className={cn(
+      className={clsx(
         "group/calendar",
         css({
           bg: "background",
@@ -47,8 +47,8 @@ function Calendar({
         ...formatters,
       }}
       classNames={{
-        root: cn(css({ w: "fit" }), defaultClassNames.root),
-        months: cn(
+        root: clsx(css({ w: "fit" }), defaultClassNames.root),
+        months: clsx(
           css({
             position: "relative",
             display: "flex",
@@ -58,11 +58,11 @@ function Calendar({
           }),
           defaultClassNames.months,
         ),
-        month: cn(
+        month: clsx(
           css({ display: "flex", w: "full", flexDirection: "column", gap: "4" }),
           defaultClassNames.month,
         ),
-        nav: cn(
+        nav: clsx(
           css({
             position: "absolute",
             insetInline: "0",
@@ -75,7 +75,7 @@ function Calendar({
           }),
           defaultClassNames.nav,
         ),
-        button_previous: cn(
+        button_previous: clsx(
           buttonVariants({ variant: buttonVariant }),
           css({
             size: "var(--cell-size)",
@@ -85,7 +85,7 @@ function Calendar({
           }),
           defaultClassNames.button_previous,
         ),
-        button_next: cn(
+        button_next: clsx(
           buttonVariants({ variant: buttonVariant }),
           css({
             size: "var(--cell-size)",
@@ -95,7 +95,7 @@ function Calendar({
           }),
           defaultClassNames.button_next,
         ),
-        month_caption: cn(
+        month_caption: clsx(
           css({
             display: "flex",
             h: "var(--cell-size)",
@@ -106,7 +106,7 @@ function Calendar({
           }),
           defaultClassNames.month_caption,
         ),
-        dropdowns: cn(
+        dropdowns: clsx(
           css({
             display: "flex",
             h: "var(--cell-size)",
@@ -119,15 +119,15 @@ function Calendar({
           }),
           defaultClassNames.dropdowns,
         ),
-        dropdown_root: cn(
+        dropdown_root: clsx(
           css({ position: "relative", borderRadius: "var(--cell-radius)" }),
           defaultClassNames.dropdown_root,
         ),
-        dropdown: cn(
+        dropdown: clsx(
           css({ position: "absolute", inset: "0", bg: "popover", opacity: "0" }),
           defaultClassNames.dropdown,
         ),
-        caption_label: cn(
+        caption_label: clsx(
           css({ fontWeight: "medium", userSelect: "none" }),
           captionLayout === "label"
             ? css({ fontSize: "sm" })
@@ -142,8 +142,8 @@ function Calendar({
           defaultClassNames.caption_label,
         ),
         month_grid: css({ w: "full", borderCollapse: "collapse" }),
-        weekdays: cn(css({ display: "flex" }), defaultClassNames.weekdays),
-        weekday: cn(
+        weekdays: clsx(css({ display: "flex" }), defaultClassNames.weekdays),
+        weekday: clsx(
           css({
             flex: "1",
             borderRadius: "var(--cell-radius)",
@@ -154,16 +154,16 @@ function Calendar({
           }),
           defaultClassNames.weekday,
         ),
-        week: cn(css({ mt: "2", display: "flex", w: "full" }), defaultClassNames.week),
-        week_number_header: cn(
+        week: clsx(css({ mt: "2", display: "flex", w: "full" }), defaultClassNames.week),
+        week_number_header: clsx(
           css({ w: "var(--cell-size)", userSelect: "none" }),
           defaultClassNames.week_number_header,
         ),
-        week_number: cn(
+        week_number: clsx(
           css({ fontSize: "0.8rem", color: "muted.foreground", userSelect: "none" }),
           defaultClassNames.week_number,
         ),
-        day: cn(
+        day: clsx(
           "group/day",
           css({
             position: "relative",
@@ -194,7 +194,7 @@ function Calendar({
               }),
           defaultClassNames.day,
         ),
-        range_start: cn(
+        range_start: clsx(
           css({
             position: "relative",
             isolation: "isolate",
@@ -213,8 +213,8 @@ function Calendar({
           }),
           defaultClassNames.range_start,
         ),
-        range_middle: cn(css({ borderRadius: "0" }), defaultClassNames.range_middle),
-        range_end: cn(
+        range_middle: clsx(css({ borderRadius: "0" }), defaultClassNames.range_middle),
+        range_end: clsx(
           css({
             position: "relative",
             isolation: "isolate",
@@ -233,7 +233,7 @@ function Calendar({
           }),
           defaultClassNames.range_end,
         ),
-        today: cn(
+        today: clsx(
           css({
             borderRadius: "var(--cell-radius)",
             bg: "muted",
@@ -242,34 +242,34 @@ function Calendar({
           }),
           defaultClassNames.today,
         ),
-        outside: cn(
+        outside: clsx(
           css({
             color: "muted.foreground",
             "&[aria-selected='true']": { color: "muted.foreground" },
           }),
           defaultClassNames.outside,
         ),
-        disabled: cn(
+        disabled: clsx(
           css({ color: "muted.foreground", opacity: "0.5" }),
           defaultClassNames.disabled,
         ),
-        hidden: cn(css({ visibility: "hidden" }), defaultClassNames.hidden),
+        hidden: clsx(css({ visibility: "hidden" }), defaultClassNames.hidden),
         ...classNames,
       }}
       components={{
         Root: ({ className, rootRef, ...props }) => {
-          return <div data-slot="calendar" ref={rootRef} className={cn(className)} {...props} />;
+          return <div data-slot="calendar" ref={rootRef} className={clsx(className)} {...props} />;
         },
         Chevron: ({ className, orientation, ...props }) => {
           if (orientation === "left") {
-            return <ChevronLeftIcon className={cn(css({ size: "4" }), className)} {...props} />;
+            return <ChevronLeftIcon className={clsx(css({ size: "4" }), className)} {...props} />;
           }
 
           if (orientation === "right") {
-            return <ChevronRightIcon className={cn(css({ size: "4" }), className)} {...props} />;
+            return <ChevronRightIcon className={clsx(css({ size: "4" }), className)} {...props} />;
           }
 
-          return <ChevronDownIcon className={cn(css({ size: "4" }), className)} {...props} />;
+          return <ChevronDownIcon className={clsx(css({ size: "4" }), className)} {...props} />;
         },
         DayButton: ({ ...props }) => <CalendarDayButton locale={locale} {...props} />,
         WeekNumber: ({ children, ...props }) => {
@@ -324,7 +324,7 @@ function CalendarDayButton({
       data-range-start={modifiers.range_start}
       data-range-end={modifiers.range_end}
       data-range-middle={modifiers.range_middle}
-      className={cn(
+      className={clsx(
         css({
           position: "relative",
           isolation: "isolate",

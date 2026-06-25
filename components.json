@@ -3,13 +3,7 @@
   "style": "base-rhea",
   "rsc": false,
   "tsx": true,
-  "tailwind": {
-    "config": "",
-    "css": "apps/zero-app/src/styles.css",
-    "baseColor": "taupe",
-    "cssVariables": true,
-    "prefix": ""
-  },
+
   "iconLibrary": "lucide",
   "rtl": false,
   "aliases": {

@@ -2,7 +2,7 @@ import * as React from "react";
 import { OTPInput, OTPInputContext } from "input-otp";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 import { MinusIcon } from "lucide-react";
 
 const inputOTPContainerStyles = css({
@@ -89,9 +89,9 @@ function InputOTP({
   return (
     <OTPInput
       data-slot="input-otp"
-      containerClassName={cn("cn-input-otp", inputOTPContainerStyles, containerClassName)}
+      containerClassName={clsx("cn-input-otp", inputOTPContainerStyles, containerClassName)}
       spellCheck={false}
-      className={cn(css({ _disabled: { cursor: "not-allowed" } }), className)}
+      className={clsx(css({ _disabled: { cursor: "not-allowed" } }), className)}
       {...props}
     />
   );
@@ -99,7 +99,7 @@ function InputOTP({
 
 function InputOTPGroup({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <div data-slot="input-otp-group" className={cn(inputOTPGroupStyles, className)} {...props} />
+    <div data-slot="input-otp-group" className={clsx(inputOTPGroupStyles, className)} {...props} />
   );
 }
 
@@ -117,7 +117,7 @@ function InputOTPSlot({
     <div
       data-slot="input-otp-slot"
       data-active={isActive}
-      className={cn(inputOTPSlotStyles, className)}
+      className={clsx(inputOTPSlotStyles, className)}
       {...props}
     >
       {char}

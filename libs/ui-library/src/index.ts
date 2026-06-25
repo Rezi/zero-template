@@ -5,9 +5,7 @@
 // Within this library, modules import each other with RELATIVE paths; apps
 // consume everything from this barrel: `import { Button } from "@zero-app/ui-library"`.
 
-export { cn } from "./lib/utils";
 export * from "./hooks/use-mobile";
-export * from "./components/panda-check";
 export * from "./components/ui/accordion";
 export * from "./components/ui/alert";
 export * from "./components/ui/alert-dialog";

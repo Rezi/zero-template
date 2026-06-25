@@ -3,7 +3,7 @@
 import * as React from "react";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 
 const tableContainerStyles = css({ position: "relative", w: "full", overflowX: "auto" });
 
@@ -53,38 +53,42 @@ const tableCaptionStyles = css({ mt: "4", fontSize: "sm", color: "muted.foregrou
 function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (
     <div data-slot="table-container" className={tableContainerStyles}>
-      <table data-slot="table" className={cn(tableStyles, className)} {...props} />
+      <table data-slot="table" className={clsx(tableStyles, className)} {...props} />
     </div>
   );
 }
 
 function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
-  return <thead data-slot="table-header" className={cn(tableHeaderStyles, className)} {...props} />;
+  return (
+    <thead data-slot="table-header" className={clsx(tableHeaderStyles, className)} {...props} />
+  );
 }
 
 function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {
-  return <tbody data-slot="table-body" className={cn(tableBodyStyles, className)} {...props} />;
+  return <tbody data-slot="table-body" className={clsx(tableBodyStyles, className)} {...props} />;
 }
 
 function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
-  return <tfoot data-slot="table-footer" className={cn(tableFooterStyles, className)} {...props} />;
+  return (
+    <tfoot data-slot="table-footer" className={clsx(tableFooterStyles, className)} {...props} />
+  );
 }
 
 function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
-  return <tr data-slot="table-row" className={cn(tableRowStyles, className)} {...props} />;
+  return <tr data-slot="table-row" className={clsx(tableRowStyles, className)} {...props} />;
 }
 
 function TableHead({ className, ...props }: React.ComponentProps<"th">) {
-  return <th data-slot="table-head" className={cn(tableHeadStyles, className)} {...props} />;
+  return <th data-slot="table-head" className={clsx(tableHeadStyles, className)} {...props} />;
 }
 
 function TableCell({ className, ...props }: React.ComponentProps<"td">) {
-  return <td data-slot="table-cell" className={cn(tableCellStyles, className)} {...props} />;
+  return <td data-slot="table-cell" className={clsx(tableCellStyles, className)} {...props} />;
 }
 
 function TableCaption({ className, ...props }: React.ComponentProps<"caption">) {
   return (
-    <caption data-slot="table-caption" className={cn(tableCaptionStyles, className)} {...props} />
+    <caption data-slot="table-caption" className={clsx(tableCaptionStyles, className)} {...props} />
   );
 }
 

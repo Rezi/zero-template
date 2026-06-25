@@ -1,7 +1,7 @@
 import * as React from "react";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 
 const kbdStyles = css({
   pointerEvents: "none",
@@ -30,13 +30,13 @@ const kbdStyles = css({
 });
 
 function Kbd({ className, ...props }: React.ComponentProps<"kbd">) {
-  return <kbd data-slot="kbd" className={cn(kbdStyles, className)} {...props} />;
+  return <kbd data-slot="kbd" className={clsx(kbdStyles, className)} {...props} />;
 }
 
 const kbdGroupStyles = css({ display: "inline-flex", alignItems: "center", gap: "1" });
 
 function KbdGroup({ className, ...props }: React.ComponentProps<"div">) {
-  return <kbd data-slot="kbd-group" className={cn(kbdGroupStyles, className)} {...props} />;
+  return <kbd data-slot="kbd-group" className={clsx(kbdGroupStyles, className)} {...props} />;
 }
 
 export { Kbd, KbdGroup };

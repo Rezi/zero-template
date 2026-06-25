@@ -11,9 +11,6 @@ const config: StorybookConfig = {
     options: {},
   },
   async viteFinal(viteConfig) {
-    const { default: tailwindcss } = await import("@tailwindcss/vite");
-    viteConfig.plugins ??= [];
-    viteConfig.plugins.push(tailwindcss());
     viteConfig.resolve ??= {};
     viteConfig.resolve.alias = [
       ...(Array.isArray(viteConfig.resolve.alias) ? viteConfig.resolve.alias : []),

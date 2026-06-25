@@ -6,7 +6,7 @@ import { useRender } from "@base-ui/react/use-render";
 import { cva, css, type RecipeVariantProps } from "@zero-app/styled-system/css";
 
 import { useIsMobile } from "../../hooks/use-mobile";
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 import { Button } from "./button";
 import { Input } from "./input";
 import { Separator } from "./separator";
@@ -104,7 +104,6 @@ function SidebarProvider({
   }, [toggleSidebar]);
 
   // We add a state so that we can do data-state="expanded" or "collapsed".
-  // This makes it easier to style the sidebar with Tailwind classes.
   const state = open ? "expanded" : "collapsed";
 
   const contextValue = React.useMemo<SidebarContextProps>(
@@ -131,7 +130,7 @@ function SidebarProvider({
             ...style,
           } as React.CSSProperties
         }
-        className={cn(sidebarProviderStyles, className)}
+        className={clsx(sidebarProviderStyles, className)}
         {...props}
       >
         {children}
@@ -157,8 +156,17 @@ const sidebarMobileStyles = css({
   "& > button": { display: "none" },
 });
 
-const sidebarDesktopStyles = css({ display: "none", color: "sidebar.foreground", md: { display: "block" } });
-const sidebarMobileInnerStyles = css({ display: "flex", h: "full", w: "full", flexDirection: "column" });
+const sidebarDesktopStyles = css({
+  display: "none",
+  color: "sidebar.foreground",
+  md: { display: "block" },
+});
+const sidebarMobileInnerStyles = css({
+  display: "flex",
+  h: "full",
+  w: "full",
+  flexDirection: "column",
+});
 
 const sidebarGapStyles = css({
   position: "relative",
@@ -239,7 +247,7 @@ function Sidebar({
 
   if (collapsible === "none") {
     return (
-      <div data-slot="sidebar" className={cn(sidebarNoneStyles, className)} {...props}>
+      <div data-slot="sidebar" className={clsx(sidebarNoneStyles, className)} {...props}>
         {children}
       </div>
     );
@@ -275,7 +283,7 @@ function Sidebar({
     <div
       // `group`/`peer` markers kept literal — translated scopes below target the
       // `data-slot="sidebar"` attributes on this same element / as a sibling.
-      className={cn("group peer", sidebarDesktopStyles)}
+      className={clsx("group peer", sidebarDesktopStyles)}
       data-state={state}
       data-collapsible={state === "collapsed" ? collapsible : ""}
       data-variant={variant}
@@ -285,7 +293,7 @@ function Sidebar({
       {/* This is what handles the sidebar gap on desktop */}
       <div
         data-slot="sidebar-gap"
-        className={cn(
+        className={clsx(
           sidebarGapStyles,
           variant === "floating" || variant === "inset" ? sidebarGapFloating : sidebarGapDefault,
         )}
@@ -293,7 +301,7 @@ function Sidebar({
       <div
         data-slot="sidebar-container"
         data-side={side}
-        className={cn(
+        className={clsx(
           sidebarContainerStyles,
           variant === "floating" || variant === "inset"
             ? sidebarContainerFloating
@@ -319,7 +327,7 @@ function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<t
       data-slot="sidebar-trigger"
       variant="ghost"
       size="icon-sm"
-      className={cn(className)}
+      className={clsx(className)}
       onClick={(event) => {
         onClick?.(event);
         toggleSidebar();
@@ -344,7 +352,13 @@ const sidebarRailStyles = css({
   sm: { display: "flex" },
   "[data-slot='sidebar'][data-side=left] &": { right: "-4" },
   "[data-slot='sidebar'][data-side=right] &": { left: "0" },
-  "&::after": { content: '""', position: "absolute", insetBlock: "0", insetInlineStart: "50%", w: "2px" },
+  "&::after": {
+    content: '""',
+    position: "absolute",
+    insetBlock: "0",
+    insetInlineStart: "50%",
+    w: "2px",
+  },
   "&:hover::after": { bg: "sidebar.border" },
   "[data-side=left] &": { cursor: "w-resize" },
   "[data-side=right] &": { cursor: "e-resize" },
@@ -370,7 +384,7 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
       tabIndex={-1}
       onClick={toggleSidebar}
       title="Toggle Sidebar"
-      className={cn(sidebarRailStyles, className)}
+      className={clsx(sidebarRailStyles, className)}
       {...props}
     />
   );
@@ -392,7 +406,9 @@ const sidebarInsetStyles = css({
 });
 
 function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
-  return <main data-slot="sidebar-inset" className={cn(sidebarInsetStyles, className)} {...props} />;
+  return (
+    <main data-slot="sidebar-inset" className={clsx(sidebarInsetStyles, className)} {...props} />
+  );
 }
 
 const sidebarInputStyles = css({ h: "8", w: "full", bg: "input/50", boxShadow: "none" });
@@ -402,7 +418,7 @@ function SidebarInput({ className, ...props }: React.ComponentProps<typeof Input
     <Input
       data-slot="sidebar-input"
       data-sidebar="input"
-      className={cn(sidebarInputStyles, className)}
+      className={clsx(sidebarInputStyles, className)}
       {...props}
     />
   );
@@ -421,7 +437,7 @@ function SidebarHeader({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="sidebar-header"
       data-sidebar="header"
-      className={cn(sidebarHeaderStyles, className)}
+      className={clsx(sidebarHeaderStyles, className)}
       {...props}
     />
   );
@@ -434,7 +450,7 @@ function SidebarFooter({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="sidebar-footer"
       data-sidebar="footer"
-      className={cn(sidebarFooterStyles, className)}
+      className={clsx(sidebarFooterStyles, className)}
       {...props}
     />
   );
@@ -447,7 +463,7 @@ function SidebarSeparator({ className, ...props }: React.ComponentProps<typeof S
     <Separator
       data-slot="sidebar-separator"
       data-sidebar="separator"
-      className={cn(sidebarSeparatorStyles, className)}
+      className={clsx(sidebarSeparatorStyles, className)}
       {...props}
     />
   );
@@ -469,7 +485,7 @@ function SidebarContent({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="sidebar-content"
       data-sidebar="content"
-      className={cn("no-scrollbar", sidebarContentStyles, className)}
+      className={clsx("no-scrollbar", sidebarContentStyles, className)}
       {...props}
     />
   );
@@ -489,7 +505,7 @@ function SidebarGroup({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="sidebar-group"
       data-sidebar="group"
-      className={cn(sidebarGroupStyles, className)}
+      className={clsx(sidebarGroupStyles, className)}
       {...props}
     />
   );
@@ -524,7 +540,7 @@ function SidebarGroupLabel({
     defaultTagName: "div",
     props: mergeProps<"div">(
       {
-        className: cn(sidebarGroupLabelStyles, className),
+        className: clsx(sidebarGroupLabelStyles, className),
       },
       props,
     ),
@@ -568,7 +584,7 @@ function SidebarGroupAction({
     defaultTagName: "button",
     props: mergeProps<"button">(
       {
-        className: cn(sidebarGroupActionStyles, className),
+        className: clsx(sidebarGroupActionStyles, className),
       },
       props,
     ),
@@ -587,7 +603,7 @@ function SidebarGroupContent({ className, ...props }: React.ComponentProps<"div"
     <div
       data-slot="sidebar-group-content"
       data-sidebar="group-content"
-      className={cn(sidebarGroupContentStyles, className)}
+      className={clsx(sidebarGroupContentStyles, className)}
       {...props}
     />
   );
@@ -606,7 +622,7 @@ function SidebarMenu({ className, ...props }: React.ComponentProps<"ul">) {
     <ul
       data-slot="sidebar-menu"
       data-sidebar="menu"
-      className={cn(sidebarMenuStyles, className)}
+      className={clsx(sidebarMenuStyles, className)}
       {...props}
     />
   );
@@ -619,7 +635,7 @@ function SidebarMenuItem({ className, ...props }: React.ComponentProps<"li">) {
       data-sidebar="menu-item"
       // `group/menu-item` kept literal — scopes are translated via the
       // `data-slot="sidebar-menu-item"` attribute on this element.
-      className={cn("group/menu-item", css({ position: "relative" }), className)}
+      className={clsx("group/menu-item", css({ position: "relative" }), className)}
       {...props}
     />
   );
@@ -710,7 +726,7 @@ function SidebarMenuButton({
     defaultTagName: "button",
     props: mergeProps<"button">(
       {
-        className: cn(sidebarMenuButtonVariants({ variant, size }), className),
+        className: clsx(sidebarMenuButtonVariants({ variant, size }), className),
       },
       props,
     ),
@@ -796,7 +812,7 @@ function SidebarMenuAction({
     defaultTagName: "button",
     props: mergeProps<"button">(
       {
-        className: cn(
+        className: clsx(
           sidebarMenuActionStyles,
           showOnHover && sidebarMenuActionShowOnHoverStyles,
           className,
@@ -843,7 +859,7 @@ function SidebarMenuBadge({ className, ...props }: React.ComponentProps<"div">) 
     <div
       data-slot="sidebar-menu-badge"
       data-sidebar="menu-badge"
-      className={cn(sidebarMenuBadgeStyles, className)}
+      className={clsx(sidebarMenuBadgeStyles, className)}
       {...props}
     />
   );
@@ -874,7 +890,7 @@ function SidebarMenuSkeleton({
     <div
       data-slot="sidebar-menu-skeleton"
       data-sidebar="menu-skeleton"
-      className={cn(sidebarMenuSkeletonStyles, className)}
+      className={clsx(sidebarMenuSkeletonStyles, className)}
       {...props}
     >
       {showIcon && (
@@ -912,7 +928,7 @@ function SidebarMenuSub({ className, ...props }: React.ComponentProps<"ul">) {
     <ul
       data-slot="sidebar-menu-sub"
       data-sidebar="menu-sub"
-      className={cn(sidebarMenuSubStyles, className)}
+      className={clsx(sidebarMenuSubStyles, className)}
       {...props}
     />
   );
@@ -923,7 +939,7 @@ function SidebarMenuSubItem({ className, ...props }: React.ComponentProps<"li">)
     <li
       data-slot="sidebar-menu-sub-item"
       data-sidebar="menu-sub-item"
-      className={cn("group/menu-sub-item", css({ position: "relative" }), className)}
+      className={clsx("group/menu-sub-item", css({ position: "relative" }), className)}
       {...props}
     />
   );
@@ -970,7 +986,7 @@ function SidebarMenuSubButton({
     defaultTagName: "a",
     props: mergeProps<"a">(
       {
-        className: cn(sidebarMenuSubButtonStyles, className),
+        className: clsx(sidebarMenuSubButtonStyles, className),
       },
       props,
     ),

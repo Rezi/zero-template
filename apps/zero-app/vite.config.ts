@@ -5,7 +5,6 @@ import { devtools } from "@tanstack/devtools-vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 
 import viteReact from "@vitejs/plugin-react";
-import tailwindcss from "@tailwindcss/vite";
 
 const r = (p: string) => resolve(__dirname, p);
 
@@ -23,11 +22,10 @@ const config = defineConfig({
       { find: "@zero-app/auth", replacement: r("../../libs/auth/src/index.ts") },
       { find: "@zero-app/db", replacement: r("../../libs/db/src/index.ts") },
       { find: "@zero-app/zero", replacement: r("../../libs/zero/src/index.ts") },
-      // shadcn/ui is generated into libs/ui-library. Generated components import
-      // each other and the `cn` helper via subpaths (@zero-app/ui-library/lib/utils,
-      // @zero-app/ui-library/components/ui/*), so those must resolve to files under
-      // src/. The regex (with a capture group) must precede the bare-package alias,
-      // which only ever resolves the barrel.
+      // shadcn/ui is generated into libs/ui-library. Components and consumers can
+      // import via subpaths (e.g. @zero-app/ui-library/components/ui/button), so
+      // those must resolve to files under src/. The regex (with a capture group)
+      // must precede the bare-package alias, which only ever resolves the barrel.
       {
         find: /^@zero-app\/ui-library\/(.*)$/,
         replacement: r("../../libs/ui-library/src/$1"),
@@ -46,10 +44,9 @@ const config = defineConfig({
     ],
   },
   // Panda's CSS is imported as a prebuilt stylesheet (@zero-app/styled-system/styles.css,
-  // produced by `panda cssgen`) rather than via the PostCSS plugin: the @tailwindcss/vite
-  // plugin owns the CSS pipeline here, so an inline css.postcss panda plugin never runs.
-  // Regenerate the stylesheet with `deno task panda` (or `deno task panda:watch` for HMR).
-  plugins: [devtools(), tailwindcss(), tanstackStart(), viteReact()],
+  // produced by `panda cssgen`) and consumed as a plain CSS side-effect import in
+  // `__root.tsx`. Regenerate it with `deno task panda` (or `deno task panda:watch` for HMR).
+  plugins: [devtools(), tanstackStart(), viteReact()],
 });
 
 export default config;

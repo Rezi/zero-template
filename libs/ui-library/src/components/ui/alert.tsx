@@ -1,7 +1,7 @@
 import * as React from "react";
 import { css, cva, type RecipeVariantProps } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 
 const alertVariants = cva({
   base: {
@@ -50,7 +50,7 @@ function Alert({
     <div
       data-slot="alert"
       role="alert"
-      className={cn(alertVariants({ variant }), className)}
+      className={clsx(alertVariants({ variant }), className)}
       {...props}
     />
   );
@@ -60,7 +60,7 @@ function AlertTitle({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="alert-title"
-      className={cn(
+      className={clsx(
         css({
           fontWeight: "medium",
           "[data-slot='alert']:has(> svg) &": { gridColumnStart: "2" },
@@ -78,7 +78,7 @@ function AlertDescription({ className, ...props }: React.ComponentProps<"div">) 
   return (
     <div
       data-slot="alert-description"
-      className={cn(
+      className={clsx(
         css({
           fontSize: "sm",
           textWrap: "balance",
@@ -99,7 +99,7 @@ function AlertAction({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="alert-action"
-      className={cn(css({ position: "absolute", top: "2.5", right: "3" }), className)}
+      className={clsx(css({ position: "absolute", top: "2.5", right: "3" }), className)}
       {...props}
     />
   );

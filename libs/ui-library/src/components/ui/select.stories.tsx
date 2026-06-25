@@ -78,7 +78,9 @@ export const Controlled: Story = {
             <SelectItem value="blueberry">Blueberry</SelectItem>
           </SelectContent>
         </Select>
-        <p className={css({ fontSize: "sm", color: "muted.foreground" })}>Selected: {value ?? "none"}</p>
+        <p className={css({ fontSize: "sm", color: "muted.foreground" })}>
+          Selected: {value ?? "none"}
+        </p>
       </div>
     );
   },

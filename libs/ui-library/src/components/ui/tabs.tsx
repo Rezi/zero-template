@@ -1,14 +1,14 @@
 import { Tabs as TabsPrimitive } from "@base-ui/react/tabs";
 import { css, cva, type RecipeVariantProps } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 
 function Tabs({ className, orientation = "horizontal", ...props }: TabsPrimitive.Root.Props) {
   return (
     <TabsPrimitive.Root
       data-slot="tabs"
       data-orientation={orientation}
-      className={cn(
+      className={clsx(
         css({
           display: "flex",
           gap: "2",
@@ -58,7 +58,7 @@ function TabsList({
     <TabsPrimitive.List
       data-slot="tabs-list"
       data-variant={variant}
-      className={cn(tabsListVariants({ variant }), className)}
+      className={clsx(tabsListVariants({ variant }), className)}
       {...props}
     />
   );
@@ -68,7 +68,7 @@ function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
   return (
     <TabsPrimitive.Tab
       data-slot="tabs-trigger"
-      className={cn(
+      className={clsx(
         css({
           position: "relative",
           display: "inline-flex",
@@ -158,7 +158,7 @@ function TabsContent({ className, ...props }: TabsPrimitive.Panel.Props) {
   return (
     <TabsPrimitive.Panel
       data-slot="tabs-content"
-      className={cn(css({ flex: "1", fontSize: "sm", outline: "none" }), className)}
+      className={clsx(css({ flex: "1", fontSize: "sm", outline: "none" }), className)}
       {...props}
     />
   );

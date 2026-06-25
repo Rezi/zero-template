@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Button } from "@zero-app/ui-library";
 
 type ThemeMode = "light" | "dark" | "auto";
 
@@ -67,8 +68,8 @@ export default function ThemeToggle() {
       : `Theme mode: ${mode}. Click to switch mode.`;
 
   return (
-    <button type="button" onClick={toggleMode} aria-label={label} title={label}>
+    <Button variant="outline" onClick={toggleMode} aria-label={label} title={label}>
       {mode === "auto" ? "Auto" : mode === "dark" ? "Dark" : "Light"}
-    </button>
+    </Button>
   );
 }

@@ -1,11 +1,10 @@
 import * as React from "react";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 
 // shadcn cards round to `min(var(--radius-4xl), 24px)`; reused by several slots.
 const cardRadius = "min(var(--radius-4xl), 24px)";
-// Tailwind `shadow-sm` composed with `ring-1`. The ring colour is the only part
 // that changes between light/dark.
 const cardShadow = (ringColor: string) =>
   `0 0 0 1px ${ringColor}, 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)`;
@@ -19,7 +18,7 @@ function Card({
     <div
       data-slot="card"
       data-size={size}
-      className={cn(
+      className={clsx(
         css({
           display: "flex",
           flexDirection: "column",
@@ -53,9 +52,6 @@ function Card({
   );
 }
 
-// Bottom divider for a header. The `border-b` Tailwind utility used to draw the
-// border AND trigger the `&.border-b` padding; in Panda the `bordered` prop applies
-// both together.
 const cardHeaderBorderedStyles = css({
   borderBottomWidth: "1px",
   borderColor: "border",
@@ -70,7 +66,7 @@ function CardHeader({
   return (
     <div
       data-slot="card-header"
-      className={cn(
+      className={clsx(
         css({
           containerType: "inline-size",
           containerName: "card-header",
@@ -96,7 +92,7 @@ function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-title"
-      className={cn(
+      className={clsx(
         css({ fontFamily: "var(--font-heading)", fontSize: "1rem", fontWeight: "medium" }),
         className,
       )}
@@ -109,7 +105,7 @@ function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-description"
-      className={cn(css({ fontSize: "sm", color: "muted.foreground" }), className)}
+      className={clsx(css({ fontSize: "sm", color: "muted.foreground" }), className)}
       {...props}
     />
   );
@@ -119,7 +115,7 @@ function CardAction({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-action"
-      className={cn(
+      className={clsx(
         css({
           gridColumnStart: "2",
           gridRow: "span 2 / span 2",
@@ -138,7 +134,7 @@ function CardContent({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-content"
-      className={cn(css({ px: "var(--card-spacing)" }), className)}
+      className={clsx(css({ px: "var(--card-spacing)" }), className)}
       {...props}
     />
   );
@@ -159,7 +155,7 @@ function CardFooter({
   return (
     <div
       data-slot="card-footer"
-      className={cn(
+      className={clsx(
         css({
           display: "flex",
           alignItems: "center",

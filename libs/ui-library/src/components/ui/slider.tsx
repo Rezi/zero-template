@@ -1,7 +1,7 @@
 import { Slider as SliderPrimitive } from "@base-ui/react/slider";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 
 const shadowMd = "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)";
 const thumbRingHover = `0 0 0 4px color-mix(in oklab, var(--ring) 30%, transparent), ${shadowMd}`;
@@ -80,7 +80,7 @@ function Slider({
 
   return (
     <SliderPrimitive.Root
-      className={cn(sliderStyles, className)}
+      className={clsx(sliderStyles, className)}
       data-slot="slider"
       defaultValue={defaultValue}
       value={value}
@@ -94,7 +94,11 @@ function Slider({
           <SliderPrimitive.Indicator data-slot="slider-range" className={sliderIndicatorStyles} />
         </SliderPrimitive.Track>
         {Array.from({ length: _values.length }, (_, index) => (
-          <SliderPrimitive.Thumb data-slot="slider-thumb" key={index} className={sliderThumbStyles} />
+          <SliderPrimitive.Thumb
+            data-slot="slider-thumb"
+            key={index}
+            className={sliderThumbStyles}
+          />
         ))}
       </SliderPrimitive.Control>
     </SliderPrimitive.Root>

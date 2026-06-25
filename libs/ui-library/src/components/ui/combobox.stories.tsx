@@ -62,7 +62,9 @@ export const Controlled: Story = {
             </ComboboxList>
           </ComboboxContent>
         </Combobox>
-        <p className={css({ fontSize: "sm", color: "muted.foreground" })}>Selected: {value ?? "none"}</p>
+        <p className={css({ fontSize: "sm", color: "muted.foreground" })}>
+          Selected: {value ?? "none"}
+        </p>
       </div>
     );
   },

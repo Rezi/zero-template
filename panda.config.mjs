@@ -14,12 +14,43 @@
 // for typing, so dropping the runtime import avoids the resolution failure while
 // the JSDoc keeps editor type-checking.
 //
-// Tailwind v4 is still active alongside Panda for now, so `preflight` is disabled
-// to avoid a second, conflicting CSS reset. Drop this once Tailwind is removed.
+
+// Reproduces Panda's native `/<opacity>` color modifier for *custom* color
+// utilities. Panda only auto-applies the modifier to built-in color utilities
+// (where it emits `color-mix(in srgb, …)`); for a custom utility it passes the
+// raw `"token/NN"` string straight through, so we expand it here. Defaulting to
+// `srgb` keeps custom + built-in opacities blending in the same color space.
+function colorWithAlpha(value, colorSpace = "srgb") {
+  if (typeof value !== "string") return value;
+  const slash = value.indexOf("/");
+  if (slash === -1) return value; // bare token / raw value — already resolved by Panda
+  const token = value.slice(0, slash).replace(/\./g, "-");
+  const pct = value.slice(slash + 1);
+  return `color-mix(in ${colorSpace}, var(--colors-${token}) ${pct}%, transparent)`;
+}
 
 /** @type {import("@pandacss/dev").Config} */
 export default {
   preflight: false,
+
+  globalCss: {
+    "*": {
+      borderColor: "border",
+      outlineColor: "ring/50",
+    },
+    html: {
+      fontFamily: "var(--font-sans)",
+    },
+    body: {
+      bg: "background",
+      color: "foreground",
+    },
+    ".no-scrollbar": {
+      msOverflowStyle: "none",
+      scrollbarWidth: "none",
+      "&::-webkit-scrollbar": { display: "none" },
+    },
+  },
 
   // Emit React JSX patterns (Box, Stack, styled, …) in addition to css().
   jsxFramework: "react",
@@ -68,9 +99,7 @@ export default {
       // for dark), so light/dark switching is handled by those variables — no
       // Panda `_dark` condition is needed here. This lets
       // `css({ bg: "background", color: "muted.foreground" })` resolve the same
-      // tokens the Tailwind classes (`bg-background`, `text-muted-foreground`, …)
-      // used to — tw2panda drops these because they live in CSS `@theme`, not a
-      // tailwind.config it can read.
+
       semanticTokens: {
         colors: {
           background: { value: "var(--background)" },
@@ -129,11 +158,8 @@ export default {
     },
   },
 
-  // Custom utilities that reproduce Tailwind features the shadcn components rely
-  // on but Panda has no built-in for. Shared across all converted components.
   utilities: {
     extend: {
-      // Tailwind's `size-*` sets width AND height together.
       size: {
         className: "size",
         values: "sizes",
@@ -141,7 +167,7 @@ export default {
           return { width: value, height: value };
         },
       },
-      // Tailwind's focus ring (`ring-3`, `ring-[3px]`) is a spread box-shadow.
+
       // `ringW` draws it; `ringC` sets the colour via a CSS var with a sensible
       // fallback so the two can be set independently (as TW does).
       // NOTE: named `ringW`/`ringC` (not `ringWidth`/`ringColor`) on purpose —
@@ -161,17 +187,11 @@ export default {
         transform(value) {
           // Panda resolves a bare token (e.g. "ring") to `var(--colors-ring)`,
           // but it does NOT apply the `/<opacity>` modifier for a custom utility
-          // — it passes the raw "ring/30" string through. Reproduce Tailwind v4's
-          // `color-mix(in oklab, <color> N%, transparent)` by hand for that case.
-          const slash = typeof value === "string" ? value.indexOf("/") : -1;
-          if (slash !== -1) {
-            const token = value.slice(0, slash).replace(/\./g, "-");
-            const pct = value.slice(slash + 1);
-            return {
-              "--ring-shadow-color": `color-mix(in oklab, var(--colors-${token}) ${pct}%, transparent)`,
-            };
-          }
-          return { "--ring-shadow-color": value };
+          // — it passes the raw "ring/30" string through. `colorWithAlpha`
+          // expands that case (and is a no-op for an already-resolved value), so
+          // ring opacities blend in the same `srgb` space as every built-in
+          // color utility.
+          return { "--ring-shadow-color": colorWithAlpha(value) };
         },
       },
     },

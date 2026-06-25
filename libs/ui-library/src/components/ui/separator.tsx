@@ -1,7 +1,7 @@
 import { Separator as SeparatorPrimitive } from "@base-ui/react/separator";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 
 const separatorStyles = css({
   flexShrink: "0",
@@ -15,7 +15,7 @@ function Separator({ className, orientation = "horizontal", ...props }: Separato
     <SeparatorPrimitive
       data-slot="separator"
       orientation={orientation}
-      className={cn(separatorStyles, className)}
+      className={clsx(separatorStyles, className)}
       {...props}
     />
   );

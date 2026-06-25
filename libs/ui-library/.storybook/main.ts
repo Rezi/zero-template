@@ -11,9 +11,6 @@ const config: StorybookConfig = {
     options: {},
   },
   async viteFinal(viteConfig) {
-    const { default: tailwindcss } = await import("@tailwindcss/vite");
-    viteConfig.plugins ??= [];
-    viteConfig.plugins.push(tailwindcss());
     // Mirror the app's alias setup so stories can import from the package
     // barrel (`@zero-app/ui-library`) and subpaths, just like consumers do.
     // The styled-system alias also resolves the prebuilt Panda stylesheet the

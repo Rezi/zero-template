@@ -2,7 +2,7 @@ import * as React from "react";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 import { contentAnimationStyles, overlayAnimationStyles } from "../../lib/animations";
 import { Button } from "./button";
 import { XIcon } from "lucide-react";
@@ -94,7 +94,7 @@ function DialogOverlay({ className, ...props }: DialogPrimitive.Backdrop.Props) 
   return (
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
-      className={cn(dialogOverlayStyles, overlayAnimationStyles, className)}
+      className={clsx(dialogOverlayStyles, overlayAnimationStyles, className)}
       {...props}
     />
   );
@@ -113,7 +113,7 @@ function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
-        className={cn(dialogContentStyles, contentAnimationStyles, className)}
+        className={clsx(dialogContentStyles, contentAnimationStyles, className)}
         {...props}
       >
         {children}
@@ -132,7 +132,9 @@ function DialogContent({
 }
 
 function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
-  return <div data-slot="dialog-header" className={cn(dialogHeaderStyles, className)} {...props} />;
+  return (
+    <div data-slot="dialog-header" className={clsx(dialogHeaderStyles, className)} {...props} />
+  );
 }
 
 function DialogFooter({
@@ -144,7 +146,7 @@ function DialogFooter({
   showCloseButton?: boolean;
 }) {
   return (
-    <div data-slot="dialog-footer" className={cn(dialogFooterStyles, className)} {...props}>
+    <div data-slot="dialog-footer" className={clsx(dialogFooterStyles, className)} {...props}>
       {children}
       {showCloseButton && (
         <DialogPrimitive.Close render={<Button variant="outline" />}>Close</DialogPrimitive.Close>
@@ -157,7 +159,7 @@ function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn(dialogTitleStyles, className)}
+      className={clsx(dialogTitleStyles, className)}
       {...props}
     />
   );
@@ -167,7 +169,7 @@ function DialogDescription({ className, ...props }: DialogPrimitive.Description.
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"
-      className={cn(dialogDescriptionStyles, className)}
+      className={clsx(dialogDescriptionStyles, className)}
       {...props}
     />
   );

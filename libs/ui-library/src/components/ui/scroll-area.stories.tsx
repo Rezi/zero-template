@@ -33,9 +33,7 @@ export const Default: Story = {
 
 export const Paragraph: Story = {
   render: () => (
-    <ScrollArea
-      className={css({ h: "48", w: "80", rounded: "2xl", borderWidth: "1px", p: "4" })}
-    >
+    <ScrollArea className={css({ h: "48", w: "80", rounded: "2xl", borderWidth: "1px", p: "4" })}>
       <p className={css({ fontSize: "sm", lineHeight: "relaxed", color: "muted.foreground" })}>
         {Array.from({ length: 12 })
           .map(

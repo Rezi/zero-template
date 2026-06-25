@@ -1,7 +1,7 @@
 import * as React from "react";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 
 const textareaStyles = css({
   display: "flex",
@@ -34,7 +34,7 @@ const textareaStyles = css({
 });
 
 function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
-  return <textarea data-slot="textarea" className={cn(textareaStyles, className)} {...props} />;
+  return <textarea data-slot="textarea" className={clsx(textareaStyles, className)} {...props} />;
 }
 
 export { Textarea };

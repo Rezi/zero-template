@@ -57,7 +57,12 @@ export const Controlled: Story = {
     const [value, setValue] = React.useState("");
     return (
       <div
-        className={css({ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "3" })}
+        className={css({
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-start",
+          gap: "3",
+        })}
       >
         <InputOTP maxLength={4} value={value} onChange={setValue}>
           <InputOTPGroup>

@@ -3,7 +3,7 @@
 import { Toggle as TogglePrimitive } from "@base-ui/react/toggle";
 import { cva, type RecipeVariantProps } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 
 const toggleVariants = cva({
   base: {
@@ -82,7 +82,7 @@ function Toggle({
   return (
     <TogglePrimitive
       data-slot="toggle"
-      className={cn("group/toggle", toggleVariants({ variant, size }), className)}
+      className={clsx("group/toggle", toggleVariants({ variant, size }), className)}
       {...props}
     />
   );

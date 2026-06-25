@@ -3,7 +3,7 @@
 import * as React from "react";
 import { cva, css, type RecipeVariantProps } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 import { Button } from "./button";
 import { Input } from "./input";
 import { Textarea } from "./textarea";
@@ -101,7 +101,7 @@ const inputGroupAddonVariants = cva({
     },
     // Opt-in divider. The side depends on the addon's placement: a block-start
     // addon gets a bottom border, a block-end addon a top border (was the
-    // `&.border-b` / `&.border-t` Tailwind marker classes).
+
     bordered: {
       true: {},
       false: {},
@@ -130,7 +130,7 @@ function InputGroup({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="input-group"
       role="group"
-      className={cn(inputGroupStyles, className)}
+      className={clsx(inputGroupStyles, className)}
       {...props}
     />
   );
@@ -147,7 +147,7 @@ function InputGroupAddon({
       role="group"
       data-slot="input-group-addon"
       data-align={align}
-      className={cn(inputGroupAddonVariants({ align, bordered }), className)}
+      className={clsx(inputGroupAddonVariants({ align, bordered }), className)}
       onClick={(e) => {
         if ((e.target as HTMLElement).closest("button")) {
           return;
@@ -202,7 +202,7 @@ function InputGroupButton({
       type={type}
       data-size={size}
       variant={variant}
-      className={cn(inputGroupButtonVariants({ size }), className)}
+      className={clsx(inputGroupButtonVariants({ size }), className)}
       {...props}
     />
   );
@@ -219,7 +219,7 @@ const inputGroupTextStyles = css({
 });
 
 function InputGroupText({ className, ...props }: React.ComponentProps<"span">) {
-  return <span className={cn(inputGroupTextStyles, className)} {...props} />;
+  return <span className={clsx(inputGroupTextStyles, className)} {...props} />;
 }
 
 const inputGroupInputStyles = css({
@@ -238,7 +238,7 @@ function InputGroupInput({ className, ...props }: React.ComponentProps<"input">)
   return (
     <Input
       data-slot="input-group-control"
-      className={cn(inputGroupInputStyles, className)}
+      className={clsx(inputGroupInputStyles, className)}
       {...props}
     />
   );
@@ -262,7 +262,7 @@ function InputGroupTextarea({ className, ...props }: React.ComponentProps<"texta
   return (
     <Textarea
       data-slot="input-group-control"
-      className={cn(inputGroupTextareaStyles, className)}
+      className={clsx(inputGroupTextareaStyles, className)}
       {...props}
     />
   );

@@ -37,8 +37,20 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 const shell = css({ h: "96", w: "full" });
-const brand = css({ px: "4", py: "3", fontFamily: "var(--font-heading)", fontSize: "1rem", fontWeight: "medium" });
-const topbar = css({ display: "flex", alignItems: "center", gap: "2", borderBottomWidth: "1px", p: "4" });
+const brand = css({
+  px: "4",
+  py: "3",
+  fontFamily: "var(--font-heading)",
+  fontSize: "1rem",
+  fontWeight: "medium",
+});
+const topbar = css({
+  display: "flex",
+  alignItems: "center",
+  gap: "2",
+  borderBottomWidth: "1px",
+  p: "4",
+});
 const topbarLabel = css({ fontSize: "sm", fontWeight: "medium" });
 
 export const Default: Story = {
@@ -46,9 +58,7 @@ export const Default: Story = {
     <div className={shell}>
       <SidebarProvider>
         <Sidebar collapsible="none">
-          <SidebarHeader className={brand}>
-            Acme Inc
-          </SidebarHeader>
+          <SidebarHeader className={brand}>Acme Inc</SidebarHeader>
           <SidebarContent>
             <SidebarGroup>
               <SidebarGroupLabel>Application</SidebarGroupLabel>
@@ -71,14 +81,20 @@ export const Default: Story = {
               </SidebarGroupContent>
             </SidebarGroup>
           </SidebarContent>
-          <SidebarFooter className={css({ px: "4", py: "3", fontSize: "xs", color: "muted.foreground" })}>v1.0.0</SidebarFooter>
+          <SidebarFooter
+            className={css({ px: "4", py: "3", fontSize: "xs", color: "muted.foreground" })}
+          >
+            v1.0.0
+          </SidebarFooter>
         </Sidebar>
         <SidebarInset>
           <div className={topbar}>
             <SidebarTrigger />
             <span className={topbarLabel}>Dashboard</span>
           </div>
-          <div className={css({ p: "6", fontSize: "sm", color: "muted.foreground" })}>Main content area.</div>
+          <div className={css({ p: "6", fontSize: "sm", color: "muted.foreground" })}>
+            Main content area.
+          </div>
         </SidebarInset>
       </SidebarProvider>
     </div>
@@ -90,9 +106,7 @@ export const Collapsible: Story = {
     <div className={shell}>
       <SidebarProvider>
         <Sidebar collapsible="icon">
-          <SidebarHeader className={brand}>
-            Acme
-          </SidebarHeader>
+          <SidebarHeader className={brand}>Acme</SidebarHeader>
           <SidebarContent>
             <SidebarGroup>
               <SidebarGroupLabel>Application</SidebarGroupLabel>

@@ -4,7 +4,7 @@ import * as React from "react";
 import { Command as CommandPrimitive } from "cmdk";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./dialog";
 import { InputGroup, InputGroupAddon } from "./input-group";
 import { SearchIcon, CheckIcon } from "lucide-react";
@@ -22,8 +22,6 @@ const commandStyles = css({
 
 const commandDialogContentStyles = css({
   top: "33.333333%",
-  // override DialogContent's translate(-50%,-50%) — `!important` because Panda
-  // atomic transform classes don't dedupe the way Tailwind/twMerge would.
   transform: "translateX(-50%)!",
   overflow: "hidden",
   borderRadius: "3xl!",
@@ -103,11 +101,7 @@ const commandShortcutStyles = css({
 
 function Command({ className, ...props }: React.ComponentProps<typeof CommandPrimitive>) {
   return (
-    <CommandPrimitive
-      data-slot="command"
-      className={cn(commandStyles, className)}
-      {...props}
-    />
+    <CommandPrimitive data-slot="command" className={clsx(commandStyles, className)} {...props} />
   );
 }
 
@@ -132,7 +126,7 @@ function CommandDialog({
         <DialogDescription>{description}</DialogDescription>
       </DialogHeader>
       <DialogContent
-        className={cn(commandDialogContentStyles, className)}
+        className={clsx(commandDialogContentStyles, className)}
         showCloseButton={showCloseButton}
       >
         {children}
@@ -150,7 +144,7 @@ function CommandInput({
       <InputGroup className={commandInputGroupStyles}>
         <CommandPrimitive.Input
           data-slot="command-input"
-          className={cn(commandInputStyles, className)}
+          className={clsx(commandInputStyles, className)}
           {...props}
         />
         <InputGroupAddon>
@@ -165,7 +159,7 @@ function CommandList({ className, ...props }: React.ComponentProps<typeof Comman
   return (
     <CommandPrimitive.List
       data-slot="command-list"
-      className={cn("no-scrollbar", commandListStyles, className)}
+      className={clsx("no-scrollbar", commandListStyles, className)}
       {...props}
     />
   );
@@ -178,7 +172,7 @@ function CommandEmpty({
   return (
     <CommandPrimitive.Empty
       data-slot="command-empty"
-      className={cn(commandEmptyStyles, className)}
+      className={clsx(commandEmptyStyles, className)}
       {...props}
     />
   );
@@ -191,7 +185,7 @@ function CommandGroup({
   return (
     <CommandPrimitive.Group
       data-slot="command-group"
-      className={cn(commandGroupStyles, className)}
+      className={clsx(commandGroupStyles, className)}
       {...props}
     />
   );
@@ -204,7 +198,7 @@ function CommandSeparator({
   return (
     <CommandPrimitive.Separator
       data-slot="command-separator"
-      className={cn(commandSeparatorStyles, className)}
+      className={clsx(commandSeparatorStyles, className)}
       {...props}
     />
   );
@@ -218,7 +212,7 @@ function CommandItem({
   return (
     <CommandPrimitive.Item
       data-slot="command-item"
-      className={cn(commandItemStyles, className)}
+      className={clsx(commandItemStyles, className)}
       {...props}
     >
       {children}
@@ -231,7 +225,7 @@ function CommandShortcut({ className, ...props }: React.ComponentProps<"span">) 
   return (
     <span
       data-slot="command-shortcut"
-      className={cn(commandShortcutStyles, className)}
+      className={clsx(commandShortcutStyles, className)}
       {...props}
     />
   );

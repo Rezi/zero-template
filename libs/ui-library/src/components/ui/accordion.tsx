@@ -1,7 +1,7 @@
 import { Accordion as AccordionPrimitive } from "@base-ui/react/accordion";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 
 const accordionStyles = css({
@@ -90,7 +90,7 @@ function Accordion({ className, ...props }: AccordionPrimitive.Root.Props) {
   return (
     <AccordionPrimitive.Root
       data-slot="accordion"
-      className={cn(accordionStyles, className)}
+      className={clsx(accordionStyles, className)}
       {...props}
     />
   );
@@ -100,7 +100,7 @@ function AccordionItem({ className, ...props }: AccordionPrimitive.Item.Props) {
   return (
     <AccordionPrimitive.Item
       data-slot="accordion-item"
-      className={cn(accordionItemStyles, className)}
+      className={clsx(accordionItemStyles, className)}
       {...props}
     />
   );
@@ -111,7 +111,7 @@ function AccordionTrigger({ className, children, ...props }: AccordionPrimitive.
     <AccordionPrimitive.Header className={accordionHeaderStyles}>
       <AccordionPrimitive.Trigger
         data-slot="accordion-trigger"
-        className={cn(accordionTriggerStyles, className)}
+        className={clsx(accordionTriggerStyles, className)}
         {...props}
       >
         {children}
@@ -135,7 +135,7 @@ function AccordionContent({ className, children, ...props }: AccordionPrimitive.
       className={accordionContentPanelStyles}
       {...props}
     >
-      <div className={cn(accordionContentInnerStyles, className)}>{children}</div>
+      <div className={clsx(accordionContentInnerStyles, className)}>{children}</div>
     </AccordionPrimitive.Panel>
   );
 }

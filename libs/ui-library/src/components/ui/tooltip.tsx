@@ -1,7 +1,7 @@
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 import { tooltipAnimationStyles } from "../../lib/animations";
 
 const tooltipPositionerStyles = css({ isolation: "isolate", zIndex: "50" });
@@ -93,7 +93,7 @@ function TooltipContent({
       >
         <TooltipPrimitive.Popup
           data-slot="tooltip-content"
-          className={cn(tooltipContentStyles, tooltipAnimationStyles, className)}
+          className={clsx(tooltipContentStyles, tooltipAnimationStyles, className)}
           {...props}
         >
           {children}

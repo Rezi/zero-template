@@ -4,7 +4,7 @@ import * as React from "react";
 import { ContextMenu as ContextMenuPrimitive } from "@base-ui/react/context-menu";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 import { popoverAnimationStyles } from "../../lib/animations";
 import { ChevronRightIcon, CheckIcon } from "lucide-react";
 
@@ -134,7 +134,7 @@ function ContextMenuTrigger({ className, ...props }: ContextMenuPrimitive.Trigge
   return (
     <ContextMenuPrimitive.Trigger
       data-slot="context-menu-trigger"
-      className={cn(contextMenuTriggerStyles, className)}
+      className={clsx(contextMenuTriggerStyles, className)}
       {...props}
     />
   );
@@ -160,7 +160,7 @@ function ContextMenuContent({
       >
         <ContextMenuPrimitive.Popup
           data-slot="context-menu-content"
-          className={cn(contextMenuContentStyles, popoverAnimationStyles, className)}
+          className={clsx(contextMenuContentStyles, popoverAnimationStyles, className)}
           {...props}
         />
       </ContextMenuPrimitive.Positioner>
@@ -183,7 +183,7 @@ function ContextMenuLabel({
     <ContextMenuPrimitive.GroupLabel
       data-slot="context-menu-label"
       data-inset={inset}
-      className={cn(contextMenuLabelStyles, className)}
+      className={clsx(contextMenuLabelStyles, className)}
       {...props}
     />
   );
@@ -203,7 +203,7 @@ function ContextMenuItem({
       data-slot="context-menu-item"
       data-inset={inset}
       data-variant={variant}
-      className={cn(contextMenuItemStyles, className)}
+      className={clsx(contextMenuItemStyles, className)}
       {...props}
     />
   );
@@ -225,7 +225,7 @@ function ContextMenuSubTrigger({
     <ContextMenuPrimitive.SubmenuTrigger
       data-slot="context-menu-sub-trigger"
       data-inset={inset}
-      className={cn(contextMenuSubTriggerStyles, className)}
+      className={clsx(contextMenuSubTriggerStyles, className)}
       {...props}
     >
       {children}
@@ -251,7 +251,7 @@ function ContextMenuCheckboxItem({
     <ContextMenuPrimitive.CheckboxItem
       data-slot="context-menu-checkbox-item"
       data-inset={inset}
-      className={cn(contextMenuCheckRadioItemStyles, className)}
+      className={clsx(contextMenuCheckRadioItemStyles, className)}
       checked={checked}
       {...props}
     >
@@ -281,7 +281,7 @@ function ContextMenuRadioItem({
     <ContextMenuPrimitive.RadioItem
       data-slot="context-menu-radio-item"
       data-inset={inset}
-      className={cn(contextMenuCheckRadioItemStyles, className)}
+      className={clsx(contextMenuCheckRadioItemStyles, className)}
       {...props}
     >
       <span className={contextMenuIndicatorStyles}>
@@ -298,7 +298,7 @@ function ContextMenuSeparator({ className, ...props }: ContextMenuPrimitive.Sepa
   return (
     <ContextMenuPrimitive.Separator
       data-slot="context-menu-separator"
-      className={cn(contextMenuSeparatorStyles, className)}
+      className={clsx(contextMenuSeparatorStyles, className)}
       {...props}
     />
   );
@@ -308,7 +308,7 @@ function ContextMenuShortcut({ className, ...props }: React.ComponentProps<"span
   return (
     <span
       data-slot="context-menu-shortcut"
-      className={cn(contextMenuShortcutStyles, className)}
+      className={clsx(contextMenuShortcutStyles, className)}
       {...props}
     />
   );

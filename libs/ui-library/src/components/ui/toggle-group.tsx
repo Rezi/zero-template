@@ -3,7 +3,7 @@ import { Toggle as TogglePrimitive } from "@base-ui/react/toggle";
 import { ToggleGroup as ToggleGroupPrimitive } from "@base-ui/react/toggle-group";
 import { css, type RecipeVariantProps } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 import { toggleVariants } from "./toggle";
 
 const toggleGroupStyles = css({
@@ -87,7 +87,7 @@ function ToggleGroup({
       data-spacing={spacing}
       data-orientation={orientation}
       style={{ "--gap": spacing } as React.CSSProperties}
-      className={cn(toggleGroupStyles, className)}
+      className={clsx(toggleGroupStyles, className)}
       {...props}
     >
       <ToggleGroupContext.Provider value={{ variant, size, spacing, orientation }}>
@@ -112,7 +112,7 @@ function ToggleGroupItem({
       data-variant={context.variant || variant}
       data-size={context.size || size}
       data-spacing={context.spacing}
-      className={cn(
+      className={clsx(
         toggleGroupItemStyles,
         toggleVariants({
           variant: context.variant || variant,

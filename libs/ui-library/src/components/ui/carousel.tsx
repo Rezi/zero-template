@@ -4,7 +4,7 @@ import * as React from "react";
 import useEmblaCarousel, { type UseEmblaCarouselType } from "embla-carousel-react";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 import { Button } from "./button";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 
@@ -144,7 +144,7 @@ function Carousel({
     >
       <div
         onKeyDownCapture={handleKeyDown}
-        className={cn(css({ position: "relative" }), className)}
+        className={clsx(css({ position: "relative" }), className)}
         role="region"
         aria-roledescription="carousel"
         data-slot="carousel"
@@ -162,7 +162,7 @@ function CarouselContent({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div ref={carouselRef} className={css({ overflow: "hidden" })} data-slot="carousel-content">
       <div
-        className={cn(
+        className={clsx(
           carouselContentInner,
           orientation === "horizontal" ? carouselContentHorizontal : carouselContentVertical,
           className,
@@ -181,7 +181,7 @@ function CarouselItem({ className, ...props }: React.ComponentProps<"div">) {
       role="group"
       aria-roledescription="slide"
       data-slot="carousel-item"
-      className={cn(
+      className={clsx(
         carouselItemBase,
         orientation === "horizontal" ? carouselItemHorizontal : carouselItemVertical,
         className,
@@ -204,7 +204,7 @@ function CarouselPrevious({
       data-slot="carousel-previous"
       variant={variant}
       size={size}
-      className={cn(
+      className={clsx(
         carouselNavBase,
         orientation === "horizontal" ? carouselPrevHorizontal : carouselPrevVertical,
         className,
@@ -232,7 +232,7 @@ function CarouselNext({
       data-slot="carousel-next"
       variant={variant}
       size={size}
-      className={cn(
+      className={clsx(
         carouselNavBase,
         orientation === "horizontal" ? carouselNextHorizontal : carouselNextVertical,
         className,

@@ -4,7 +4,7 @@ import * as React from "react";
 import { Dialog as SheetPrimitive } from "@base-ui/react/dialog";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 import { Button } from "./button";
 import { XIcon } from "lucide-react";
 
@@ -117,7 +117,7 @@ function SheetOverlay({ className, ...props }: SheetPrimitive.Backdrop.Props) {
   return (
     <SheetPrimitive.Backdrop
       data-slot="sheet-overlay"
-      className={cn(sheetOverlayStyles, className)}
+      className={clsx(sheetOverlayStyles, className)}
       {...props}
     />
   );
@@ -139,7 +139,7 @@ function SheetContent({
       <SheetPrimitive.Popup
         data-slot="sheet-content"
         data-side={side}
-        className={cn(sheetContentStyles, className)}
+        className={clsx(sheetContentStyles, className)}
         {...props}
       >
         {children}
@@ -158,18 +158,18 @@ function SheetContent({
 }
 
 function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
-  return <div data-slot="sheet-header" className={cn(sheetHeaderStyles, className)} {...props} />;
+  return <div data-slot="sheet-header" className={clsx(sheetHeaderStyles, className)} {...props} />;
 }
 
 function SheetFooter({ className, ...props }: React.ComponentProps<"div">) {
-  return <div data-slot="sheet-footer" className={cn(sheetFooterStyles, className)} {...props} />;
+  return <div data-slot="sheet-footer" className={clsx(sheetFooterStyles, className)} {...props} />;
 }
 
 function SheetTitle({ className, ...props }: SheetPrimitive.Title.Props) {
   return (
     <SheetPrimitive.Title
       data-slot="sheet-title"
-      className={cn(sheetTitleStyles, className)}
+      className={clsx(sheetTitleStyles, className)}
       {...props}
     />
   );
@@ -179,7 +179,7 @@ function SheetDescription({ className, ...props }: SheetPrimitive.Description.Pr
   return (
     <SheetPrimitive.Description
       data-slot="sheet-description"
-      className={cn(sheetDescriptionStyles, className)}
+      className={clsx(sheetDescriptionStyles, className)}
       {...props}
     />
   );

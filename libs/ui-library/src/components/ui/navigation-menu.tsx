@@ -1,7 +1,7 @@
 import { NavigationMenu as NavigationMenuPrimitive } from "@base-ui/react/navigation-menu";
 import { cva, css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 import { ChevronDownIcon } from "lucide-react";
 
 const shadowLg = "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)";
@@ -35,7 +35,7 @@ function NavigationMenu({
   return (
     <NavigationMenuPrimitive.Root
       data-slot="navigation-menu"
-      className={cn(navigationMenuStyles, className)}
+      className={clsx(navigationMenuStyles, className)}
       {...props}
     >
       {children}
@@ -51,7 +51,7 @@ function NavigationMenuList({
   return (
     <NavigationMenuPrimitive.List
       data-slot="navigation-menu-list"
-      className={cn("group", navigationMenuListStyles, className)}
+      className={clsx("group", navigationMenuListStyles, className)}
       {...props}
     />
   );
@@ -64,7 +64,7 @@ function NavigationMenuItem({
   return (
     <NavigationMenuPrimitive.Item
       data-slot="navigation-menu-item"
-      className={cn(css({ position: "relative" }), className)}
+      className={clsx(css({ position: "relative" }), className)}
       {...props}
     />
   );
@@ -119,7 +119,7 @@ function NavigationMenuTrigger({
   return (
     <NavigationMenuPrimitive.Trigger
       data-slot="navigation-menu-trigger"
-      className={cn(navigationMenuTriggerStyle(), "group", className)}
+      className={clsx(navigationMenuTriggerStyle(), "group", className)}
       {...props}
     >
       {children} <ChevronDownIcon className={navigationMenuTriggerIconStyles} aria-hidden="true" />
@@ -147,7 +147,7 @@ function NavigationMenuContent({ className, ...props }: NavigationMenuPrimitive.
   return (
     <NavigationMenuPrimitive.Content
       data-slot="navigation-menu-content"
-      className={cn(navigationMenuContentStyles, className)}
+      className={clsx(navigationMenuContentStyles, className)}
       {...props}
     />
   );
@@ -210,7 +210,7 @@ function NavigationMenuPositioner({
         sideOffset={sideOffset}
         align={align}
         alignOffset={alignOffset}
-        className={cn(navigationMenuPositionerStyles, className)}
+        className={clsx(navigationMenuPositionerStyles, className)}
         {...props}
       >
         <NavigationMenuPrimitive.Popup className={navigationMenuPopupStyles}>
@@ -255,7 +255,7 @@ function NavigationMenuLink({ className, ...props }: NavigationMenuPrimitive.Lin
   return (
     <NavigationMenuPrimitive.Link
       data-slot="navigation-menu-link"
-      className={cn(navigationMenuLinkStyles, className)}
+      className={clsx(navigationMenuLinkStyles, className)}
       {...props}
     />
   );
@@ -289,7 +289,7 @@ function NavigationMenuIndicator({
   return (
     <NavigationMenuPrimitive.Icon
       data-slot="navigation-menu-indicator"
-      className={cn(navigationMenuIndicatorStyles, className)}
+      className={clsx(navigationMenuIndicatorStyles, className)}
       {...props}
     >
       <div className={navigationMenuIndicatorArrowStyles} />

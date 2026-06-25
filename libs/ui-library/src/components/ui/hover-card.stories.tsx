@@ -21,7 +21,13 @@ export const Default: Story = {
       <HoverCardTrigger render={<Button variant="link">@zero-app</Button>} />
       <HoverCardContent>
         <div className={css({ display: "flex", flexDirection: "column", gap: "2" })}>
-          <h4 className={css({ fontFamily: "var(--font-heading)", fontSize: "sm", fontWeight: "medium" })}>
+          <h4
+            className={css({
+              fontFamily: "var(--font-heading)",
+              fontSize: "sm",
+              fontWeight: "medium",
+            })}
+          >
             @zero-app
           </h4>
           <p className={mutedSm}>The shadcn-style component library built on Base UI.</p>

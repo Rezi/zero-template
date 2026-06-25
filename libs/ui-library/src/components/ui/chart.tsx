@@ -3,7 +3,7 @@ import * as RechartsPrimitive from "recharts";
 import type { TooltipValueType } from "recharts";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 
 const shadowLg = "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)";
 
@@ -126,7 +126,7 @@ function ChartContainer({
       <div
         data-slot="chart"
         data-chart={chartId}
-        className={cn(chartContainerStyles, className)}
+        className={clsx(chartContainerStyles, className)}
         {...props}
       >
         <ChartStyle id={chartId} config={config} />
@@ -209,7 +209,9 @@ function ChartTooltipContent({
 
     if (labelFormatter) {
       return (
-        <div className={cn(chartLabelStyles, labelClassName)}>{labelFormatter(value, payload)}</div>
+        <div className={clsx(chartLabelStyles, labelClassName)}>
+          {labelFormatter(value, payload)}
+        </div>
       );
     }
 
@@ -217,7 +219,7 @@ function ChartTooltipContent({
       return null;
     }
 
-    return <div className={cn(chartLabelStyles, labelClassName)}>{value}</div>;
+    return <div className={clsx(chartLabelStyles, labelClassName)}>{value}</div>;
   }, [label, labelFormatter, payload, hideLabel, labelClassName, config, labelKey]);
 
   if (!active || !payload?.length) {
@@ -227,7 +229,7 @@ function ChartTooltipContent({
   const nestLabel = payload.length === 1 && indicator !== "dot";
 
   return (
-    <div className={cn(chartTooltipStyles, className)}>
+    <div className={clsx(chartTooltipStyles, className)}>
       {!nestLabel ? tooltipLabel : null}
       <div className={chartTooltipListStyles}>
         {payload
@@ -240,7 +242,7 @@ function ChartTooltipContent({
             return (
               <div
                 key={index}
-                className={cn(
+                className={clsx(
                   chartTooltipRowStyles,
                   indicator === "dot" && css({ alignItems: "center" }),
                 )}
@@ -254,7 +256,7 @@ function ChartTooltipContent({
                     ) : (
                       !hideIndicator && (
                         <div
-                          className={cn(
+                          className={clsx(
                             chartIndicatorBaseStyles,
                             indicator === "dot" && css({ h: "2.5", w: "2.5" }),
                             indicator === "line" && css({ w: "1" }),
@@ -277,16 +279,14 @@ function ChartTooltipContent({
                       )
                     )}
                     <div
-                      className={cn(
+                      className={clsx(
                         css({
                           display: "flex",
                           flex: "1",
                           justifyContent: "space-between",
                           lineHeight: "none",
                         }),
-                        nestLabel
-                          ? css({ alignItems: "flex-end" })
-                          : css({ alignItems: "center" }),
+                        nestLabel ? css({ alignItems: "flex-end" }) : css({ alignItems: "center" }),
                       )}
                     >
                       <div className={chartTooltipListStyles}>
@@ -340,7 +340,7 @@ function ChartLegendContent({
 
   return (
     <div
-      className={cn(
+      className={clsx(
         css({ display: "flex", alignItems: "center", justifyContent: "center", gap: "4" }),
         verticalAlign === "top" ? css({ pb: "3" }) : css({ pt: "3" }),
         className,

@@ -2,7 +2,7 @@ import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import { cva, css, type RecipeVariantProps } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 import { Separator } from "./separator";
 
 const buttonGroupVariants = cva({
@@ -73,7 +73,7 @@ function ButtonGroup({
       role="group"
       data-slot="button-group"
       data-orientation={orientation}
-      className={cn(buttonGroupVariants({ orientation }), className)}
+      className={clsx(buttonGroupVariants({ orientation }), className)}
       {...props}
     />
   );
@@ -98,7 +98,7 @@ function ButtonGroupText({ className, render, ...props }: useRender.ComponentPro
     defaultTagName: "div",
     props: mergeProps<"div">(
       {
-        className: cn(buttonGroupTextStyles, className),
+        className: clsx(buttonGroupTextStyles, className),
       },
       props,
     ),
@@ -126,7 +126,7 @@ function ButtonGroupSeparator({
     <Separator
       data-slot="button-group-separator"
       orientation={orientation}
-      className={cn(buttonGroupSeparatorStyles, className)}
+      className={clsx(buttonGroupSeparatorStyles, className)}
       {...props}
     />
   );

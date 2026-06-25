@@ -1,7 +1,7 @@
 import * as React from "react";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 
 const aspectRatioStyles = css({ position: "relative", aspectRatio: "var(--ratio)" });
 
@@ -18,7 +18,7 @@ function AspectRatio({
           "--ratio": ratio,
         } as React.CSSProperties
       }
-      className={cn(aspectRatioStyles, className)}
+      className={clsx(aspectRatioStyles, className)}
       {...props}
     />
   );

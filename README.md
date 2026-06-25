@@ -7,7 +7,8 @@ A real-time zero-app app built as an **Nx monorepo**. The stack:
 - **[Rocicorp Zero](https://zero.rocicorp.dev/)** — sync engine / local-first queries & mutators
 - **[better-auth](https://www.better-auth.com/)** — authentication (email/password + GitHub OAuth)
 - **[Drizzle ORM](https://orm.drizzle.team/)** + **PostgreSQL** — schema & migrations
-- **[Vite](https://vite.dev/)** + **[Tailwind CSS v4](https://tailwindcss.com/)** — build & styling
+- **[Vite](https://vite.dev/)** — build
+- \*\*[Panda CSS](https://panda-css.com/) styling
 - **[Vitest](https://vitest.dev/)** + **[Playwright](https://playwright.dev/)** — unit & e2e tests
 
 > **Package manager & task runner: [Deno](https://deno.com/)** (≥ 2.x). Dependencies are declared in `package.json` and resolved by Deno into a real `node_modules` directory (`"nodeModulesDir": "auto"` in `deno.json`); the lockfile is `deno.lock`. Tasks live in `deno.json` and are run with `deno task <name>`. Do **not** use `npm`/`pnpm install` — that would create a competing lockfile and `node_modules` layout.

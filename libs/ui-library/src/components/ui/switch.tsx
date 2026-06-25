@@ -1,7 +1,7 @@
 import { Switch as SwitchPrimitive } from "@base-ui/react/switch";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 
 const switchStyles = css({
   position: "relative",
@@ -79,7 +79,7 @@ function Switch({
     <SwitchPrimitive.Root
       data-slot="switch"
       data-size={size}
-      className={cn("peer", switchStyles, className)}
+      className={clsx("peer", switchStyles, className)}
       {...props}
     >
       <SwitchPrimitive.Thumb data-slot="switch-thumb" className={switchThumbStyles} />

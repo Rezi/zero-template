@@ -2,7 +2,7 @@ import { Radio as RadioPrimitive } from "@base-ui/react/radio";
 import { RadioGroup as RadioGroupPrimitive } from "@base-ui/react/radio-group";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 
 const radioGroupStyles = css({ display: "grid", w: "full", gap: "3" });
 
@@ -59,7 +59,7 @@ function RadioGroup({ className, ...props }: RadioGroupPrimitive.Props) {
   return (
     <RadioGroupPrimitive
       data-slot="radio-group"
-      className={cn(radioGroupStyles, className)}
+      className={clsx(radioGroupStyles, className)}
       {...props}
     />
   );
@@ -69,7 +69,7 @@ function RadioGroupItem({ className, ...props }: RadioPrimitive.Root.Props) {
   return (
     <RadioPrimitive.Root
       data-slot="radio-group-item"
-      className={cn("group/radio-group-item peer", radioGroupItemStyles, className)}
+      className={clsx("group/radio-group-item peer", radioGroupItemStyles, className)}
       {...props}
     >
       <RadioPrimitive.Indicator

@@ -4,7 +4,7 @@ import * as React from "react";
 import { AlertDialog as AlertDialogPrimitive } from "@base-ui/react/alert-dialog";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 import { contentAnimationStyles, overlayAnimationStyles } from "../../lib/animations";
 import { Button } from "./button";
 
@@ -123,7 +123,7 @@ function AlertDialogOverlay({ className, ...props }: AlertDialogPrimitive.Backdr
   return (
     <AlertDialogPrimitive.Backdrop
       data-slot="alert-dialog-overlay"
-      className={cn(alertDialogOverlayStyles, overlayAnimationStyles, className)}
+      className={clsx(alertDialogOverlayStyles, overlayAnimationStyles, className)}
       {...props}
     />
   );
@@ -142,7 +142,7 @@ function AlertDialogContent({
       <AlertDialogPrimitive.Popup
         data-slot="alert-dialog-content"
         data-size={size}
-        className={cn(alertDialogContentStyles, contentAnimationStyles, className)}
+        className={clsx(alertDialogContentStyles, contentAnimationStyles, className)}
         {...props}
       />
     </AlertDialogPortal>
@@ -153,7 +153,7 @@ function AlertDialogHeader({ className, ...props }: React.ComponentProps<"div">)
   return (
     <div
       data-slot="alert-dialog-header"
-      className={cn(alertDialogHeaderStyles, className)}
+      className={clsx(alertDialogHeaderStyles, className)}
       {...props}
     />
   );
@@ -163,7 +163,7 @@ function AlertDialogFooter({ className, ...props }: React.ComponentProps<"div">)
   return (
     <div
       data-slot="alert-dialog-footer"
-      className={cn(alertDialogFooterStyles, className)}
+      className={clsx(alertDialogFooterStyles, className)}
       {...props}
     />
   );
@@ -173,7 +173,7 @@ function AlertDialogMedia({ className, ...props }: React.ComponentProps<"div">) 
   return (
     <div
       data-slot="alert-dialog-media"
-      className={cn(alertDialogMediaStyles, className)}
+      className={clsx(alertDialogMediaStyles, className)}
       {...props}
     />
   );
@@ -186,7 +186,7 @@ function AlertDialogTitle({
   return (
     <AlertDialogPrimitive.Title
       data-slot="alert-dialog-title"
-      className={cn(alertDialogTitleStyles, className)}
+      className={clsx(alertDialogTitleStyles, className)}
       {...props}
     />
   );
@@ -199,14 +199,14 @@ function AlertDialogDescription({
   return (
     <AlertDialogPrimitive.Description
       data-slot="alert-dialog-description"
-      className={cn(alertDialogDescriptionStyles, className)}
+      className={clsx(alertDialogDescriptionStyles, className)}
       {...props}
     />
   );
 }
 
 function AlertDialogAction({ className, ...props }: React.ComponentProps<typeof Button>) {
-  return <Button data-slot="alert-dialog-action" className={cn(className)} {...props} />;
+  return <Button data-slot="alert-dialog-action" className={clsx(className)} {...props} />;
 }
 
 function AlertDialogCancel({
@@ -219,7 +219,7 @@ function AlertDialogCancel({
   return (
     <AlertDialogPrimitive.Close
       data-slot="alert-dialog-cancel"
-      className={cn(className)}
+      className={clsx(className)}
       render={<Button variant={variant} size={size} />}
       {...props}
     />

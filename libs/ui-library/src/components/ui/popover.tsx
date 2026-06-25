@@ -2,7 +2,7 @@ import * as React from "react";
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 import { popoverAnimationStyles } from "../../lib/animations";
 
 const shadowLg = "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)";
@@ -68,7 +68,7 @@ function PopoverContent({
       >
         <PopoverPrimitive.Popup
           data-slot="popover-content"
-          className={cn(popoverContentStyles, popoverAnimationStyles, className)}
+          className={clsx(popoverContentStyles, popoverAnimationStyles, className)}
           {...props}
         />
       </PopoverPrimitive.Positioner>
@@ -78,7 +78,7 @@ function PopoverContent({
 
 function PopoverHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <div data-slot="popover-header" className={cn(popoverHeaderStyles, className)} {...props} />
+    <div data-slot="popover-header" className={clsx(popoverHeaderStyles, className)} {...props} />
   );
 }
 
@@ -86,7 +86,7 @@ function PopoverTitle({ className, ...props }: PopoverPrimitive.Title.Props) {
   return (
     <PopoverPrimitive.Title
       data-slot="popover-title"
-      className={cn(popoverTitleStyles, className)}
+      className={clsx(popoverTitleStyles, className)}
       {...props}
     />
   );
@@ -96,7 +96,7 @@ function PopoverDescription({ className, ...props }: PopoverPrimitive.Descriptio
   return (
     <PopoverPrimitive.Description
       data-slot="popover-description"
-      className={cn(popoverDescriptionStyles, className)}
+      className={clsx(popoverDescriptionStyles, className)}
       {...props}
     />
   );

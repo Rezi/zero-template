@@ -46,7 +46,12 @@ export const Controlled: Story = {
     const [open, setOpen] = React.useState(false);
     return (
       <div
-        className={css({ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "3" })}
+        className={css({
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-start",
+          gap: "3",
+        })}
       >
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger render={<Button>{open ? "Opened" : "Open"}</Button>} />

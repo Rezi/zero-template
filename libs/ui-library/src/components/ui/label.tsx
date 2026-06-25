@@ -3,7 +3,7 @@
 import * as React from "react";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 
 const labelStyles = css({
   display: "flex",
@@ -20,7 +20,7 @@ const labelStyles = css({
 });
 
 function Label({ className, ...props }: React.ComponentProps<"label">) {
-  return <label data-slot="label" className={cn(labelStyles, className)} {...props} />;
+  return <label data-slot="label" className={clsx(labelStyles, className)} {...props} />;
 }
 
 export { Label };

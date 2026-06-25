@@ -61,7 +61,12 @@ export const Controlled: Story = {
     const [open, setOpen] = React.useState(false);
     return (
       <div
-        className={css({ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "3" })}
+        className={css({
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-start",
+          gap: "3",
+        })}
       >
         <Button onClick={() => setOpen(true)}>Open controlled drawer</Button>
         <Drawer open={open} onOpenChange={setOpen}>

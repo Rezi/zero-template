@@ -1,7 +1,7 @@
 import { ScrollArea as ScrollAreaPrimitive } from "@base-ui/react/scroll-area";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 
 const scrollAreaViewportStyles = css({
   size: "full",
@@ -39,7 +39,7 @@ function ScrollArea({ className, children, ...props }: ScrollAreaPrimitive.Root.
   return (
     <ScrollAreaPrimitive.Root
       data-slot="scroll-area"
-      className={cn(css({ position: "relative" }), className)}
+      className={clsx(css({ position: "relative" }), className)}
       {...props}
     >
       <ScrollAreaPrimitive.Viewport
@@ -64,7 +64,7 @@ function ScrollBar({
       data-slot="scroll-area-scrollbar"
       data-orientation={orientation}
       orientation={orientation}
-      className={cn(scrollBarStyles, className)}
+      className={clsx(scrollBarStyles, className)}
       {...props}
     >
       <ScrollAreaPrimitive.Thumb data-slot="scroll-area-thumb" className={scrollThumbStyles} />

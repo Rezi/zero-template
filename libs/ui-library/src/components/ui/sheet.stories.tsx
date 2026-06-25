@@ -66,7 +66,15 @@ export const LeftSide: Story = {
           <SheetTitle>Navigation</SheetTitle>
           <SheetDescription>Browse the sections of the app.</SheetDescription>
         </SheetHeader>
-        <nav className={css({ display: "flex", flexDirection: "column", gap: "1", px: "4", fontSize: "sm" })}>
+        <nav
+          className={css({
+            display: "flex",
+            flexDirection: "column",
+            gap: "1",
+            px: "4",
+            fontSize: "sm",
+          })}
+        >
           <a className={navLink} href="/">
             Home
           </a>

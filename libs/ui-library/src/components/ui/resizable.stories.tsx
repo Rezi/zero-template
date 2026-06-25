@@ -15,7 +15,13 @@ type Story = StoryObj<typeof meta>;
 const box = css({ h: "64", overflow: "hidden", rounded: "2xl", borderWidth: "1px" });
 const w32 = css({ w: "32rem" });
 const w40 = css({ w: "40rem" });
-const panelInner = css({ display: "flex", h: "full", alignItems: "center", justifyContent: "center", p: "6" });
+const panelInner = css({
+  display: "flex",
+  h: "full",
+  alignItems: "center",
+  justifyContent: "center",
+  p: "6",
+});
 const medium = css({ fontWeight: "medium" });
 
 export const Default: Story = {

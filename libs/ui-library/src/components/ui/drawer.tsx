@@ -4,7 +4,7 @@ import * as React from "react";
 import { Drawer as DrawerPrimitive } from "vaul";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 
 const drawerOverlayStyles = css({
   position: "fixed",
@@ -124,7 +124,7 @@ function DrawerOverlay({
   return (
     <DrawerPrimitive.Overlay
       data-slot="drawer-overlay"
-      className={cn(drawerOverlayStyles, className)}
+      className={clsx(drawerOverlayStyles, className)}
       {...props}
     />
   );
@@ -140,7 +140,7 @@ function DrawerContent({
       <DrawerOverlay />
       <DrawerPrimitive.Content
         data-slot="drawer-content"
-        className={cn(drawerContentStyles, className)}
+        className={clsx(drawerContentStyles, className)}
         {...props}
       >
         <div className={drawerHandleStyles} />
@@ -151,18 +151,22 @@ function DrawerContent({
 }
 
 function DrawerHeader({ className, ...props }: React.ComponentProps<"div">) {
-  return <div data-slot="drawer-header" className={cn(drawerHeaderStyles, className)} {...props} />;
+  return (
+    <div data-slot="drawer-header" className={clsx(drawerHeaderStyles, className)} {...props} />
+  );
 }
 
 function DrawerFooter({ className, ...props }: React.ComponentProps<"div">) {
-  return <div data-slot="drawer-footer" className={cn(drawerFooterStyles, className)} {...props} />;
+  return (
+    <div data-slot="drawer-footer" className={clsx(drawerFooterStyles, className)} {...props} />
+  );
 }
 
 function DrawerTitle({ className, ...props }: React.ComponentProps<typeof DrawerPrimitive.Title>) {
   return (
     <DrawerPrimitive.Title
       data-slot="drawer-title"
-      className={cn(drawerTitleStyles, className)}
+      className={clsx(drawerTitleStyles, className)}
       {...props}
     />
   );
@@ -175,7 +179,7 @@ function DrawerDescription({
   return (
     <DrawerPrimitive.Description
       data-slot="drawer-description"
-      className={cn(drawerDescriptionStyles, className)}
+      className={clsx(drawerDescriptionStyles, className)}
       {...props}
     />
   );

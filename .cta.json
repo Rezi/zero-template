@@ -2,7 +2,6 @@
   "projectName": "zero-app",
   "mode": "file-router",
   "typescript": true,
-  "tailwind": true,
   "packageManager": "deno",
   "git": true,
   "install": true,

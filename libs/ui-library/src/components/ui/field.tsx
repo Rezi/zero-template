@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { css, cva, type RecipeVariantProps } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 import { Label } from "./label";
 import { Separator } from "./separator";
 
@@ -9,7 +9,7 @@ function FieldSet({ className, ...props }: React.ComponentProps<"fieldset">) {
   return (
     <fieldset
       data-slot="field-set"
-      className={cn(
+      className={clsx(
         css({
           display: "flex",
           flexDirection: "column",
@@ -33,7 +33,7 @@ function FieldLegend({
     <legend
       data-slot="field-legend"
       data-variant={variant}
-      className={cn(
+      className={clsx(
         css({
           mb: "3",
           fontWeight: "medium",
@@ -51,7 +51,7 @@ function FieldGroup({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="field-group"
-      className={cn(
+      className={clsx(
         css({
           containerType: "inline-size",
           containerName: "field-group",
@@ -122,7 +122,7 @@ function Field({
       role="group"
       data-slot="field"
       data-orientation={orientation}
-      className={cn(fieldVariants({ orientation }), className)}
+      className={clsx(fieldVariants({ orientation }), className)}
       {...props}
     />
   );
@@ -132,7 +132,7 @@ function FieldContent({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="field-content"
-      className={cn(
+      className={clsx(
         css({ display: "flex", flex: "1", flexDirection: "column", gap: "1", lineHeight: "snug" }),
         className,
       )}
@@ -145,7 +145,7 @@ function FieldLabel({ className, ...props }: React.ComponentProps<typeof Label>)
   return (
     <Label
       data-slot="field-label"
-      className={cn(
+      className={clsx(
         css({
           display: "flex",
           w: "fit",
@@ -174,7 +174,7 @@ function FieldTitle({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="field-label"
-      className={cn(
+      className={clsx(
         css({
           display: "flex",
           w: "fit",
@@ -195,7 +195,7 @@ function FieldDescription({ className, ...props }: React.ComponentProps<"p">) {
   return (
     <p
       data-slot="field-description"
-      className={cn(
+      className={clsx(
         css({
           textAlign: "left",
           fontSize: "sm",
@@ -227,7 +227,7 @@ function FieldSeparator({
     <div
       data-slot="field-separator"
       data-content={!!children}
-      className={cn(
+      className={clsx(
         css({
           position: "relative",
           marginBlock: "-0.5rem",
@@ -306,7 +306,10 @@ function FieldError({
     <div
       role="alert"
       data-slot="field-error"
-      className={cn(css({ fontSize: "sm", fontWeight: "normal", color: "destructive" }), className)}
+      className={clsx(
+        css({ fontSize: "sm", fontWeight: "normal", color: "destructive" }),
+        className,
+      )}
       {...props}
     >
       {content}

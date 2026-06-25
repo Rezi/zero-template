@@ -1,7 +1,7 @@
 import * as React from "react";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 import { ChevronDownIcon } from "lucide-react";
 
 type NativeSelectProps = Omit<React.ComponentProps<"select">, "size"> & {
@@ -62,11 +62,16 @@ const nativeSelectOptionStyles = css({ bg: "Canvas", color: "CanvasText" });
 function NativeSelect({ className, size = "default", ...props }: NativeSelectProps) {
   return (
     <div
-      className={cn("group/native-select", nativeSelectWrapperStyles, className)}
+      className={clsx("group/native-select", nativeSelectWrapperStyles, className)}
       data-slot="native-select-wrapper"
       data-size={size}
     >
-      <select data-slot="native-select" data-size={size} className={nativeSelectStyles} {...props} />
+      <select
+        data-slot="native-select"
+        data-size={size}
+        className={nativeSelectStyles}
+        {...props}
+      />
       <ChevronDownIcon
         className={nativeSelectIconStyles}
         aria-hidden="true"
@@ -80,7 +85,7 @@ function NativeSelectOption({ className, ...props }: React.ComponentProps<"optio
   return (
     <option
       data-slot="native-select-option"
-      className={cn(nativeSelectOptionStyles, className)}
+      className={clsx(nativeSelectOptionStyles, className)}
       {...props}
     />
   );
@@ -90,7 +95,7 @@ function NativeSelectOptGroup({ className, ...props }: React.ComponentProps<"opt
   return (
     <optgroup
       data-slot="native-select-optgroup"
-      className={cn(nativeSelectOptionStyles, className)}
+      className={clsx(nativeSelectOptionStyles, className)}
       {...props}
     />
   );

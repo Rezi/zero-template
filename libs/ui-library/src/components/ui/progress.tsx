@@ -3,7 +3,7 @@
 import { Progress as ProgressPrimitive } from "@base-ui/react/progress";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 
 const progressStyles = css({ display: "flex", flexWrap: "wrap", gap: "3" });
 
@@ -40,7 +40,7 @@ function Progress({ className, children, value, ...props }: ProgressPrimitive.Ro
     <ProgressPrimitive.Root
       value={value}
       data-slot="progress"
-      className={cn(progressStyles, className)}
+      className={clsx(progressStyles, className)}
       {...props}
     >
       {children}
@@ -54,7 +54,7 @@ function Progress({ className, children, value, ...props }: ProgressPrimitive.Ro
 function ProgressTrack({ className, ...props }: ProgressPrimitive.Track.Props) {
   return (
     <ProgressPrimitive.Track
-      className={cn(progressTrackStyles, className)}
+      className={clsx(progressTrackStyles, className)}
       data-slot="progress-track"
       {...props}
     />
@@ -65,7 +65,7 @@ function ProgressIndicator({ className, ...props }: ProgressPrimitive.Indicator.
   return (
     <ProgressPrimitive.Indicator
       data-slot="progress-indicator"
-      className={cn(progressIndicatorStyles, className)}
+      className={clsx(progressIndicatorStyles, className)}
       {...props}
     />
   );
@@ -74,7 +74,7 @@ function ProgressIndicator({ className, ...props }: ProgressPrimitive.Indicator.
 function ProgressLabel({ className, ...props }: ProgressPrimitive.Label.Props) {
   return (
     <ProgressPrimitive.Label
-      className={cn(progressLabelStyles, className)}
+      className={clsx(progressLabelStyles, className)}
       data-slot="progress-label"
       {...props}
     />
@@ -84,7 +84,7 @@ function ProgressLabel({ className, ...props }: ProgressPrimitive.Label.Props) {
 function ProgressValue({ className, ...props }: ProgressPrimitive.Value.Props) {
   return (
     <ProgressPrimitive.Value
-      className={cn(progressValueStyles, className)}
+      className={clsx(progressValueStyles, className)}
       data-slot="progress-value"
       {...props}
     />

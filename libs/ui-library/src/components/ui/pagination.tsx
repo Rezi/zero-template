@@ -1,7 +1,7 @@
 import * as React from "react";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 import { Button } from "./button";
 import { ChevronLeftIcon, ChevronRightIcon, MoreHorizontalIcon } from "lucide-react";
 
@@ -25,7 +25,7 @@ function Pagination({ className, ...props }: React.ComponentProps<"nav">) {
       role="navigation"
       aria-label="pagination"
       data-slot="pagination"
-      className={cn(paginationStyles, className)}
+      className={clsx(paginationStyles, className)}
       {...props}
     />
   );
@@ -35,7 +35,7 @@ function PaginationContent({ className, ...props }: React.ComponentProps<"ul">) 
   return (
     <ul
       data-slot="pagination-content"
-      className={cn(paginationContentStyles, className)}
+      className={clsx(paginationContentStyles, className)}
       {...props}
     />
   );
@@ -55,7 +55,7 @@ function PaginationLink({ className, isActive, size = "icon", ...props }: Pagina
     <Button
       variant={isActive ? "outline" : "ghost"}
       size={size}
-      className={cn(className)}
+      className={clsx(className)}
       nativeButton={false}
       render={
         <a
@@ -78,7 +78,7 @@ function PaginationPrevious({
     <PaginationLink
       aria-label="Go to previous page"
       size="default"
-      className={cn(css({ pl: "1.5!" }), className)}
+      className={clsx(css({ pl: "1.5!" }), className)}
       {...props}
     >
       <ChevronLeftIcon data-icon="inline-start" />
@@ -96,7 +96,7 @@ function PaginationNext({
     <PaginationLink
       aria-label="Go to next page"
       size="default"
-      className={cn(css({ pr: "1.5!" }), className)}
+      className={clsx(css({ pr: "1.5!" }), className)}
       {...props}
     >
       <span className={paginationLabelStyles}>{text}</span>
@@ -110,7 +110,7 @@ function PaginationEllipsis({ className, ...props }: React.ComponentProps<"span"
     <span
       aria-hidden
       data-slot="pagination-ellipsis"
-      className={cn(paginationEllipsisStyles, className)}
+      className={clsx(paginationEllipsisStyles, className)}
       {...props}
     >
       <MoreHorizontalIcon />

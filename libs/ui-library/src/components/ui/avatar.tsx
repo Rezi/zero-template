@@ -2,7 +2,7 @@ import * as React from "react";
 import { Avatar as AvatarPrimitive } from "@base-ui/react/avatar";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 
 const avatarStyles = css({
   position: "relative",
@@ -114,7 +114,7 @@ function Avatar({
     <AvatarPrimitive.Root
       data-slot="avatar"
       data-size={size}
-      className={cn(avatarStyles, className)}
+      className={clsx(avatarStyles, className)}
       {...props}
     />
   );
@@ -124,7 +124,7 @@ function AvatarImage({ className, ...props }: AvatarPrimitive.Image.Props) {
   return (
     <AvatarPrimitive.Image
       data-slot="avatar-image"
-      className={cn(avatarImageStyles, className)}
+      className={clsx(avatarImageStyles, className)}
       {...props}
     />
   );
@@ -134,7 +134,7 @@ function AvatarFallback({ className, ...props }: AvatarPrimitive.Fallback.Props)
   return (
     <AvatarPrimitive.Fallback
       data-slot="avatar-fallback"
-      className={cn(avatarFallbackStyles, className)}
+      className={clsx(avatarFallbackStyles, className)}
       {...props}
     />
   );
@@ -142,21 +142,19 @@ function AvatarFallback({ className, ...props }: AvatarPrimitive.Fallback.Props)
 
 function AvatarBadge({ className, ...props }: React.ComponentProps<"span">) {
   return (
-    <span data-slot="avatar-badge" className={cn(avatarBadgeStyles, className)} {...props} />
+    <span data-slot="avatar-badge" className={clsx(avatarBadgeStyles, className)} {...props} />
   );
 }
 
 function AvatarGroup({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div data-slot="avatar-group" className={cn(avatarGroupStyles, className)} {...props} />
-  );
+  return <div data-slot="avatar-group" className={clsx(avatarGroupStyles, className)} {...props} />;
 }
 
 function AvatarGroupCount({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="avatar-group-count"
-      className={cn(avatarGroupCountStyles, className)}
+      className={clsx(avatarGroupCountStyles, className)}
       {...props}
     />
   );

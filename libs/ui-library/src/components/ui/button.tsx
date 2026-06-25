@@ -1,7 +1,7 @@
 import { Button as ButtonPrimitive } from "@base-ui/react/button";
 import { cva, type RecipeVariantProps } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 
 const buttonVariants = cva({
   base: {
@@ -12,6 +12,7 @@ const buttonVariants = cva({
     rounded: "2xl",
     borderWidth: "1px",
     borderColor: "transparent",
+    borderStyle: "solid",
     backgroundClip: "padding-box",
     fontSize: "sm",
     fontWeight: "medium",
@@ -136,7 +137,7 @@ function Button({
   return (
     <ButtonPrimitive
       data-slot="button"
-      className={cn(buttonVariants({ variant, size }), className)}
+      className={clsx(buttonVariants({ variant, size }), className)}
       {...props}
     />
   );

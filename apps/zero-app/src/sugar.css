@@ -68,7 +68,7 @@ in order to modify this specific build of sugar.css.
 /* CORE 
 ========================================================================
 */
-@layer base {
+@layer reset {
   /**
   * 1. Add border box sizing in all browsers (opinionated).
   * 2. Backgrounds do not repeat by default (opinionated).
@@ -153,6 +153,15 @@ in order to modify this specific build of sugar.css.
   video {
     vertical-align: middle;
   }
+
+  ol {
+    list-style: none;
+  }
+
+  a {
+    color: var(--primary);
+  }
+
   /**
    * Remove the border on iframes in all browsers (opinionated).
    */

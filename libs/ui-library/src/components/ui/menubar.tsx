@@ -5,7 +5,7 @@ import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import { Menubar as MenubarPrimitive } from "@base-ui/react/menubar";
 import { css } from "@zero-app/styled-system/css";
 
-import { cn } from "../../lib/utils";
+import { clsx } from "clsx";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -142,7 +142,9 @@ const menubarSubContentStyles = css({
 });
 
 function Menubar({ className, ...props }: MenubarPrimitive.Props) {
-  return <MenubarPrimitive data-slot="menubar" className={cn(menubarStyles, className)} {...props} />;
+  return (
+    <MenubarPrimitive data-slot="menubar" className={clsx(menubarStyles, className)} {...props} />
+  );
 }
 
 function MenubarMenu({ ...props }: React.ComponentProps<typeof DropdownMenu>) {
@@ -161,7 +163,7 @@ function MenubarTrigger({ className, ...props }: React.ComponentProps<typeof Dro
   return (
     <DropdownMenuTrigger
       data-slot="menubar-trigger"
-      className={cn(menubarTriggerStyles, className)}
+      className={clsx(menubarTriggerStyles, className)}
       {...props}
     />
   );
@@ -180,7 +182,7 @@ function MenubarContent({
       align={align}
       alignOffset={alignOffset}
       sideOffset={sideOffset}
-      className={cn(menubarContentStyles, className)}
+      className={clsx(menubarContentStyles, className)}
       {...props}
     />
   );
@@ -197,7 +199,7 @@ function MenubarItem({
       data-slot="menubar-item"
       data-inset={inset}
       data-variant={variant}
-      className={cn(menubarItemStyles, className)}
+      className={clsx(menubarItemStyles, className)}
       {...props}
     />
   );
@@ -216,7 +218,7 @@ function MenubarCheckboxItem({
     <MenuPrimitive.CheckboxItem
       data-slot="menubar-checkbox-item"
       data-inset={inset}
-      className={cn(menubarCheckboxItemStyles, className)}
+      className={clsx(menubarCheckboxItemStyles, className)}
       checked={checked}
       {...props}
     >
@@ -246,7 +248,7 @@ function MenubarRadioItem({
     <MenuPrimitive.RadioItem
       data-slot="menubar-radio-item"
       data-inset={inset}
-      className={cn(menubarRadioItemStyles, className)}
+      className={clsx(menubarRadioItemStyles, className)}
       {...props}
     >
       <span className={menubarIndicatorStyles}>
@@ -270,7 +272,7 @@ function MenubarLabel({
     <DropdownMenuLabel
       data-slot="menubar-label"
       data-inset={inset}
-      className={cn(menubarLabelStyles, className)}
+      className={clsx(menubarLabelStyles, className)}
       {...props}
     />
   );
@@ -281,7 +283,7 @@ function MenubarSeparator({
   ...props
 }: React.ComponentProps<typeof DropdownMenuSeparator>) {
   return (
-    <DropdownMenuSeparator data-slot="menubar-separator" className={cn(className)} {...props} />
+    <DropdownMenuSeparator data-slot="menubar-separator" className={clsx(className)} {...props} />
   );
 }
 
@@ -292,7 +294,7 @@ function MenubarShortcut({
   return (
     <DropdownMenuShortcut
       data-slot="menubar-shortcut"
-      className={cn(menubarShortcutStyles, className)}
+      className={clsx(menubarShortcutStyles, className)}
       {...props}
     />
   );
@@ -313,7 +315,7 @@ function MenubarSubTrigger({
     <DropdownMenuSubTrigger
       data-slot="menubar-sub-trigger"
       data-inset={inset}
-      className={cn(className)}
+      className={clsx(className)}
       {...props}
     />
   );
@@ -326,7 +328,7 @@ function MenubarSubContent({
   return (
     <DropdownMenuSubContent
       data-slot="menubar-sub-content"
-      className={cn(menubarSubContentStyles, className)}
+      className={clsx(menubarSubContentStyles, className)}
       {...props}
     />
   );
