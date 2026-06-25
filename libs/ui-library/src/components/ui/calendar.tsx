@@ -49,7 +49,13 @@ function Calendar({
       classNames={{
         root: cn(css({ w: "fit" }), defaultClassNames.root),
         months: cn(
-          css({ position: "relative", display: "flex", flexDirection: "column", gap: "4", md: { flexDirection: "row" } }),
+          css({
+            position: "relative",
+            display: "flex",
+            flexDirection: "column",
+            gap: "4",
+            md: { flexDirection: "row" },
+          }),
           defaultClassNames.months,
         ),
         month: cn(
@@ -71,12 +77,22 @@ function Calendar({
         ),
         button_previous: cn(
           buttonVariants({ variant: buttonVariant }),
-          css({ size: "var(--cell-size)", p: "0", userSelect: "none", "&[aria-disabled='true']": { opacity: "0.5" } }),
+          css({
+            size: "var(--cell-size)",
+            p: "0",
+            userSelect: "none",
+            "&[aria-disabled='true']": { opacity: "0.5" },
+          }),
           defaultClassNames.button_previous,
         ),
         button_next: cn(
           buttonVariants({ variant: buttonVariant }),
-          css({ size: "var(--cell-size)", p: "0", userSelect: "none", "&[aria-disabled='true']": { opacity: "0.5" } }),
+          css({
+            size: "var(--cell-size)",
+            p: "0",
+            userSelect: "none",
+            "&[aria-disabled='true']": { opacity: "0.5" },
+          }),
           defaultClassNames.button_next,
         ),
         month_caption: cn(
@@ -227,10 +243,16 @@ function Calendar({
           defaultClassNames.today,
         ),
         outside: cn(
-          css({ color: "muted.foreground", "&[aria-selected='true']": { color: "muted.foreground" } }),
+          css({
+            color: "muted.foreground",
+            "&[aria-selected='true']": { color: "muted.foreground" },
+          }),
           defaultClassNames.outside,
         ),
-        disabled: cn(css({ color: "muted.foreground", opacity: "0.5" }), defaultClassNames.disabled),
+        disabled: cn(
+          css({ color: "muted.foreground", opacity: "0.5" }),
+          defaultClassNames.disabled,
+        ),
         hidden: cn(css({ visibility: "hidden" }), defaultClassNames.hidden),
         ...classNames,
       }}
@@ -331,10 +353,15 @@ function CalendarDayButton({
           "&[data-selected-single=true]": { bg: "primary", color: "primary.foreground" },
           _dark: { _hover: { color: "foreground" } },
           "& > span": { fontSize: "xs", opacity: "0.7" },
+          // Focus ring driven by the `group/day` marker on the ancestor day cell
+          // (react-day-picker sets `data-focused` there). Base already supplies
+          // position/z-index, so only the ring is needed here.
+          ".group\\/day[data-focused='true'] &": {
+            borderColor: "ring",
+            ringW: "3",
+            ringC: "ring/50",
+          },
         }),
-        // group/day-scoped focus ring kept as literal Tailwind (depends on the
-        // `group/day` marker class on the day cell).
-        "group-data-[focused=true]/day:relative group-data-[focused=true]/day:z-10 group-data-[focused=true]/day:border-ring group-data-[focused=true]/day:ring-[3px] group-data-[focused=true]/day:ring-ring/50",
         defaultClassNames.day,
         className,
       )}

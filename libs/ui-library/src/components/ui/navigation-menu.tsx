@@ -35,9 +35,7 @@ function NavigationMenu({
   return (
     <NavigationMenuPrimitive.Root
       data-slot="navigation-menu"
-      // `group/navigation-menu` marker kept literal — the viewport-false content
-      // animation cluster (literal Tailwind) targets it.
-      className={cn("group/navigation-menu", navigationMenuStyles, className)}
+      className={cn(navigationMenuStyles, className)}
       {...props}
     >
       {children}
@@ -106,6 +104,11 @@ const navigationMenuTriggerIconStyles = css({
   top: "1px",
   ml: "1",
   size: "3",
+  transitionProperty: "rotate",
+  transitionDuration: "300ms",
+  // Rotate when the trigger's menu is open. Base UI sets `data-popup-open` on the
+  // trigger (`data-slot='navigation-menu-trigger'`), of which this icon is a child.
+  "[data-slot='navigation-menu-trigger'][data-popup-open] &": { rotate: "180deg" },
 });
 
 function NavigationMenuTrigger({
@@ -119,15 +122,7 @@ function NavigationMenuTrigger({
       className={cn(navigationMenuTriggerStyle(), "group", className)}
       {...props}
     >
-      {children}{" "}
-      <ChevronDownIcon
-        // chevron rotate-on-open kept literal (transition + group-scoped rotate).
-        className={cn(
-          navigationMenuTriggerIconStyles,
-          "transition duration-300 group-data-popup-open/navigation-menu-trigger:rotate-180 group-data-open/navigation-menu-trigger:rotate-180",
-        )}
-        aria-hidden="true"
-      />
+      {children} <ChevronDownIcon className={navigationMenuTriggerIconStyles} aria-hidden="true" />
     </NavigationMenuPrimitive.Trigger>
   );
 }
@@ -148,15 +143,11 @@ const navigationMenuContentStyles = css({
   "& [data-slot=navigation-menu-link]:focus": { ringW: "0", outline: "none" },
 });
 
-// Motion/enter-exit animations + the viewport-false group cluster kept literal.
-const navigationMenuContentLiteral =
-  "data-[motion=from-end]:slide-in-from-right-52 data-[motion=from-start]:slide-in-from-left-52 data-[motion=to-end]:slide-out-to-right-52 data-[motion=to-start]:slide-out-to-left-52 data-[motion^=from-]:animate-in data-[motion^=from-]:fade-in data-[motion^=to-]:animate-out data-[motion^=to-]:fade-out group-data-[viewport=false]/navigation-menu:rounded-2xl group-data-[viewport=false]/navigation-menu:bg-popover group-data-[viewport=false]/navigation-menu:text-popover-foreground group-data-[viewport=false]/navigation-menu:shadow-lg group-data-[viewport=false]/navigation-menu:ring-1 group-data-[viewport=false]/navigation-menu:ring-foreground/5 group-data-[viewport=false]/navigation-menu:duration-300 group-data-[viewport=false]/navigation-menu:dark:ring-foreground/10 group-data-[viewport=false]/navigation-menu:data-open:animate-in group-data-[viewport=false]/navigation-menu:data-open:fade-in-0 group-data-[viewport=false]/navigation-menu:data-open:zoom-in-95 group-data-[viewport=false]/navigation-menu:data-closed:animate-out group-data-[viewport=false]/navigation-menu:data-closed:fade-out-0 group-data-[viewport=false]/navigation-menu:data-closed:zoom-out-95";
-
 function NavigationMenuContent({ className, ...props }: NavigationMenuPrimitive.Content.Props) {
   return (
     <NavigationMenuPrimitive.Content
       data-slot="navigation-menu-content"
-      className={cn(navigationMenuContentStyles, navigationMenuContentLiteral, className)}
+      className={cn(navigationMenuContentStyles, className)}
       {...props}
     />
   );
@@ -198,7 +189,11 @@ const navigationMenuPopupStyles = css({
   _dark: { boxShadow: ringShadow("10%") },
 });
 
-const navigationMenuViewportStyles = css({ position: "relative", size: "full", overflow: "hidden" });
+const navigationMenuViewportStyles = css({
+  position: "relative",
+  size: "full",
+  overflow: "hidden",
+});
 
 function NavigationMenuPositioner({
   className,
@@ -294,11 +289,7 @@ function NavigationMenuIndicator({
   return (
     <NavigationMenuPrimitive.Icon
       data-slot="navigation-menu-indicator"
-      className={cn(
-        navigationMenuIndicatorStyles,
-        "data-[state=hidden]:animate-out data-[state=hidden]:fade-out data-[state=visible]:animate-in data-[state=visible]:fade-in",
-        className,
-      )}
+      className={cn(navigationMenuIndicatorStyles, className)}
       {...props}
     >
       <div className={navigationMenuIndicatorArrowStyles} />

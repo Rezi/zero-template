@@ -11,13 +11,12 @@ color handling and a plan to finish the transition.
 **TL;DR** — the component *style objects* are migrated cleanly to Panda `css()`. What
 remains tied to Tailwind is essentially three things:
 
-1. **Enter/exit animation classes** from `tw-animate-css` (13 components) — the single
-   biggest blocker.
-2. **Named `group-*/peer-*` Tailwind variants** still written as raw class strings
-   (mainly `navigation-menu.tsx` and `calendar.tsx`).
+1. ~~**Enter/exit animation classes** from `tw-animate-css` (13 components)~~ — ✅ done (§1).
+2. ~~**Named `group-*/peer-*` Tailwind variants** still written as raw class strings
+   (mainly `navigation-menu.tsx` and `calendar.tsx`)~~ — ✅ done (§2).
 3. **The global Tailwind CSS layer** (`apps/zero-app/src/styles.css`) — `@import
    "tailwindcss"`, `tw-animate-css`, `@theme`, `@apply` — plus the runtime deps
-   (`tailwindcss`, `tw-animate-css`, `tailwind-merge`).
+   (`tailwindcss`, `tw-animate-css`, `tailwind-merge`). **← the remaining work (§3/§6).**
 
 Everything else flagged by a naive grep (`group`/`peer` markers, `role="group"`,
 sonner's `toaster`/`cn-toast`) is **not** a Tailwind dependency — see §4.
@@ -26,9 +25,12 @@ sonner's `toaster`/`cn-toast`) is **not** a Tailwind dependency — see §4.
 
 ## 1. Animation classes from `tw-animate-css` (highest priority)
 
-> **Update (done):** Phases 0–1 are complete. **12 of the 13 components** below are migrated
-> and struck through; only `navigation-menu.tsx` remains (entangled with the
-> `group-data-[viewport=false]/navigation-menu:*` selectors → folded into §2).
+> **Update (done):** Phases 0–2 are complete. **All 13 components** below are migrated and
+> struck through. `navigation-menu.tsx` was finished as part of §2: its `data-[motion=…]` and
+> `group-data-[viewport=false]/navigation-menu:*` clusters turned out to be **dead code** (Base UI
+> emits neither `data-motion` nor `data-viewport`; the real content motion is already handled by
+> `data-activation-direction` + starting/ending-style in `navigationMenuContentStyles`, and the
+> popup chrome by `navigationMenuPopupStyles`), so they were deleted.
 >
 > **Pattern note (important):** this app is on **Base UI**, not Radix. Base UI drives enter/exit
 > via **CSS transitions** keyed on `data-starting-style`/`data-ending-style` (the resting style is
@@ -63,35 +65,47 @@ Tokens involved: `data-open:animate-in`, `data-closed:animate-out`, `fade-in-0`,
 | ✅ ~~`dropdown-menu.tsx`~~ | :33 | ~~slide/fade/zoom (+ `data-closed:overflow-hidden`)~~ → `popoverAnimationStyles` + local `data-closed` overflow |
 | ✅ ~~`hover-card.tsx`~~ | :31 | ~~slide/fade/zoom~~ → `popoverAnimationStyles` |
 | ✅ ~~`input-otp.tsx`~~ | :119 | ~~`animate-caret-blink duration-1000`~~ → `caretBlink` keyframe in `inputOTPCaretStyles` |
-| `navigation-menu.tsx` | :153, :299 | motion slide + viewport block (**remaining** — see §2) |
+| ✅ ~~`navigation-menu.tsx`~~ | :153, :299 | ~~motion slide + viewport block~~ → deleted (dead code; see §2). Real motion already in `navigationMenuContentStyles` |
 | ✅ ~~`popover.tsx`~~ | :33 | ~~slide/fade/zoom~~ → `popoverAnimationStyles` |
 | ✅ ~~`select.tsx`~~ | :76 | ~~slide/fade/zoom (+ `data-[align-trigger=true]:animate-none`)~~ → `selectAnimationStyles` (motion scoped to `data-align-trigger='false'`) |
 | ✅ ~~`tooltip.tsx`~~ | :33 | ~~slide/fade/zoom~~ → `tooltipAnimationStyles` (150ms + `delayed-open`) |
 
-**13 files — 12 done, 1 remaining (`navigation-menu`).** All follow the same shadcn
-enter/exit pattern, so a single set of Panda keyframes + the shared
-`animations.ts` style objects covered ~12 of them; `accordion` and `input-otp` got their
-own keyframes (`accordionDown/Up`, `caretBlink`) as planned.
+**13 files — all done.** 11 follow the shadcn enter/exit pattern, covered by the shared
+`animations.ts` style objects; `accordion` and `input-otp` got their own keyframes
+(`accordionDown/Up`, `caretBlink`); `navigation-menu`'s animation strings were dead code and
+were deleted (its real motion was already migrated).
 
 ---
 
-## 2. Named `group-*` / `peer-*` Tailwind variants (raw strings)
+## 2. Named `group-*` / `peer-*` Tailwind variants (raw strings) — ✅ DONE
 
 The migration already converted *most* group/peer relationships into Panda selectors
-(e.g. `label.tsx`: `".peer:disabled ~ &"`, `".group[data-disabled='true'] &"`). What
-remains as raw Tailwind variant strings:
+(e.g. `label.tsx`: `".peer:disabled ~ &"`, `".group[data-disabled='true'] &"`). The
+remaining raw Tailwind variant strings are now migrated:
 
 - **`navigation-menu.tsx`**
-  - `:127` — `transition duration-300 group-data-popup-open/navigation-menu-trigger:rotate-180 group-data-open/navigation-menu-trigger:rotate-180`
-  - `:153` — the large `group-data-[viewport=false]/navigation-menu:*` block (rounded, bg-popover, text-popover-foreground, shadow-lg, ring-1, `ring-foreground/5`, `dark:ring-foreground/10`, plus nested animate/fade/zoom). This is the most complex single string in the library.
+  - ~~`:127` — `transition duration-300 group-data-popup-open/navigation-menu-trigger:rotate-180 …`~~
+    → folded into `navigationMenuTriggerIconStyles` as
+    `"[data-slot='navigation-menu-trigger'][data-popup-open] &": { rotate: "180deg" }` +
+    `transitionProperty: "rotate"`. (This also **fixed a latent bug**: the original referenced the
+    named group `group/navigation-menu-trigger`, but the trigger was only marked `"group"`, so the
+    rotate never fired.)
+  - ~~`:153` — the large `group-data-[viewport=false]/navigation-menu:*` block~~ → **deleted as
+    dead code** (Base UI emits no `data-viewport`/`data-motion`; popup chrome already on
+    `navigationMenuPopupStyles`, motion already on `navigationMenuContentStyles`). The
+    `group/navigation-menu` marker on Root was removed with it.
+  - ~~`:299` — indicator `data-[state=hidden|visible]` fade~~ → deleted (Base UI sets no
+    `data-state` here; `NavigationMenuPrimitive.Icon` exposes no transition hook, so the classes
+    were inert).
 - **`calendar.tsx`**
-  - `:337` — `group-data-[focused=true]/day:relative … group-data-[focused=true]/day:border-ring group-data-[focused=true]/day:ring-[3px] group-data-[focused=true]/day:ring-ring/50`
+  - ~~`:337` — `group-data-[focused=true]/day:border-ring … :ring-[3px] :ring-ring/50`~~ → folded
+    into the day-button `css()` as `".group\\/day[data-focused='true'] &": { borderColor: "ring",
+    ringW: "3", ringC: "ring/50" }` (native `/50` opacity; `position`/`z-index` already in the base).
 
-The *marker* side of these (`"group/navigation-menu"`, `"group/day"`,
-`"group/calendar"`, `"group/toggle"`, `"group/menu-item"`, `"group/radio-group-item"`,
-`"group/native-select"`) is just a plain class name and is fine to keep — Panda selectors
-can target `.group\/day` etc. Only the **consuming variant strings above** are true
-Tailwind and need rewriting as Panda nested selectors.
+The *marker* side (`"group/day"`, `"group/calendar"`, `"group"` on the nav list/trigger, …) is
+just a plain class name and is fine to keep — Panda selectors target `.group\/day` etc. Verified:
+the escaped-slash selector and the `data-popup-open` ancestor selector both generate correctly;
+`tsc` clean; the §2 grep gate (`group-data`/`peer-data`) returns only a comment in `label.tsx`.
 
 ---
 
@@ -242,10 +256,15 @@ migrated.
 - Typecheck passes (`tsc --noEmit -p libs/ui-library/tsconfig.json` → 0 errors); `deno task
   panda` regenerates the keyframes into `styled-system/styles.css`.
 
-### Phase 2 — Migrate named group/peer variants (§2)
-- Rewrite `navigation-menu.tsx` `:127`/`:153` and `calendar.tsx` `:337` as Panda nested
-  selectors (`.group\/navigation-menu[data-viewport='false'] &`, etc.). Fold the
-  `ring-*`/`ring-foreground/5` bits into `ringW`/`ringC` + native opacity.
+### ✅ Phase 2 — Migrate named group/peer variants (§2) — DONE
+- `navigation-menu.tsx`: chevron rotate → `data-popup-open` ancestor selector (fixed a latent
+  bug); the `data-[motion=…]` + `group-data-[viewport=false]/navigation-menu:*` clusters and the
+  indicator `data-[state=…]` fade were **dead code** (Base UI emits none of those attributes) and
+  were deleted.
+- `calendar.tsx`: `:337` focus ring → `.group\/day[data-focused='true'] &` with `ringW`/`ringC`
+  + native `/50` opacity.
+- Verified: `deno task panda` regenerates the escaped-slash + ancestor selectors correctly; `tsc`
+  0 errors; oxlint clean; §2 grep gate clean (only a `label.tsx` comment).
 
 ### Phase 3 — Move the global layer into Panda
 - Recreate `* { borderColor; outlineColor }` and `body { bg; color }` via Panda
@@ -276,8 +295,8 @@ migrated.
 | Phase | Scope | Risk |
 |---|---|---|
 | ~~0~~ ✅ | ~~config keyframes~~ done | low (additive) |
-| ~~1~~ ✅ | ~~13~~ 12 components done; `navigation-menu` → Phase 2 | medium (visual parity) |
-| 2 | 2 components (`navigation-menu` + `calendar`) | medium (complex selectors) |
+| ~~1~~ ✅ | ~~13~~ 13 components done | medium (visual parity) |
+| ~~2~~ ✅ | ~~2 components (`navigation-menu` + `calendar`)~~ done | medium (complex selectors) |
 | 3 | global css + config | medium |
 | 4 | deps/build/`cn` | medium (build + reset) |
 | 5 | verification | — |
@@ -293,5 +312,9 @@ migrated.
 - **Phase 1 — animation components (§1)** — 12 of 13 components migrated off
   `tw-animate-css` to Panda (`accordion`, `alert-dialog`, `combobox`, `context-menu`,
   `dialog`, `drawer`, `dropdown-menu`, `hover-card`, `input-otp`, `popover`, `select`,
-  `tooltip`). Typecheck clean; grep gate returns only `navigation-menu.tsx` (deferred to
-  Phase 2) plus a `sonner`/comment false positive.
+  `tooltip`). Typecheck clean.
+- **Phase 2 — named group/peer variants (§2)** — `navigation-menu.tsx` (chevron rotate →
+  `data-popup-open` ancestor selector; dead `data-motion`/`data-viewport`/`data-state` clusters
+  deleted) and `calendar.tsx` (`group/day` focus ring → escaped-slash ancestor selector +
+  `ringW`/`ringC`). §1 + §2 grep gate now clean. Remaining: §3 (global Tailwind layer →
+  `globalCss` + the `colorWithAlpha` refactor) and §4 (remove Tailwind deps / `cn` swap).

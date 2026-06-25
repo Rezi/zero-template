@@ -62,6 +62,9 @@ const buttonVariants = cva({
         "&[aria-expanded='true']": { bg: "muted", color: "foreground" },
         _dark: { _hover: { bg: "muted/50" } },
       },
+      transparent: {
+        _hover: { bg: "transparent", color: "foreground" },
+      },
       destructive: {
         bg: "destructive/10",
         color: "destructive",

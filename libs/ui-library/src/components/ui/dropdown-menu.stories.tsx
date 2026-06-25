@@ -38,9 +38,9 @@ export const Default: Story = {
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="outline">Open menu</Button>} />
       <DropdownMenuContent className={w56}>
-        <DropdownMenuLabel>My Account</DropdownMenuLabel>
-        <DropdownMenuSeparator />
         <DropdownMenuGroup>
+          <DropdownMenuLabel>My Account</DropdownMenuLabel>
+          <DropdownMenuSeparator />
           <DropdownMenuItem>
             <UserIcon /> Profile
             <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut>
@@ -91,16 +91,18 @@ export const CheckboxesAndRadios: Story = {
       <DropdownMenu>
         <DropdownMenuTrigger render={<Button variant="outline">View options</Button>} />
         <DropdownMenuContent className={w56}>
-          <DropdownMenuLabel>Panels</DropdownMenuLabel>
-          <DropdownMenuCheckboxItem checked={showStatus} onCheckedChange={setShowStatus}>
-            Status bar
-          </DropdownMenuCheckboxItem>
-          <DropdownMenuCheckboxItem checked={showActivity} onCheckedChange={setShowActivity}>
-            Activity bar
-          </DropdownMenuCheckboxItem>
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>Panels</DropdownMenuLabel>
+            <DropdownMenuCheckboxItem checked={showStatus} onCheckedChange={setShowStatus}>
+              Status bar
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem checked={showActivity} onCheckedChange={setShowActivity}>
+              Activity bar
+            </DropdownMenuCheckboxItem>
+          </DropdownMenuGroup>
           <DropdownMenuSeparator />
-          <DropdownMenuLabel>Position</DropdownMenuLabel>
           <DropdownMenuRadioGroup value={position} onValueChange={setPosition}>
+            <DropdownMenuLabel>Position</DropdownMenuLabel>
             <DropdownMenuRadioItem value="top">Top</DropdownMenuRadioItem>
             <DropdownMenuRadioItem value="bottom">Bottom</DropdownMenuRadioItem>
             <DropdownMenuRadioItem value="right">Right</DropdownMenuRadioItem>

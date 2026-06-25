@@ -214,7 +214,7 @@ function ComboboxInput({
         {showTrigger && (
           <InputGroupButton
             size="icon-xs"
-            variant="ghost"
+            variant="transparent"
             render={<ComboboxTrigger />}
             data-slot="input-group-button"
             className={comboboxInputButtonStyles}
