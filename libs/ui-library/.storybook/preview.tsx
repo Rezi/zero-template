@@ -18,7 +18,7 @@ const withTheme: Decorator = (Story, context) => {
     root.style.colorScheme = theme;
   }, [theme]);
   return (
-    <div className="bg-background text-foreground font-sans">
+    <div>
       <Story />
     </div>
   );

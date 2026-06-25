@@ -51,7 +51,7 @@ in order to modify this specific build of sugar.css.
     --container-width-number: 65;
     --container-width: calc(1rem * var(--container-width-number));
 
-    --color-shadow-half: color-mix(in srgb, var(--color-foreground) 8%, transparent);
+    --color-shadow-half: color-mix(in srgb, var(--foreground) 8%, transparent);
 
     --s-box-shadow-half: 0 0 calc(1rem * var(--s-multiplier-shadow)) var(--color-shadow-half);
   }
@@ -111,8 +111,8 @@ in order to modify this specific build of sugar.css.
    */
   body {
     margin: 0;
-    color: var(---color-foreground);
-    background-color: var(--color-background);
+    color: var(--foreground);
+    background-color: var(--background);
   }
   p {
     text-wrap: pretty;
@@ -599,7 +599,7 @@ in order to modify this specific build of sugar.css.
     no matter whether there is a scrollbar or not */
   }
   body > header {
-    background-color: var(--color-background);
+    background-color: var(--background);
   }
   body > footer {
     padding: var(--sugar-spacing-block) 0;
