@@ -53,7 +53,7 @@ function Home() {
             bg: "var(--chip-bg)",
             px: "3",
             py: "1.5",
-            fontSize: "sm",
+
             fontWeight: "medium",
             _hover: { bg: "var(--link-bg-hover)" },
             _disabled: { cursor: "not-allowed", opacity: "0.5" },
@@ -62,9 +62,7 @@ function Home() {
           Create Album
         </button>
         {!isSignedIn && (
-          <span className={css({ fontSize: "sm", color: "var(--sea-ink-soft)" })}>
-            Sign in to add an album.
-          </span>
+          <span className={css({ color: "var(--sea-ink-soft)" })}>Sign in to add an album.</span>
         )}
       </div>
 

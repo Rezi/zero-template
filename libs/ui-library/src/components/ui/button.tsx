@@ -14,7 +14,6 @@ const buttonVariants = cva({
     borderColor: "transparent",
     borderStyle: "solid",
     backgroundClip: "padding-box",
-    fontSize: "sm",
     fontWeight: "medium",
     whiteSpace: "nowrap",
     transitionProperty: "all",
@@ -104,6 +103,8 @@ const buttonVariants = cva({
         h: "7",
         gap: "1",
         px: "3",
+        fontSize: "sm",
+
         "&:has([data-icon='inline-end'])": { pr: "2" },
         "&:has([data-icon='inline-start'])": { pl: "2" },
       },

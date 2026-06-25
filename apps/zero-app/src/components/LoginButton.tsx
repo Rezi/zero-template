@@ -20,8 +20,10 @@ export function LoginButton() {
   }
 
   return (
-    <Link to="/login" className={buttonVariants({ variant: "link", size: "sm" })}>
-      Sign in
-    </Link>
+    <>
+      <Link to="/login" className={buttonVariants({ variant: "link", size: "lg" })}>
+        Sign in d
+      </Link>
+    </>
   );
 }
