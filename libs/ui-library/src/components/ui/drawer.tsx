@@ -16,10 +16,6 @@ const drawerOverlayStyles = css({
   },
 });
 
-// Enter/exit animations kept as literal Tailwind (tw-animate-css) — ported later as a dedicated pass.
-const drawerOverlayAnimations =
-  "data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0";
-
 const drawerContentStyles = css({
   position: "fixed",
   zIndex: "50",
@@ -128,7 +124,7 @@ function DrawerOverlay({
   return (
     <DrawerPrimitive.Overlay
       data-slot="drawer-overlay"
-      className={cn(drawerOverlayStyles, drawerOverlayAnimations, className)}
+      className={cn(drawerOverlayStyles, className)}
       {...props}
     />
   );
@@ -155,15 +151,11 @@ function DrawerContent({
 }
 
 function DrawerHeader({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div data-slot="drawer-header" className={cn(drawerHeaderStyles, className)} {...props} />
-  );
+  return <div data-slot="drawer-header" className={cn(drawerHeaderStyles, className)} {...props} />;
 }
 
 function DrawerFooter({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div data-slot="drawer-footer" className={cn(drawerFooterStyles, className)} {...props} />
-  );
+  return <div data-slot="drawer-footer" className={cn(drawerFooterStyles, className)} {...props} />;
 }
 
 function DrawerTitle({ className, ...props }: React.ComponentProps<typeof DrawerPrimitive.Title>) {

@@ -89,7 +89,6 @@ const inputGroupAddonVariants = cva({
         px: "2.5",
         pt: "2",
         "[data-slot='input-group']:has(> input) &": { pt: "2" },
-        "&.border-b": { pb: "2" },
       },
       "block-end": {
         order: "9999",
@@ -98,12 +97,31 @@ const inputGroupAddonVariants = cva({
         px: "2.5",
         pb: "2",
         "[data-slot='input-group']:has(> input) &": { pb: "2" },
-        "&.border-t": { pt: "2" },
       },
     },
+    // Opt-in divider. The side depends on the addon's placement: a block-start
+    // addon gets a bottom border, a block-end addon a top border (was the
+    // `&.border-b` / `&.border-t` Tailwind marker classes).
+    bordered: {
+      true: {},
+      false: {},
+    },
   },
+  compoundVariants: [
+    {
+      align: "block-start",
+      bordered: true,
+      css: { borderBottomWidth: "1px", borderColor: "border", pb: "2" },
+    },
+    {
+      align: "block-end",
+      bordered: true,
+      css: { borderTopWidth: "1px", borderColor: "border", pt: "2" },
+    },
+  ],
   defaultVariants: {
     align: "inline-start",
+    bordered: false,
   },
 });
 
@@ -121,6 +139,7 @@ function InputGroup({ className, ...props }: React.ComponentProps<"div">) {
 function InputGroupAddon({
   className,
   align = "inline-start",
+  bordered,
   ...props
 }: React.ComponentProps<"div"> & RecipeVariantProps<typeof inputGroupAddonVariants>) {
   return (
@@ -128,7 +147,7 @@ function InputGroupAddon({
       role="group"
       data-slot="input-group-addon"
       data-align={align}
-      className={cn(inputGroupAddonVariants({ align }), className)}
+      className={cn(inputGroupAddonVariants({ align, bordered }), className)}
       onClick={(e) => {
         if ((e.target as HTMLElement).closest("button")) {
           return;

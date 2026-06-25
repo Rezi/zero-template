@@ -41,6 +41,28 @@ export default {
 
   theme: {
     extend: {
+      // Keyframe animations for the cases that genuinely need them. The Base UI
+      // overlay/popup enter/exit motion does NOT live here — it uses CSS
+      // transitions keyed on `data-starting-style`/`data-ending-style` (see
+      // `libs/ui-library/src/lib/animations.ts`), which is what Base UI natively
+      // drives. Keyframes keyed on `data-open`/`data-closed` (the Radix idiom)
+      // don't reliably run on portalled backdrops.
+      keyframes: {
+        // Base UI exposes the resolved panel height as `--accordion-panel-height`.
+        accordionDown: {
+          from: { height: "0" },
+          to: { height: "var(--accordion-panel-height)" },
+        },
+        accordionUp: {
+          from: { height: "var(--accordion-panel-height)" },
+          to: { height: "0" },
+        },
+        caretBlink: {
+          "0%, 70%, 100%": { opacity: "1" },
+          "20%, 50%": { opacity: "0" },
+        },
+      },
+
       // shadcn/ui semantic colour tokens. Each maps to a CSS variable already
       // defined in `apps/zero-app/src/styles.css` (`:root` for light, `.dark`
       // for dark), so light/dark switching is handled by those variables — no

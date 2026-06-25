@@ -5,6 +5,7 @@ import { ContextMenu as ContextMenuPrimitive } from "@base-ui/react/context-menu
 import { css } from "@zero-app/styled-system/css";
 
 import { cn } from "../../lib/utils";
+import { popoverAnimationStyles } from "../../lib/animations";
 import { ChevronRightIcon, CheckIcon } from "lucide-react";
 
 const shadowLg = "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)";
@@ -29,10 +30,6 @@ const contextMenuContentStyles = css({
     boxShadow: `0 0 0 1px color-mix(in oklab, var(--foreground) 10%, transparent), ${shadowLg}`,
   },
 });
-
-// Enter/exit animations kept as literal Tailwind (tw-animate-css) — ported later as a dedicated pass.
-const contextMenuContentAnimations =
-  "duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95";
 
 const contextMenuLabelStyles = css({
   px: "2",
@@ -163,7 +160,7 @@ function ContextMenuContent({
       >
         <ContextMenuPrimitive.Popup
           data-slot="context-menu-content"
-          className={cn(contextMenuContentStyles, contextMenuContentAnimations, className)}
+          className={cn(contextMenuContentStyles, popoverAnimationStyles, className)}
           {...props}
         />
       </ContextMenuPrimitive.Positioner>
@@ -238,9 +235,7 @@ function ContextMenuSubTrigger({
 }
 
 function ContextMenuSubContent({ ...props }: React.ComponentProps<typeof ContextMenuContent>) {
-  return (
-    <ContextMenuContent data-slot="context-menu-sub-content" side="right" {...props} />
-  );
+  return <ContextMenuContent data-slot="context-menu-sub-content" side="right" {...props} />;
 }
 
 function ContextMenuCheckboxItem({

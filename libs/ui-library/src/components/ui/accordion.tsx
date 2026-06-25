@@ -59,7 +59,21 @@ const accordionTriggerIconUpStyles = css({
   "[data-slot='accordion-trigger'][aria-expanded='true'] &": { display: "inline" },
 });
 
-const accordionContentPanelStyles = css({ overflow: "hidden", px: "4", fontSize: "sm" });
+const accordionContentPanelStyles = css({
+  overflow: "hidden",
+  px: "4",
+  fontSize: "sm",
+  "&[data-open]": {
+    animationName: "accordionDown",
+    animationDuration: "0.2s",
+    animationTimingFunction: "ease-out",
+  },
+  "&[data-closed]": {
+    animationName: "accordionUp",
+    animationDuration: "0.2s",
+    animationTimingFunction: "ease-out",
+  },
+});
 
 const accordionContentInnerStyles = css({
   height: "var(--accordion-panel-height)",
@@ -118,10 +132,7 @@ function AccordionContent({ className, children, ...props }: AccordionPrimitive.
   return (
     <AccordionPrimitive.Panel
       data-slot="accordion-content"
-      className={cn(
-        accordionContentPanelStyles,
-        "data-open:animate-accordion-down data-closed:animate-accordion-up",
-      )}
+      className={accordionContentPanelStyles}
       {...props}
     >
       <div className={cn(accordionContentInnerStyles, className)}>{children}</div>

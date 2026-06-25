@@ -26,11 +26,26 @@ sonner's `toaster`/`cn-toast`) is **not** a Tailwind dependency — see §4.
 
 ## 1. Animation classes from `tw-animate-css` (highest priority)
 
+> **Update (done):** Phases 0–1 are complete. **12 of the 13 components** below are migrated
+> and struck through; only `navigation-menu.tsx` remains (entangled with the
+> `group-data-[viewport=false]/navigation-menu:*` selectors → folded into §2).
+>
+> **Pattern note (important):** this app is on **Base UI**, not Radix. Base UI drives enter/exit
+> via **CSS transitions** keyed on `data-starting-style`/`data-ending-style` (the resting style is
+> the open state; the hidden state goes under those attributes), NOT keyframe `animation`s keyed on
+> `data-open`/`data-closed`. The shared style objects live in `libs/ui-library/src/lib/animations.ts`
+> (`overlayAnimationStyles`, `contentAnimationStyles`, `popoverAnimationStyles`,
+> `tooltipAnimationStyles`, `selectAnimationStyles`) and follow `sheet.tsx`'s established idiom. A
+> first attempt used `@keyframes enter/exit` + `data-open`/`data-closed` (a faithful `tw-animate-css`
+> port) but the backdrop stayed static — Base UI doesn't reliably run those keyframes on a portalled
+> backdrop. `panda.config.mjs` keyframes are now only `accordionDown`/`accordionUp` + `caretBlink`
+> (accordion + caret legitimately need keyframes); `drawer` relies on `vaul`'s own injected overlay fade.
+
 These are Tailwind/`tw-animate-css` utility strings passed as `className` (usually as a
 sibling of a Panda `css()` result inside `cn(...)`). They depend on both
-`@import "tailwindcss"` and `@import "tw-animate-css"` being active. Panda currently has
+`@import "tailwindcss"` and `@import "tw-animate-css"` being active. ~~Panda currently has
 **no** keyframes/animation tokens defined (`grep` of `panda.config.mjs` → none), so these
-cannot be dropped until equivalents are added to Panda.
+cannot be dropped until equivalents are added to Panda.~~ (Keyframes now defined — see Update.)
 
 Tokens involved: `data-open:animate-in`, `data-closed:animate-out`, `fade-in-0`,
 `fade-out-0`, `zoom-in-95`, `zoom-out-95`, `slide-in-from-{top,bottom,left,right}-2`,
@@ -39,23 +54,24 @@ Tokens involved: `data-open:animate-in`, `data-closed:animate-out`, `fade-in-0`,
 
 | Component | Location (approx) | Notes |
 |---|---|---|
-| `accordion.tsx` | :123 | `data-open:animate-accordion-down data-closed:animate-accordion-up` |
-| `alert-dialog.tsx` | :111, :113 | overlay + content fade/zoom |
-| `combobox.tsx` | :51 | popover slide/fade/zoom |
-| `context-menu.tsx` | :35 | popover slide/fade/zoom |
-| `dialog.tsx` | :73, :75 | overlay + content |
-| `drawer.tsx` | :21 | fade |
-| `dropdown-menu.tsx` | :33 | slide/fade/zoom (+ `data-closed:overflow-hidden`) |
-| `hover-card.tsx` | :31 | slide/fade/zoom |
-| `input-otp.tsx` | :119 | `animate-caret-blink duration-1000` |
-| `navigation-menu.tsx` | :153, :299 | motion slide + viewport block (see §2) |
-| `popover.tsx` | :33 | slide/fade/zoom |
-| `select.tsx` | :76 | slide/fade/zoom (+ `data-[align-trigger=true]:animate-none`) |
-| `tooltip.tsx` | :33 | slide/fade/zoom |
+| ✅ ~~`accordion.tsx`~~ | :123 | ~~`data-open:animate-accordion-down data-closed:animate-accordion-up`~~ → `accordionDown`/`accordionUp` keyframes in `accordionContentPanelStyles` |
+| ✅ ~~`alert-dialog.tsx`~~ | :111, :113 | ~~overlay + content fade/zoom~~ → `overlayAnimationStyles` + `contentAnimationStyles` |
+| ✅ ~~`combobox.tsx`~~ | :51 | ~~popover slide/fade/zoom~~ → `popoverAnimationStyles` |
+| ✅ ~~`context-menu.tsx`~~ | :35 | ~~popover slide/fade/zoom~~ → `popoverAnimationStyles` |
+| ✅ ~~`dialog.tsx`~~ | :73, :75 | ~~overlay + content~~ → `overlayAnimationStyles` + `contentAnimationStyles` |
+| ✅ ~~`drawer.tsx`~~ | :21 | ~~fade~~ → removed; `vaul` injects its own overlay fade |
+| ✅ ~~`dropdown-menu.tsx`~~ | :33 | ~~slide/fade/zoom (+ `data-closed:overflow-hidden`)~~ → `popoverAnimationStyles` + local `data-closed` overflow |
+| ✅ ~~`hover-card.tsx`~~ | :31 | ~~slide/fade/zoom~~ → `popoverAnimationStyles` |
+| ✅ ~~`input-otp.tsx`~~ | :119 | ~~`animate-caret-blink duration-1000`~~ → `caretBlink` keyframe in `inputOTPCaretStyles` |
+| `navigation-menu.tsx` | :153, :299 | motion slide + viewport block (**remaining** — see §2) |
+| ✅ ~~`popover.tsx`~~ | :33 | ~~slide/fade/zoom~~ → `popoverAnimationStyles` |
+| ✅ ~~`select.tsx`~~ | :76 | ~~slide/fade/zoom (+ `data-[align-trigger=true]:animate-none`)~~ → `selectAnimationStyles` (motion scoped to `data-align-trigger='false'`) |
+| ✅ ~~`tooltip.tsx`~~ | :33 | ~~slide/fade/zoom~~ → `tooltipAnimationStyles` (150ms + `delayed-open`) |
 
-**13 files.** All follow the same shadcn enter/exit pattern, so a single set of Panda
-keyframes + an `animation`-style utility can cover ~12 of them; `accordion` and
-`input-otp` need their own keyframes (`accordion-down/up`, `caret-blink`).
+**13 files — 12 done, 1 remaining (`navigation-menu`).** All follow the same shadcn
+enter/exit pattern, so a single set of Panda keyframes + the shared
+`animations.ts` style objects covered ~12 of them; `accordion` and `input-otp` got their
+own keyframes (`accordionDown/Up`, `caretBlink`) as planned.
 
 ---
 
@@ -205,19 +221,26 @@ Ordered so the app stays working after every phase. Storybook + the app both pul
 `apps/zero-app/src/styles.css`, so Tailwind can only be removed once **all** of §1–§2 are
 migrated.
 
-### Phase 0 — Panda animation foundation (unblocks §1)
-- Add `theme.extend.keyframes` to `panda.config.mjs`: `enter`/`exit` (fade+zoom+slide via
-  CSS vars, mirroring `tw-animate-css`/shadcn), `accordion-down`, `accordion-up`,
-  `caret-blink`.
-- Add a small set of helper styles/recipe (or a `data-open`/`data-closed` utility) that
-  apply those keyframes, so component call-sites stay terse.
+### ✅ Phase 0 — Panda animation foundation (unblocks §1) — DONE
+- `theme.extend.keyframes` in `panda.config.mjs` = `accordionDown`, `accordionUp`, `caretBlink`
+  (the only cases that genuinely need keyframes). The Base UI enter/exit motion does NOT use
+  keyframes — see the pattern note in §1.
+- Shared style objects in `libs/ui-library/src/lib/animations.ts` (`overlayAnimationStyles`,
+  `contentAnimationStyles`, `popoverAnimationStyles`, `tooltipAnimationStyles`,
+  `selectAnimationStyles`) — CSS transitions keyed on `data-starting-style`/`data-ending-style`,
+  following `sheet.tsx`.
 - Verify in Storybook against the existing `tw-animate-css` output before removing it.
+  (`tw-animate-css` is still imported, so the two can be diffed side-by-side before Phase 4.)
 
-### Phase 1 — Migrate the 13 animation components (§1)
-- Replace each animation class string with the Phase-0 Panda equivalent, expressed in the
+### ✅ Phase 1 — Migrate the animation components (§1) — DONE (except `navigation-menu`)
+- ~~Replace each animation class string with the Phase-0 Panda equivalent, expressed in the
   component's existing `css()` object via `data-open`/`data-closed`/`data-[side=…]`
-  selectors (the components already use these data attributes).
-- Do `accordion` and `input-otp` (caret) individually.
+  selectors~~ — done for the 12 components struck through in the §1 table.
+- ~~Do `accordion` and `input-otp` (caret) individually.~~ Done.
+- `navigation-menu.tsx` deferred to **Phase 2** (its animation is entangled with the
+  `group-data-[viewport=false]/navigation-menu:*` selectors).
+- Typecheck passes (`tsc --noEmit -p libs/ui-library/tsconfig.json` → 0 errors); `deno task
+  panda` regenerates the keyframes into `styled-system/styles.css`.
 
 ### Phase 2 — Migrate named group/peer variants (§2)
 - Rewrite `navigation-menu.tsx` `:127`/`:153` and `calendar.tsx` `:337` as Panda nested
@@ -252,9 +275,9 @@ migrated.
 ### Effort snapshot
 | Phase | Scope | Risk |
 |---|---|---|
-| 0 | config keyframes | low (additive) |
-| 1 | 13 components | medium (visual parity) |
-| 2 | 2 components | medium (complex selectors) |
+| ~~0~~ ✅ | ~~config keyframes~~ done | low (additive) |
+| ~~1~~ ✅ | ~~13~~ 12 components done; `navigation-menu` → Phase 2 | medium (visual parity) |
+| 2 | 2 components (`navigation-menu` + `calendar`) | medium (complex selectors) |
 | 3 | global css + config | medium |
 | 4 | deps/build/`cn` | medium (build + reset) |
 | 5 | verification | — |
@@ -263,3 +286,12 @@ migrated.
 - **Story literals → Panda `css()`** — all 6 stories (direction, card, button, badge,
   alert, tabs) migrated; typecheck passes and no `className="…"` Tailwind literals remain
   in any `.stories.tsx`.
+- **Phase 0 — Panda animation foundation** — `accordionDown`, `accordionUp`, `caretBlink`
+  keyframes in `panda.config.mjs`; shared transition-based animation style objects (Base UI
+  `data-starting-style`/`data-ending-style` idiom, per `sheet.tsx`) in
+  `libs/ui-library/src/lib/animations.ts`.
+- **Phase 1 — animation components (§1)** — 12 of 13 components migrated off
+  `tw-animate-css` to Panda (`accordion`, `alert-dialog`, `combobox`, `context-menu`,
+  `dialog`, `drawer`, `dropdown-menu`, `hover-card`, `input-otp`, `popover`, `select`,
+  `tooltip`). Typecheck clean; grep gate returns only `navigation-menu.tsx` (deferred to
+  Phase 2) plus a `sonner`/comment false positive.

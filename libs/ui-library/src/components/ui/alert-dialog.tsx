@@ -5,6 +5,7 @@ import { AlertDialog as AlertDialogPrimitive } from "@base-ui/react/alert-dialog
 import { css } from "@zero-app/styled-system/css";
 
 import { cn } from "../../lib/utils";
+import { contentAnimationStyles, overlayAnimationStyles } from "../../lib/animations";
 import { Button } from "./button";
 
 const shadowXl = "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)";
@@ -106,12 +107,6 @@ const alertDialogDescriptionStyles = css({
   "& > a:hover": { color: "foreground" },
 });
 
-// Enter/exit animations kept as literal Tailwind (tw-animate-css) — ported later as a dedicated pass.
-const alertDialogOverlayAnimations =
-  "duration-100 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0";
-const alertDialogContentAnimations =
-  "duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95";
-
 function AlertDialog({ ...props }: AlertDialogPrimitive.Root.Props) {
   return <AlertDialogPrimitive.Root data-slot="alert-dialog" {...props} />;
 }
@@ -128,7 +123,7 @@ function AlertDialogOverlay({ className, ...props }: AlertDialogPrimitive.Backdr
   return (
     <AlertDialogPrimitive.Backdrop
       data-slot="alert-dialog-overlay"
-      className={cn(alertDialogOverlayStyles, alertDialogOverlayAnimations, className)}
+      className={cn(alertDialogOverlayStyles, overlayAnimationStyles, className)}
       {...props}
     />
   );
@@ -147,7 +142,7 @@ function AlertDialogContent({
       <AlertDialogPrimitive.Popup
         data-slot="alert-dialog-content"
         data-size={size}
-        className={cn(alertDialogContentStyles, alertDialogContentAnimations, className)}
+        className={cn(alertDialogContentStyles, contentAnimationStyles, className)}
         {...props}
       />
     </AlertDialogPortal>

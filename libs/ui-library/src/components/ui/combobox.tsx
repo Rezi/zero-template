@@ -3,6 +3,7 @@ import { Combobox as ComboboxPrimitive } from "@base-ui/react";
 import { css } from "@zero-app/styled-system/css";
 
 import { cn } from "../../lib/utils";
+import { popoverAnimationStyles } from "../../lib/animations";
 import { Button } from "./button";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "./input-group";
 import { ChevronDownIcon, XIcon, CheckIcon } from "lucide-react";
@@ -11,7 +12,11 @@ const shadowLg = "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 
 const iconNone = css({ pointerEvents: "none" });
 
 const comboboxTriggerStyles = css({ "& svg:not([class*='size-'])": { size: "4" } });
-const comboboxTriggerIconStyles = css({ pointerEvents: "none", size: "4", color: "muted.foreground" });
+const comboboxTriggerIconStyles = css({
+  pointerEvents: "none",
+  size: "4",
+  color: "muted.foreground",
+});
 
 const comboboxInputButtonStyles = css({
   "[data-slot='input-group']:has([data-slot=combobox-clear]) &": { display: "none" },
@@ -45,10 +50,6 @@ const comboboxContentStyles = css({
     boxShadow: `0 0 0 1px color-mix(in oklab, var(--foreground) 10%, transparent), ${shadowLg}`,
   },
 });
-
-// Enter/exit animations kept as literal Tailwind (tw-animate-css) — ported later as a dedicated pass.
-const comboboxContentAnimations =
-  "duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95";
 
 const comboboxListStyles = css({
   maxH: "min(calc(var(--spacing, 0.25rem) * 72 - var(--spacing, 0.25rem) * 9), calc(var(--available-height) - var(--spacing, 0.25rem) * 9))",
@@ -123,7 +124,11 @@ const comboboxChipsStyles = css({
   transitionProperty: "color, box-shadow",
   transitionDuration: "200ms",
   _focusWithin: { borderColor: "ring", ringW: "3", ringC: "ring/30" },
-  "&:has([aria-invalid='true'])": { borderColor: "destructive", ringW: "3", ringC: "destructive/20" },
+  "&:has([aria-invalid='true'])": {
+    borderColor: "destructive",
+    ringW: "3",
+    ringC: "destructive/20",
+  },
   "&:has([data-slot=combobox-chip])": { px: "1" },
   _dark: {
     "&:has([aria-invalid='true'])": { borderColor: "destructive/50", ringC: "destructive/40" },
@@ -249,7 +254,7 @@ function ComboboxContent({
         <ComboboxPrimitive.Popup
           data-slot="combobox-content"
           data-chips={!!anchor}
-          className={cn(comboboxContentStyles, comboboxContentAnimations, className)}
+          className={cn(comboboxContentStyles, popoverAnimationStyles, className)}
           {...props}
         />
       </ComboboxPrimitive.Positioner>

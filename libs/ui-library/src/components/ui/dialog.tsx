@@ -3,6 +3,7 @@ import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { css } from "@zero-app/styled-system/css";
 
 import { cn } from "../../lib/utils";
+import { contentAnimationStyles, overlayAnimationStyles } from "../../lib/animations";
 import { Button } from "./button";
 import { XIcon } from "lucide-react";
 
@@ -43,7 +44,12 @@ const dialogContentStyles = css({
   },
 });
 
-const dialogCloseButtonStyles = css({ position: "absolute", top: "4", right: "4", bg: "secondary" });
+const dialogCloseButtonStyles = css({
+  position: "absolute",
+  top: "4",
+  right: "4",
+  bg: "secondary",
+});
 
 const dialogHeaderStyles = css({ display: "flex", flexDirection: "column", gap: "1.5" });
 
@@ -68,12 +74,6 @@ const dialogDescriptionStyles = css({
   "& > a:hover": { color: "foreground" },
 });
 
-// Enter/exit animations kept as literal Tailwind (tw-animate-css) — ported later as a dedicated pass.
-const dialogOverlayAnimations =
-  "duration-100 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0";
-const dialogContentAnimations =
-  "duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95";
-
 function Dialog({ ...props }: DialogPrimitive.Root.Props) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />;
 }
@@ -94,7 +94,7 @@ function DialogOverlay({ className, ...props }: DialogPrimitive.Backdrop.Props) 
   return (
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
-      className={cn(dialogOverlayStyles, dialogOverlayAnimations, className)}
+      className={cn(dialogOverlayStyles, overlayAnimationStyles, className)}
       {...props}
     />
   );
@@ -113,7 +113,7 @@ function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
-        className={cn(dialogContentStyles, dialogContentAnimations, className)}
+        className={cn(dialogContentStyles, contentAnimationStyles, className)}
         {...props}
       >
         {children}

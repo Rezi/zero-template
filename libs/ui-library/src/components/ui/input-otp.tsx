@@ -63,7 +63,15 @@ const inputOTPCaretWrapperStyles = css({
   justifyContent: "center",
 });
 
-const inputOTPCaretStyles = css({ h: "4", w: "1px", bg: "foreground" });
+const inputOTPCaretStyles = css({
+  h: "4",
+  w: "1px",
+  bg: "foreground",
+  animationName: "caretBlink",
+  animationDuration: "1s",
+  animationTimingFunction: "ease-out",
+  animationIterationCount: "infinite",
+});
 
 const inputOTPSeparatorStyles = css({
   display: "flex",
@@ -115,8 +123,7 @@ function InputOTPSlot({
       {char}
       {hasFakeCaret && (
         <div className={inputOTPCaretWrapperStyles}>
-          {/* animate-caret-blink kept as literal Tailwind (tw-animate-css) — ported later */}
-          <div className={cn(inputOTPCaretStyles, "animate-caret-blink duration-1000")} />
+          <div className={inputOTPCaretStyles} />
         </div>
       )}
     </div>

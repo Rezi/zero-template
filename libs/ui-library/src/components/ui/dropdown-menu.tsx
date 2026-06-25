@@ -3,6 +3,7 @@ import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import { css } from "@zero-app/styled-system/css";
 
 import { cn } from "../../lib/utils";
+import { popoverAnimationStyles } from "../../lib/animations";
 import { ChevronRightIcon, CheckIcon } from "lucide-react";
 
 const shadowLg = "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)";
@@ -28,9 +29,9 @@ const dropdownContentStyles = css({
   },
 });
 
-// Enter/exit animations kept as literal Tailwind (tw-animate-css) — ported later as a dedicated pass.
-const dropdownContentAnimations =
-  "duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:overflow-hidden data-closed:fade-out-0 data-closed:zoom-out-95";
+// `overflow: hidden` while closing prevents submenu content from spilling during
+// the exit animation; the enter/exit motion itself comes from popoverAnimationStyles.
+const dropdownContentClosedOverflow = css({ "&[data-ending-style]": { overflow: "hidden" } });
 
 const dropdownSubContentStyles = css({ w: "auto!", minW: "96px!" });
 
@@ -170,7 +171,12 @@ function DropdownMenuContent({
       >
         <MenuPrimitive.Popup
           data-slot="dropdown-menu-content"
-          className={cn(dropdownContentStyles, dropdownContentAnimations, className)}
+          className={cn(
+            dropdownContentStyles,
+            popoverAnimationStyles,
+            dropdownContentClosedOverflow,
+            className,
+          )}
           {...props}
         />
       </MenuPrimitive.Positioner>

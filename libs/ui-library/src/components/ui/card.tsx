@@ -53,7 +53,20 @@ function Card({
   );
 }
 
-function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
+// Bottom divider for a header. The `border-b` Tailwind utility used to draw the
+// border AND trigger the `&.border-b` padding; in Panda the `bordered` prop applies
+// both together.
+const cardHeaderBorderedStyles = css({
+  borderBottomWidth: "1px",
+  borderColor: "border",
+  pb: "var(--card-spacing)",
+});
+
+function CardHeader({
+  className,
+  bordered,
+  ...props
+}: React.ComponentProps<"div"> & { bordered?: boolean }) {
   return (
     <div
       data-slot="card-header"
@@ -70,8 +83,8 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
           px: "var(--card-spacing)",
           "&:has([data-slot='card-action'])": { gridTemplateColumns: "1fr auto" },
           "&:has([data-slot='card-description'])": { gridTemplateRows: "auto auto" },
-          "&.border-b": { pb: "var(--card-spacing)" },
         }),
+        bordered && cardHeaderBorderedStyles,
         className,
       )}
       {...props}
@@ -131,7 +144,18 @@ function CardContent({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
-function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
+// Top divider for a footer (the `border-t` counterpart of cardHeaderBorderedStyles).
+const cardFooterBorderedStyles = css({
+  borderTopWidth: "1px",
+  borderColor: "border",
+  pt: "var(--card-spacing)",
+});
+
+function CardFooter({
+  className,
+  bordered,
+  ...props
+}: React.ComponentProps<"div"> & { bordered?: boolean }) {
   return (
     <div
       data-slot="card-footer"
@@ -142,8 +166,8 @@ function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
           borderBottomLeftRadius: cardRadius,
           borderBottomRightRadius: cardRadius,
           px: "var(--card-spacing)",
-          "&.border-t": { pt: "var(--card-spacing)" },
         }),
+        bordered && cardFooterBorderedStyles,
         className,
       )}
       {...props}

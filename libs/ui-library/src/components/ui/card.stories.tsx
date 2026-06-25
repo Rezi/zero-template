@@ -41,14 +41,7 @@ export const Default: Story = {
           Name your project and pick a framework to get started.
         </p>
       </CardContent>
-      <CardFooter
-        className={css({
-          justifyContent: "flex-end",
-          gap: "2",
-          borderTopWidth: "1px",
-          borderColor: "border",
-        })}
-      >
+      <CardFooter bordered className={css({ justifyContent: "flex-end", gap: "2" })}>
         <Button variant="outline">Cancel</Button>
         <Button>Deploy</Button>
       </CardFooter>

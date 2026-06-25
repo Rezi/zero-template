@@ -5,6 +5,7 @@ import { Select as SelectPrimitive } from "@base-ui/react/select";
 import { css } from "@zero-app/styled-system/css";
 
 import { cn } from "../../lib/utils";
+import { selectAnimationStyles } from "../../lib/animations";
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react";
 
 const shadowLg = "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)";
@@ -48,7 +49,11 @@ const selectTriggerStyles = css({
   },
 });
 
-const selectTriggerIconStyles = css({ pointerEvents: "none", size: "4", color: "muted.foreground" });
+const selectTriggerIconStyles = css({
+  pointerEvents: "none",
+  size: "4",
+  color: "muted.foreground",
+});
 
 const selectPositionerStyles = css({ isolation: "isolate", zIndex: "50" });
 
@@ -70,10 +75,6 @@ const selectContentStyles = css({
     boxShadow: `0 0 0 1px color-mix(in oklab, var(--foreground) 10%, transparent), ${shadowLg}`,
   },
 });
-
-// Enter/exit animations kept as literal Tailwind (tw-animate-css) — ported later as a dedicated pass.
-const selectContentAnimations =
-  "duration-100 data-[align-trigger=true]:animate-none data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95";
 
 const selectLabelStyles = css({ px: "2", py: "1", fontSize: "xs", color: "muted.foreground" });
 
@@ -211,7 +212,7 @@ function SelectContent({
         <SelectPrimitive.Popup
           data-slot="select-content"
           data-align-trigger={alignItemWithTrigger}
-          className={cn(selectContentStyles, selectContentAnimations, className)}
+          className={cn(selectContentStyles, selectAnimationStyles, className)}
           {...props}
         >
           <SelectScrollUpButton />

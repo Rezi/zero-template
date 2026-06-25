@@ -2,6 +2,7 @@ import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
 import { css } from "@zero-app/styled-system/css";
 
 import { cn } from "../../lib/utils";
+import { tooltipAnimationStyles } from "../../lib/animations";
 
 const tooltipPositionerStyles = css({ isolation: "isolate", zIndex: "50" });
 
@@ -27,10 +28,6 @@ const tooltipContentStyles = css({
     rounded: "lg",
   },
 });
-
-// Enter/exit animations kept as literal Tailwind (tw-animate-css) — ported later as a dedicated pass.
-const tooltipContentAnimations =
-  "data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=delayed-open]:animate-in data-[state=delayed-open]:fade-in-0 data-[state=delayed-open]:zoom-in-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95";
 
 const tooltipArrowStyles = css({
   zIndex: "50",
@@ -96,7 +93,7 @@ function TooltipContent({
       >
         <TooltipPrimitive.Popup
           data-slot="tooltip-content"
-          className={cn(tooltipContentStyles, tooltipContentAnimations, className)}
+          className={cn(tooltipContentStyles, tooltipAnimationStyles, className)}
           {...props}
         >
           {children}
