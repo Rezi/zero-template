@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { CheckIcon } from "lucide-react";
+import { css } from "@zero-app/styled-system/css";
 
 import { Badge } from "@zero-app/ui-library";
 
@@ -26,7 +27,7 @@ export const Default: Story = {};
 
 export const Variants: Story = {
   render: (args) => (
-    <div className="flex flex-wrap items-center gap-3">
+    <div className={css({ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "3" })}>
       <Badge {...args} variant="default">
         Default
       </Badge>

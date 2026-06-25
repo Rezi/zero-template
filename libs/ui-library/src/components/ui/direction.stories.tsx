@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { css } from "@zero-app/styled-system/css";
 
 import { Button, DirectionProvider } from "@zero-app/ui-library";
 
@@ -20,7 +21,18 @@ type Story = StoryObj<typeof meta>;
 function DemoRow({ direction }: { direction: "ltr" | "rtl" }) {
   return (
     <DirectionProvider direction={direction}>
-      <div dir={direction} className="flex items-center gap-2 rounded-md border p-4">
+      <div
+        dir={direction}
+        className={css({
+          display: "flex",
+          alignItems: "center",
+          gap: "2",
+          rounded: "md",
+          borderWidth: "1px",
+          borderColor: "border",
+          p: "4",
+        })}
+      >
         <Button variant="outline">Cancel</Button>
         <Button>Confirm</Button>
       </div>
@@ -40,13 +52,13 @@ export const RightToLeft: Story = {
 
 export const SideBySide: Story = {
   render: () => (
-    <div className="space-y-4">
+    <div className={css({ spaceY: "4" })}>
       <div>
-        <p className="mb-1 text-sm text-muted-foreground">LTR</p>
+        <p className={css({ mb: "1", fontSize: "sm", color: "muted.foreground" })}>LTR</p>
         <DemoRow direction="ltr" />
       </div>
       <div>
-        <p className="mb-1 text-sm text-muted-foreground">RTL</p>
+        <p className={css({ mb: "1", fontSize: "sm", color: "muted.foreground" })}>RTL</p>
         <DemoRow direction="rtl" />
       </div>
     </div>

@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { css } from "@zero-app/styled-system/css";
 
 import {
   Button,
@@ -25,7 +26,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
   render: (args) => (
-    <Card {...args} className="w-80">
+    <Card {...args} className={css({ w: "80" })}>
       <CardHeader>
         <CardTitle>Create project</CardTitle>
         <CardDescription>Deploy your new project in one click.</CardDescription>
@@ -36,11 +37,18 @@ export const Default: Story = {
         </CardAction>
       </CardHeader>
       <CardContent>
-        <p className="text-muted-foreground">
+        <p className={css({ color: "muted.foreground" })}>
           Name your project and pick a framework to get started.
         </p>
       </CardContent>
-      <CardFooter className="justify-end gap-2 border-t">
+      <CardFooter
+        className={css({
+          justifyContent: "flex-end",
+          gap: "2",
+          borderTopWidth: "1px",
+          borderColor: "border",
+        })}
+      >
         <Button variant="outline">Cancel</Button>
         <Button>Deploy</Button>
       </CardFooter>
@@ -51,7 +59,7 @@ export const Default: Story = {
 export const Small: Story = {
   args: { size: "sm" },
   render: (args) => (
-    <Card {...args} className="w-72">
+    <Card {...args} className={css({ w: "72" })}>
       <CardHeader>
         <CardTitle>Compact card</CardTitle>
         <CardDescription>Uses the tighter `sm` spacing.</CardDescription>

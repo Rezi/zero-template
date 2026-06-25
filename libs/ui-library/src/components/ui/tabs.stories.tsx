@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import * as React from "react";
+import { css } from "@zero-app/styled-system/css";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@zero-app/ui-library";
 
@@ -20,7 +21,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
   render: (args) => (
-    <Tabs {...args} defaultValue="account" className="w-80">
+    <Tabs {...args} defaultValue="account" className={css({ w: "80" })}>
       <TabsList>
         <TabsTrigger value="account">Account</TabsTrigger>
         <TabsTrigger value="password">Password</TabsTrigger>
@@ -39,7 +40,7 @@ export const Controlled: Story = {
         {...args}
         value={value}
         onValueChange={(next) => setValue(String(next))}
-        className="w-96"
+        className={css({ w: "96" })}
       >
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -56,7 +57,7 @@ export const Controlled: Story = {
 
 export const Line: Story = {
   render: (args) => (
-    <Tabs {...args} defaultValue="one" className="w-80">
+    <Tabs {...args} defaultValue="one" className={css({ w: "80" })}>
       <TabsList variant="line">
         <TabsTrigger value="one">One</TabsTrigger>
         <TabsTrigger value="two">Two</TabsTrigger>

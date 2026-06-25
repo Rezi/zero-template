@@ -1,7 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { ArrowRightIcon, PlusIcon } from "lucide-react";
+import { css } from "@zero-app/styled-system/css";
 
 import { Button } from "@zero-app/ui-library";
+
+const rowStyles = css({ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "3" });
 
 const meta = {
   title: "Components/Button",
@@ -32,7 +35,7 @@ export const Default: Story = {};
 
 export const Variants: Story = {
   render: (args) => (
-    <div className="flex flex-wrap items-center gap-3">
+    <div className={rowStyles}>
       <Button {...args} variant="default">
         Default
       </Button>
@@ -58,7 +61,7 @@ export const Variants: Story = {
 
 export const Sizes: Story = {
   render: (args) => (
-    <div className="flex flex-wrap items-center gap-3">
+    <div className={rowStyles}>
       <Button {...args} size="xs">
         Extra small
       </Button>
@@ -78,7 +81,7 @@ export const Sizes: Story = {
 
 export const WithIcon: Story = {
   render: (args) => (
-    <div className="flex flex-wrap items-center gap-3">
+    <div className={rowStyles}>
       <Button {...args}>
         <PlusIcon /> Add item
       </Button>

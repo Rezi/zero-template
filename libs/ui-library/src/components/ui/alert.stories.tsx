@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { AlertCircleIcon, CheckCircle2Icon, XIcon } from "lucide-react";
 
+import { css } from "@zero-app/styled-system/css";
+
 import { Alert, AlertAction, AlertDescription, AlertTitle, Button } from "@zero-app/ui-library";
 
 const meta = {
@@ -20,7 +22,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
   render: (args) => (
-    <Alert {...args} className="max-w-md">
+    <Alert {...args} className={css({ maxW: "md" })}>
       <CheckCircle2Icon />
       <AlertTitle>Success! Your changes have been saved.</AlertTitle>
       <AlertDescription>
@@ -33,7 +35,7 @@ export const Default: Story = {
 export const Destructive: Story = {
   args: { variant: "destructive" },
   render: (args) => (
-    <Alert {...args} className="max-w-md">
+    <Alert {...args} className={css({ maxW: "md" })}>
       <AlertCircleIcon />
       <AlertTitle>Unable to process your payment.</AlertTitle>
       <AlertDescription>Please verify your billing information and try again.</AlertDescription>
@@ -43,7 +45,7 @@ export const Destructive: Story = {
 
 export const WithAction: Story = {
   render: (args) => (
-    <Alert {...args} className="max-w-md">
+    <Alert {...args} className={css({ maxW: "md" })}>
       <AlertCircleIcon />
       <AlertTitle>Your trial is ending soon.</AlertTitle>
       <AlertDescription>Upgrade to keep access to all features.</AlertDescription>

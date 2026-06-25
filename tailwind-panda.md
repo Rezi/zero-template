@@ -4,20 +4,23 @@ Audit of `libs/ui-library` (55 components + their `.stories.tsx`) for residual T
 usage after the Panda migration, plus an analysis of the `/`-opacity (transparency)
 color handling and a plan to finish the transition.
 
+> **Update:** the literal Tailwind classes in the story files have been migrated to Panda
+> `css()` (all 6 stories: direction, card, button, badge, alert, tabs). That item is done
+> and has been dropped from the list below.
+
 **TL;DR** — the component *style objects* are migrated cleanly to Panda `css()`. What
-remains tied to Tailwind is essentially four things:
+remains tied to Tailwind is essentially three things:
 
 1. **Enter/exit animation classes** from `tw-animate-css` (13 components) — the single
    biggest blocker.
 2. **Named `group-*/peer-*` Tailwind variants** still written as raw class strings
    (mainly `navigation-menu.tsx` and `calendar.tsx`).
-3. **Literal Tailwind layout classes in story files** (6 stories).
-4. **The global Tailwind CSS layer** (`apps/zero-app/src/styles.css`) — `@import
+3. **The global Tailwind CSS layer** (`apps/zero-app/src/styles.css`) — `@import
    "tailwindcss"`, `tw-animate-css`, `@theme`, `@apply` — plus the runtime deps
    (`tailwindcss`, `tw-animate-css`, `tailwind-merge`).
 
 Everything else flagged by a naive grep (`group`/`peer` markers, `role="group"`,
-sonner's `toaster`/`cn-toast`) is **not** a Tailwind dependency — see §5.
+sonner's `toaster`/`cn-toast`) is **not** a Tailwind dependency — see §4.
 
 ---
 
@@ -76,25 +79,7 @@ Tailwind and need rewriting as Panda nested selectors.
 
 ---
 
-## 3. Literal Tailwind classes in story files
-
-Layout/util classes hard-coded in stories (cosmetic wrappers, not component styles):
-
-| Story | Classes |
-|---|---|
-| `direction.stories.tsx` | `flex items-center gap-2 rounded-md border p-4`; `space-y-4`; `mb-1 text-sm text-muted-foreground` (×2) |
-| `card.stories.tsx` | `w-80`; `w-72`; `text-muted-foreground`; `justify-end gap-2 border-t` |
-| `button.stories.tsx` | `flex flex-wrap items-center gap-3` (×3) |
-| `badge.stories.tsx` | `flex flex-wrap items-center gap-3` |
-| `alert.stories.tsx` | `max-w-md` (×3) |
-| `tabs.stories.tsx` | `w-80` (×2), `w-96` |
-
-These are trivially replaced with `css({...})` (e.g. `flex flex-wrap items-center gap-3`
-→ `css({ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "3" })`).
-
----
-
-## 4. Global Tailwind layer & dependencies
+## 3. Global Tailwind layer & dependencies
 
 **`apps/zero-app/src/styles.css`** (also imported by Storybook's `preview.tsx`):
 
@@ -118,11 +103,11 @@ app's Vite config.
 **`cn()` (`lib/utils.ts`)** = `twMerge(clsx(inputs))`. `twMerge` is meaningful only while
 Tailwind classes coexist with Panda output; once Tailwind is gone it does nothing useful
 for Panda's atomic classes (and could in theory mis-merge them). Plan to swap to plain
-`clsx` or Panda's `cx` at the end (see Phase 5).
+`clsx` or Panda's `cx` at the end (see Phase 4).
 
 ---
 
-## 5. NOT Tailwind leftovers (false positives — leave alone)
+## 4. NOT Tailwind leftovers (false positives — leave alone)
 
 - `"group"`, `"peer"`, `"group/<name>"` **bare markers** — plain class names targeted by
   Panda selectors. No Tailwind needed.
@@ -134,7 +119,7 @@ for Panda's atomic classes (and could in theory mis-merge them). Plan to swap to
 
 ---
 
-## 6. Transparency colors (`/<opacity>`) — analysis & abstraction
+## 5. Transparency colors (`/<opacity>`) — analysis & abstraction
 
 ### What actually needs special handling
 
@@ -214,10 +199,10 @@ gradient-stop color).
 
 ---
 
-## 7. Finalization plan
+## 6. Finalization plan
 
 Ordered so the app stays working after every phase. Storybook + the app both pull
-`apps/zero-app/src/styles.css`, so Tailwind can only be removed once **all** of §1–§3 are
+`apps/zero-app/src/styles.css`, so Tailwind can only be removed once **all** of §1–§2 are
 migrated.
 
 ### Phase 0 — Panda animation foundation (unblocks §1)
@@ -239,17 +224,14 @@ migrated.
   selectors (`.group\/navigation-menu[data-viewport='false'] &`, etc.). Fold the
   `ring-*`/`ring-foreground/5` bits into `ringW`/`ringC` + native opacity.
 
-### Phase 3 — Migrate story literals (§3)
-- Replace the literal classes in the 6 stories with `css({...})` wrappers.
-
-### Phase 4 — Move the global layer into Panda
+### Phase 3 — Move the global layer into Panda
 - Recreate `* { borderColor; outlineColor }` and `body { bg; color }` via Panda
   `globalCss` in `panda.config.mjs`.
 - Confirm `@theme inline` is fully redundant with `semanticTokens` (it is) and drop it;
   **keep** the `:root` / `.dark` CSS-variable blocks (Panda tokens depend on them).
-- Apply the §6 `colorWithAlpha` refactor + resolve srgb/oklab.
+- Apply the §5 `colorWithAlpha` refactor + resolve srgb/oklab.
 
-### Phase 5 — Remove Tailwind
+### Phase 4 — Remove Tailwind
 - Delete `@import "tailwindcss"`, `tw-animate-css`, `shadcn/tailwind.css`, `@source`,
   `@custom-variant dark` from `styles.css`. (Dark mode is already handled by `.dark` CSS
   vars; no Panda `_dark` condition needed for tokens.)
@@ -261,10 +243,9 @@ migrated.
 - Enable Panda `preflight: true` (currently `false` to avoid double reset) and re-check
   the app + Storybook for reset regressions.
 
-### Phase 6 — Verify
+### Phase 5 — Verify
 - `deno task panda` (regenerate styled-system), typecheck, run Storybook, visually diff
-  the animated components (dialogs, popovers, accordion, OTP caret, nav-menu, calendar)
-  and the 6 edited stories.
+  the animated components (dialogs, popovers, accordion, OTP caret, nav-menu, calendar).
 - Grep gate (should return nothing in `libs/ui-library/src` except sonner markers):
   `grep -rnE '(animate-in|animate-out|fade-in|zoom-in|slide-in-from|animate-accordion|animate-caret|group-data|peer-data|@apply|@tailwind)' libs/ui-library/src`
 
@@ -274,7 +255,11 @@ migrated.
 | 0 | config keyframes | low (additive) |
 | 1 | 13 components | medium (visual parity) |
 | 2 | 2 components | medium (complex selectors) |
-| 3 | 6 stories | low |
-| 4 | global css + config | medium |
-| 5 | deps/build/`cn` | medium (build + reset) |
-| 6 | verification | — |
+| 3 | global css + config | medium |
+| 4 | deps/build/`cn` | medium (build + reset) |
+| 5 | verification | — |
+
+### Done
+- **Story literals → Panda `css()`** — all 6 stories (direction, card, button, badge,
+  alert, tabs) migrated; typecheck passes and no `className="…"` Tailwind literals remain
+  in any `.stories.tsx`.
