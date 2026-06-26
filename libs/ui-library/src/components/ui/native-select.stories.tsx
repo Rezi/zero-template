@@ -1,12 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { css } from "@zero-app/styled-system/css";
 
-import {
-  Label,
-  NativeSelect,
-  NativeSelectOptGroup,
-  NativeSelectOption,
-} from "@zero-app/ui-library";
+import { Label } from "./label";
+import { NativeSelect, NativeSelectOptGroup, NativeSelectOption } from "./native-select";
 
 const meta = {
   title: "Components/NativeSelect",

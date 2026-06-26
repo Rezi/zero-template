@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { css } from "@zero-app/styled-system/css";
 
-import { Progress, ProgressLabel, ProgressValue } from "@zero-app/ui-library";
+import { Progress, ProgressLabel, ProgressValue } from "./progress";
 
 const meta = {
   title: "Components/Progress",

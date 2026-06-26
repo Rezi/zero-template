@@ -8,7 +8,7 @@ import {
   UnderlineIcon,
 } from "lucide-react";
 
-import { ToggleGroup, ToggleGroupItem } from "@zero-app/ui-library";
+import { ToggleGroup, ToggleGroupItem } from "./toggle-group";
 
 const meta = {
   title: "Components/ToggleGroup",

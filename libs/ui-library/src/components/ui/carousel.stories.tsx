@@ -1,15 +1,14 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { css } from "@zero-app/styled-system/css";
 
+import { Card, CardContent } from "./card";
 import {
-  Card,
-  CardContent,
   Carousel,
   CarouselContent,
   CarouselItem,
   CarouselNext,
   CarouselPrevious,
-} from "@zero-app/ui-library";
+} from "./carousel";
 
 const meta = {
   title: "Components/Carousel",

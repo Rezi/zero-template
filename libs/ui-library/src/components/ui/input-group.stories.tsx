@@ -9,8 +9,8 @@ import {
   InputGroupInput,
   InputGroupText,
   InputGroupTextarea,
-  Kbd,
-} from "@zero-app/ui-library";
+} from "./input-group";
+import { Kbd } from "./kbd";
 
 const meta = {
   title: "Components/InputGroup",

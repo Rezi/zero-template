@@ -2,15 +2,15 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { FolderIcon, PlusIcon, SearchIcon } from "lucide-react";
 import { css } from "@zero-app/styled-system/css";
 
+import { Button } from "./button";
 import {
-  Button,
   Empty,
   EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from "@zero-app/ui-library";
+} from "./empty";
 
 const meta = {
   title: "Components/Empty",

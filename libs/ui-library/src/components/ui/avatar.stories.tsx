@@ -8,7 +8,7 @@ import {
   AvatarGroup,
   AvatarGroupCount,
   AvatarImage,
-} from "@zero-app/ui-library";
+} from "./avatar";
 
 const meta = {
   title: "Components/Avatar",

@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { css } from "@zero-app/styled-system/css";
 
-import { Kbd, KbdGroup } from "@zero-app/ui-library";
+import { Kbd, KbdGroup } from "./kbd";
 
 const meta = {
   title: "Components/Kbd",

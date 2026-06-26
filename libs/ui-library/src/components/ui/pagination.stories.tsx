@@ -9,7 +9,7 @@ import {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
-} from "@zero-app/ui-library";
+} from "./pagination";
 
 const meta = {
   title: "Components/Pagination",

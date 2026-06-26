@@ -1,10 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { css } from "@zero-app/styled-system/css";
 
+import { Button } from "./button";
+import { Input } from "./input";
+import { Label } from "./label";
 import {
-  Button,
-  Input,
-  Label,
   Sheet,
   SheetClose,
   SheetContent,
@@ -13,7 +13,7 @@ import {
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-} from "@zero-app/ui-library";
+} from "./sheet";
 
 const meta = {
   title: "Components/Sheet",

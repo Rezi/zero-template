@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { css } from "@zero-app/styled-system/css";
 
-import { AspectRatio } from "@zero-app/ui-library";
+import { AspectRatio } from "./aspect-ratio";
 
 const meta = {
   title: "Components/AspectRatio",

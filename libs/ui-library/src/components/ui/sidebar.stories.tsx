@@ -16,7 +16,7 @@ import {
   SidebarMenuItem,
   SidebarProvider,
   SidebarTrigger,
-} from "@zero-app/ui-library";
+} from "./sidebar";
 
 const items = [
   { title: "Home", icon: HomeIcon },

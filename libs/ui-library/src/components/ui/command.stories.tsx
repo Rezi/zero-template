@@ -11,8 +11,8 @@ import {
 
 import { css } from "@zero-app/styled-system/css";
 
+import { Button } from "./button";
 import {
-  Button,
   Command,
   CommandDialog,
   CommandEmpty,
@@ -22,7 +22,7 @@ import {
   CommandList,
   CommandSeparator,
   CommandShortcut,
-} from "@zero-app/ui-library";
+} from "./command";
 
 const meta = {
   title: "Components/Command",

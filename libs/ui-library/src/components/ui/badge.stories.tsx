@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { CheckIcon } from "lucide-react";
 import { css } from "@zero-app/styled-system/css";
 
-import { Badge } from "@zero-app/ui-library";
+import { Badge } from "./badge";
 
 const meta = {
   title: "Components/Badge",

@@ -6,7 +6,7 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 
-import { Header } from "@zero-app/zero-app-components";
+import { Header } from "./Header";
 
 // Header renders a TanStack Router `<Link>`, which throws without a router in
 // context. Wrap each story in a throwaway in-memory router whose root route

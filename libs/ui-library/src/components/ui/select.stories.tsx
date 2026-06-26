@@ -11,7 +11,7 @@ import {
   SelectSeparator,
   SelectTrigger,
   SelectValue,
-} from "@zero-app/ui-library";
+} from "./select";
 
 const meta = {
   title: "Components/Select",

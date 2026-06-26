@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import * as React from "react";
 import { css } from "@zero-app/styled-system/css";
 
-import { Slider } from "@zero-app/ui-library";
+import { Slider } from "./slider";
 
 const meta = {
   title: "Components/Slider",

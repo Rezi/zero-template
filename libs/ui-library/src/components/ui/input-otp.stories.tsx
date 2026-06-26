@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import * as React from "react";
 import { css } from "@zero-app/styled-system/css";
 
-import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from "@zero-app/ui-library";
+import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from "./input-otp";
 
 const meta = {
   title: "Components/InputOTP",

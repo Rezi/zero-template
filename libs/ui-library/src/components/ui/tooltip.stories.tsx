@@ -2,13 +2,8 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { PlusIcon } from "lucide-react";
 import { css } from "@zero-app/styled-system/css";
 
-import {
-  Button,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@zero-app/ui-library";
+import { Button } from "./button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./tooltip";
 
 const meta = {
   title: "Components/Tooltip",

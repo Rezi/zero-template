@@ -15,7 +15,7 @@ import {
   MenubarSubContent,
   MenubarSubTrigger,
   MenubarTrigger,
-} from "@zero-app/ui-library";
+} from "./menubar";
 
 const meta = {
   title: "Components/Menubar",

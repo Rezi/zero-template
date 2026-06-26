@@ -11,7 +11,7 @@ import {
   ComboboxItem,
   ComboboxLabel,
   ComboboxList,
-} from "@zero-app/ui-library";
+} from "./combobox";
 
 const frameworks = ["Next.js", "SvelteKit", "Nuxt.js", "Remix", "Astro", "Gatsby"];
 

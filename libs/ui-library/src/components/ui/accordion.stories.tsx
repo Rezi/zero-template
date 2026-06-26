@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { css } from "@zero-app/styled-system/css";
 
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@zero-app/ui-library";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./accordion";
 
 const meta = {
   title: "Components/Accordion",

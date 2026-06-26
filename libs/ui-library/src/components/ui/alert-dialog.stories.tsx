@@ -12,8 +12,8 @@ import {
   AlertDialogMedia,
   AlertDialogTitle,
   AlertDialogTrigger,
-  Button,
-} from "@zero-app/ui-library";
+} from "./alert-dialog";
+import { Button } from "./button";
 
 const meta = {
   title: "Components/AlertDialog",

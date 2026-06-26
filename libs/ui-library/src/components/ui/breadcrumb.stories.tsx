@@ -9,7 +9,7 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
-} from "@zero-app/ui-library";
+} from "./breadcrumb";
 
 const meta = {
   title: "Components/Breadcrumb",

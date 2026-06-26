@@ -3,8 +3,8 @@ import * as React from "react";
 import { CreditCardIcon, LogOutIcon, SettingsIcon, UserIcon } from "lucide-react";
 import { css } from "@zero-app/styled-system/css";
 
+import { Button } from "./button";
 import {
-  Button,
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
@@ -19,7 +19,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from "@zero-app/ui-library";
+} from "./dropdown-menu";
 
 const meta = {
   title: "Components/DropdownMenu",

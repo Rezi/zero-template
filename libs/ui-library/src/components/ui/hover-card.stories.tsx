@@ -2,7 +2,8 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { CalendarIcon } from "lucide-react";
 import { css } from "@zero-app/styled-system/css";
 
-import { Button, HoverCard, HoverCardContent, HoverCardTrigger } from "@zero-app/ui-library";
+import { Button } from "./button";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "./hover-card";
 
 const meta = {
   title: "Components/HoverCard",

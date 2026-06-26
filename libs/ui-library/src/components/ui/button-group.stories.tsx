@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { BoldIcon, ItalicIcon, UnderlineIcon } from "lucide-react";
 
-import { Button, ButtonGroup, ButtonGroupSeparator, ButtonGroupText } from "@zero-app/ui-library";
+import { Button } from "./button";
+import { ButtonGroup, ButtonGroupSeparator, ButtonGroupText } from "./button-group";
 
 const meta = {
   title: "Components/ButtonGroup",

@@ -8,7 +8,7 @@ import {
   NavigationMenuLink,
   NavigationMenuList,
   NavigationMenuTrigger,
-} from "@zero-app/ui-library";
+} from "./navigation-menu";
 
 const meta = {
   title: "Components/NavigationMenu",

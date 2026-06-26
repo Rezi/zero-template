@@ -10,7 +10,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@zero-app/ui-library";
+} from "./table";
 
 const meta = {
   title: "Components/Table",

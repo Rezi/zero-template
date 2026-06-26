@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { ArrowRightIcon, PlusIcon } from "lucide-react";
 import { css } from "@zero-app/styled-system/css";
 
-import { Button } from "@zero-app/ui-library";
+import { Button } from "./button";
 
 const rowStyles = css({ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "3" });
 

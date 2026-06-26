@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import * as React from "react";
 import { css } from "@zero-app/styled-system/css";
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@zero-app/ui-library";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./tabs";
 
 const meta = {
   title: "Components/Tabs",

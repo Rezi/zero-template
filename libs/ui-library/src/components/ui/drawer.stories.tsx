@@ -2,8 +2,8 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import * as React from "react";
 import { css } from "@zero-app/styled-system/css";
 
+import { Button } from "./button";
 import {
-  Button,
   Drawer,
   DrawerClose,
   DrawerContent,
@@ -12,10 +12,9 @@ import {
   DrawerHeader,
   DrawerTitle,
   DrawerTrigger,
-  Field,
-  FieldLabel,
-  Input,
-} from "@zero-app/ui-library";
+} from "./drawer";
+import { Field, FieldLabel } from "./field";
+import { Input } from "./input";
 
 const meta = {
   title: "Components/Drawer",

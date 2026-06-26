@@ -15,7 +15,9 @@
     // Automatic JSX runtime (tsconfig `jsx: react-jsx`) — `React` need not be in scope.
     "react/react-in-jsx-scope": "off",
     // Sequential awaits are intentional throughout the interactive dev wizard.
-    "no-await-in-loop": "off"
+    "no-await-in-loop": "off",
+    // CSS (and other asset) side-effect imports cannot be assigned — allow them.
+    "import/no-unassigned-import": ["warn", { "allow": ["**/*.css"] }]
   },
   "ignorePatterns": [
     "**/node_modules",

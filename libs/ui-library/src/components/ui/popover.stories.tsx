@@ -2,17 +2,17 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import * as React from "react";
 import { css } from "@zero-app/styled-system/css";
 
+import { Button } from "./button";
+import { Input } from "./input";
+import { Label } from "./label";
 import {
-  Button,
-  Input,
-  Label,
   Popover,
   PopoverContent,
   PopoverDescription,
   PopoverHeader,
   PopoverTitle,
   PopoverTrigger,
-} from "@zero-app/ui-library";
+} from "./popover";
 
 const meta = {
   title: "Components/Popover",

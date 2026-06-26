@@ -2,8 +2,8 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import * as React from "react";
 import { css } from "@zero-app/styled-system/css";
 
+import { Button } from "./button";
 import {
-  Button,
   Dialog,
   DialogClose,
   DialogContent,
@@ -12,9 +12,9 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  Input,
-  Label,
-} from "@zero-app/ui-library";
+} from "./dialog";
+import { Input } from "./input";
+import { Label } from "./label";
 
 const meta = {
   title: "Components/Dialog",

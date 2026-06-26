@@ -3,7 +3,8 @@ import * as React from "react";
 import { ChevronsUpDownIcon } from "lucide-react";
 import { css } from "@zero-app/styled-system/css";
 
-import { Button, Collapsible, CollapsibleContent, CollapsibleTrigger } from "@zero-app/ui-library";
+import { Button } from "./button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./collapsible";
 
 const meta = {
   title: "Components/Collapsible",

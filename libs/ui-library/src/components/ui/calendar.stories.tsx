@@ -3,7 +3,7 @@ import * as React from "react";
 import type { DateRange } from "react-day-picker";
 import { css } from "@zero-app/styled-system/css";
 
-import { Calendar } from "@zero-app/ui-library";
+import { Calendar } from "./calendar";
 
 const bordered = css({ rounded: "2xl", borderWidth: "1px" });
 

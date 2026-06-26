@@ -3,7 +3,8 @@ import { AlertCircleIcon, CheckCircle2Icon, XIcon } from "lucide-react";
 
 import { css } from "@zero-app/styled-system/css";
 
-import { Alert, AlertAction, AlertDescription, AlertTitle, Button } from "@zero-app/ui-library";
+import { Alert, AlertAction, AlertDescription, AlertTitle } from "./alert";
+import { Button } from "./button";
 
 const meta = {
   title: "Components/Alert",

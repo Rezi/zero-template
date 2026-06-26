@@ -1,7 +1,13 @@
 import type { ReactNode } from "react";
 import Header from "./Header";
 
-export function SiteLayout({ children, rightSlot }: { children: ReactNode; rightSlot?: ReactNode }) {
+export function SiteLayout({
+  children,
+  rightSlot,
+}: {
+  children: ReactNode;
+  rightSlot?: ReactNode;
+}) {
   return (
     <>
       <header>

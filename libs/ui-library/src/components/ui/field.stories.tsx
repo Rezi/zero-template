@@ -9,8 +9,8 @@ import {
   FieldLabel,
   FieldLegend,
   FieldSet,
-  Input,
-} from "@zero-app/ui-library";
+} from "./field";
+import { Input } from "./input";
 
 const meta = {
   title: "Components/Field",

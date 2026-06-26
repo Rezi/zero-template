@@ -6,7 +6,7 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 
-import { SiteLayout } from "@zero-app/zero-app-components";
+import { SiteLayout } from "./SiteLayout";
 
 // SiteLayout renders Header, which uses a TanStack Router `<Link>`. Provide a
 // throwaway in-memory router so the link has a router in context.

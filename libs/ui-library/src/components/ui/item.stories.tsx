@@ -2,8 +2,8 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { ChevronRightIcon, MusicIcon } from "lucide-react";
 import { css } from "@zero-app/styled-system/css";
 
+import { Button } from "./button";
 import {
-  Button,
   Item,
   ItemActions,
   ItemContent,
@@ -12,7 +12,7 @@ import {
   ItemMedia,
   ItemSeparator,
   ItemTitle,
-} from "@zero-app/ui-library";
+} from "./item";
 
 const meta = {
   title: "Components/Item",

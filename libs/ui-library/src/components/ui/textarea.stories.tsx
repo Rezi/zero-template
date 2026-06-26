@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { css } from "@zero-app/styled-system/css";
 
-import { Label, Textarea } from "@zero-app/ui-library";
+import { Label } from "./label";
+import { Textarea } from "./textarea";
 
 const meta = {
   title: "Components/Textarea",

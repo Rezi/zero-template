@@ -8,8 +8,8 @@ import {
   ChartLegendContent,
   ChartTooltip,
   ChartTooltipContent,
-  type ChartConfig,
-} from "@zero-app/ui-library";
+  ChartConfig,
+} from "./chart";
 
 const data = [
   { month: "January", desktop: 186, mobile: 80 },

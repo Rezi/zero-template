@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { BoldIcon, ItalicIcon, UnderlineIcon } from "lucide-react";
 import { css } from "@zero-app/styled-system/css";
 
-import { Toggle } from "@zero-app/ui-library";
+import { Toggle } from "./toggle";
 
 const meta = {
   title: "Components/Toggle",

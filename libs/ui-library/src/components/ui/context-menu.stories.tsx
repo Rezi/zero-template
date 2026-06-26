@@ -17,7 +17,7 @@ import {
   ContextMenuSubContent,
   ContextMenuSubTrigger,
   ContextMenuTrigger,
-} from "@zero-app/ui-library";
+} from "./context-menu";
 
 const meta = {
   title: "Components/ContextMenu",
