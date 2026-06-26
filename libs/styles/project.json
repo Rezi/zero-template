@@ -3,5 +3,14 @@
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "projectType": "library",
   "sourceRoot": "libs/styles/src",
-  "tags": ["type:ui", "scope:styles"]
+  "tags": ["type:ui", "scope:styles"],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "outputs": ["{projectRoot}/styled-system"],
+      "options": {
+        "command": "panda"
+      }
+    }
+  }
 }
