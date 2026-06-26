@@ -1,10 +1,10 @@
-/* Design tokens and global stylesheet.
+/* Design tokens.
  *
- *   - the variable font + sugar.css imports,
+ * Semantic colour tokens (light + dark), font and radius scales. The Panda
+ * `semanticTokens` in panda.config.mjs map onto the CSS variables declared here.
+ * Cascade ordering (font, this file, sugar reset, generated Panda CSS) is owned by
+ * `global.css`, which is the single stylesheet every consumer imports.
  */
-@import "@fontsource-variable/oxanium";
-@import "./sugar.css";
-
 :root {
   --font-sans: "Oxanium Variable", ui-sans-serif, system-ui, sans-serif;
   --font-mono:

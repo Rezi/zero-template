@@ -35,9 +35,14 @@ const config = defineConfig({
         find: "@zero-app/zero-app-components",
         replacement: r("../../libs/zero-app-components/src/index.ts"),
       },
-      // Panda CSS generated output (see panda.config.mjs `outdir`). The bare
-      // specifier and its subpaths (`/css`, `/jsx`, `/styles.css`, …) resolve here.
-      { find: "@zero-app/styled-system", replacement: r("../../styled-system") },
+      // Panda CSS generated output (see libs/styles/panda.config.mjs `outdir`). The
+      // bare specifier and its subpaths (`/css`, `/jsx`, `/styles.css`, …) resolve
+      // here. Must precede the `@zero-app/styles` alias below — distinct strings, but
+      // keep specificity ordering intentional.
+      { find: "@zero-app/styled-system", replacement: r("../../libs/styles/styled-system") },
+      // The styles library: the single global stylesheet (`@zero-app/styles/global.css`)
+      // plus tokens/sugar live under its src/.
+      { find: "@zero-app/styles", replacement: r("../../libs/styles/src") },
       // App-local imports. Vite matches string aliases at a path boundary, so
       // "@" never collides with "@zero-app/*".
       { find: "@", replacement: r("src") },

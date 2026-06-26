@@ -23,7 +23,8 @@ const config: StorybookConfig = {
         replacement: r("../src/$1"),
       },
       { find: "@zero-app/ui-library", replacement: r("../src/index.ts") },
-      { find: "@zero-app/styled-system", replacement: r("../../../styled-system") },
+      { find: "@zero-app/styled-system", replacement: r("../../../libs/styles/styled-system") },
+      { find: "@zero-app/styles", replacement: r("../../../libs/styles/src") },
     ];
     return viteConfig;
   },

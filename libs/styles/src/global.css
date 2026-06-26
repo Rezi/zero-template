@@ -1,0 +1,18 @@
+/* The single global stylesheet for the whole workspace.
+ *
+ * Every consumer (the app + both Storybooks) imports ONLY this file
+ * (`@zero-app/styles/global.css`) — nothing reaches into the app for styles.
+ *
+ * Order matters and is intentional:
+ *   1. oxanium    — the variable font (declares @font-face).
+ *   2. tokens.css — design-token CSS variables (:root / .dark), un-layered so
+ *                   they always resolve regardless of layer order.
+ *   3. sugar.css  — reset + grid, declared in @layer reset / @layer base.
+ *   4. styled-system styles.css — generated Panda CSS. Declared AFTER sugar so
+ *                   Panda's layers take precedence over the sugar reset, matching
+ *                   the previous (app-owned) load order.
+ */
+@import "@fontsource-variable/oxanium";
+@import "./tokens.css";
+@import "./sugar.css";
+@import "@zero-app/styled-system/styles.css";

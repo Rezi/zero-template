@@ -45,13 +45,21 @@ export default [
               // App-specific components: may build on the pure UI foundation
               // and consume data-access libraries.
               sourceTag: "scope:app-components",
-              onlyDependOnLibsWithTags: ["scope:ui", "scope:auth", "scope:zero"],
+              onlyDependOnLibsWithTags: ["scope:ui", "scope:styles", "scope:auth", "scope:zero"],
             },
             {
               // ui-library is a pure presentational foundation / design system.
-              // It must not depend on data-access (auth/db/zero) libraries.
+              // It must not depend on data-access (auth/db/zero) libraries. It may
+              // depend on the styles library — the Panda runtime (@zero-app/styled-system)
+              // now resolves into libs/styles, creating a real graph edge.
               sourceTag: "scope:ui",
-              onlyDependOnLibsWithTags: ["scope:ui"],
+              onlyDependOnLibsWithTags: ["scope:ui", "scope:styles"],
+            },
+            {
+              // styles is the leaf design-system library (tokens, global CSS, Panda
+              // output). It must not depend on any other workspace library.
+              sourceTag: "scope:styles",
+              onlyDependOnLibsWithTags: [],
             },
             {
               sourceTag: "scope:auth",
