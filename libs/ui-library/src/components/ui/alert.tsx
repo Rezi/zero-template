@@ -1,108 +1,35 @@
 import * as React from "react";
-import { css, cva, type RecipeVariantProps } from "@zero-app/styled-system/css";
+import { alert, type AlertVariantProps } from "@zero-app/styled-system/recipes";
 
 import { clsx } from "clsx";
-
-const alertVariants = cva({
-  base: {
-    position: "relative",
-    display: "grid",
-    w: "full",
-    gap: "0.5",
-    rounded: "2xl",
-    borderWidth: "1px",
-    px: "4",
-    py: "3",
-    textAlign: "left",
-    fontSize: "sm",
-    "&:has([data-slot='alert-action'])": { position: "relative", pr: "4.5rem" },
-    "&:has(> svg)": { gridTemplateColumns: "auto 1fr", columnGap: "2.5" },
-    // *:[svg] = direct-child svg
-    "& > svg": {
-      gridRow: "span 2 / span 2",
-      transform: "translateY(0.125rem)",
-      color: "currentColor",
-    },
-    "& > svg:not([class*='size-'])": { size: "4" },
-  },
-  variants: {
-    variant: {
-      default: { bg: "card", color: "card.foreground" },
-      destructive: {
-        bg: "card",
-        color: "destructive",
-        "& > [data-slot='alert-description']": { color: "destructive/90" },
-        "& > svg": { color: "currentColor" },
-      },
-    },
-  },
-  defaultVariants: {
-    variant: "default",
-  },
-});
 
 function Alert({
   className,
   variant,
   ...props
-}: React.ComponentProps<"div"> & RecipeVariantProps<typeof alertVariants>) {
+}: React.ComponentProps<"div"> & AlertVariantProps) {
   return (
     <div
       data-slot="alert"
       role="alert"
-      className={clsx(alertVariants({ variant }), className)}
+      className={clsx(alert({ variant }).root, className)}
       {...props}
     />
   );
 }
 
 function AlertTitle({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="alert-title"
-      className={clsx(
-        css({
-          fontWeight: "medium",
-          "[data-slot='alert']:has(> svg) &": { gridColumnStart: "2" },
-          "& a": { textDecoration: "underline", textUnderlineOffset: "3px" },
-          "& a:hover": { color: "foreground" },
-        }),
-        className,
-      )}
-      {...props}
-    />
-  );
+  return <div data-slot="alert-title" className={clsx(alert().title, className)} {...props} />;
 }
 
 function AlertDescription({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <div
-      data-slot="alert-description"
-      className={clsx(
-        css({
-          fontSize: "sm",
-          textWrap: "balance",
-          color: "muted.foreground",
-          md: { textWrap: "pretty" },
-          "& a": { textDecoration: "underline", textUnderlineOffset: "3px" },
-          "& a:hover": { color: "foreground" },
-          "& p:not(:last-child)": { mb: "4" },
-        }),
-        className,
-      )}
-      {...props}
-    />
+    <div data-slot="alert-description" className={clsx(alert().description, className)} {...props} />
   );
 }
 
 function AlertAction({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="alert-action"
-      className={clsx(css({ position: "absolute", top: "2.5", right: "3" }), className)}
-      {...props}
-    />
-  );
+  return <div data-slot="alert-action" className={clsx(alert().action, className)} {...props} />;
 }
 
 export { Alert, AlertTitle, AlertDescription, AlertAction };

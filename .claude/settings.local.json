@@ -15,7 +15,10 @@
       "Bash(sbx create *)",
       "Bash(sbx --help)",
       "Bash(sbx ls *)",
-      "Bash(sbx diagnose *)"
+      "Bash(sbx diagnose *)",
+      "Bash(docker context *)",
+      "Bash(sbx reset *)",
+      "Bash(sbx rm *)"
     ]
   },
   "statusLine": {

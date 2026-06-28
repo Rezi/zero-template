@@ -170,16 +170,38 @@ async function killZeroCache(): Promise<void> {
     stderr: "null",
   }).output();
   if (pkill.code !== 0) return; // nothing was running — done immediately
-  // Poll until all matching processes have exited.
-  while (true) {
-    const pgrep = await new Deno.Command("pgrep", {
+
+  const isGone = async () => {
+    const r = await new Deno.Command("pgrep", {
       args: ["-f", "zero-cache"],
       stdout: "null",
       stderr: "null",
     }).output();
-    if (pgrep.code !== 0) break;
+    return r.code !== 0;
+  };
+
+  // Wait up to 5 s for graceful SIGTERM shutdown.
+  const gracefulDeadline = Date.now() + 5_000;
+  while (Date.now() < gracefulDeadline) {
+    if (await isGone()) return;
     await new Promise((r) => setTimeout(r, 200));
   }
+
+  // Still running — force-kill with SIGKILL.
+  p.log.warn("zero-cache did not stop gracefully, sending SIGKILL…");
+  await new Deno.Command("pkill", {
+    args: ["-9", "-f", "zero-cache"],
+    stdout: "null",
+    stderr: "null",
+  }).output();
+
+  const killDeadline = Date.now() + 2_000;
+  while (Date.now() < killDeadline) {
+    if (await isGone()) return;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+
+  p.log.warn("zero-cache processes could not be killed — proceeding anyway.");
 }
 
 function stopJob(job: Job) {
@@ -755,6 +777,7 @@ async function main() {
           });
           break;
         case "zero-cache":
+          p.log.step("Stopping any existing zero-cache processes…");
           await killZeroCache();
           await startJob({
             label: "zero-cache",

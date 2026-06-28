@@ -20,6 +20,14 @@
 // for typing, so dropping the runtime import avoids the resolution failure while
 // the JSDoc keeps editor type-checking.
 //
+// The config recipes live in `./recipes` (relative TS files, bundled by esbuild
+// at config-load). They author their styles against the *generated* token-aware
+// types via type-only imports, which esbuild strips before resolution — so there
+// is no runtime/circular dependency on the generated output they end up in. See
+// `./recipes/define-recipe.ts` for the full rationale.
+
+import { recipes, slotRecipes } from "./recipes/index.ts";
+
 
 // Reproduces Panda's native `/<opacity>` color modifier for *custom* color
 // utilities. Panda only auto-applies the modifier to built-in color utilities
@@ -76,8 +84,25 @@ export default {
   importMap: "@zero-app/styled-system",
   outdir: "libs/styles/styled-system",
 
+  // Pre-generate every variant of every config recipe. The recipes back UI
+  // components consumed with *dynamic* props (e.g. `<Button variant={x}>`), which
+  // Panda can't resolve statically — so without this, only literally-used variants
+  // would emit CSS. `"*"` restores the full-coverage behaviour the inline `cva()`
+  // definitions had (their config objects were statically visible in each file).
+  staticCss: {
+    recipes: "*",
+  },
+
   theme: {
     extend: {
+      // Config recipes (button, badge, …). Authored in `./recipes`; each key is
+      // emitted as a function + types in `@zero-app/styled-system/recipes`.
+      recipes,
+
+      // Slot recipes (multi-part components, e.g. alert). The generated function
+      // returns a `{ slot: className }` map.
+      slotRecipes,
+
       // Keyframe animations for the cases that genuinely need them. The Base UI
       // overlay/popup enter/exit motion does NOT live here — it uses CSS
       // transitions keyed on `data-starting-style`/`data-ending-style` (see

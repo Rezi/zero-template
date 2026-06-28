@@ -1,0 +1,140 @@
+import { defineSlotRecipe } from "./define-recipe";
+
+export const itemRecipe = defineSlotRecipe({
+  className: "item",
+  slots: [
+    "group",
+    "separator",
+    "root",
+    "media",
+    "content",
+    "title",
+    "description",
+    "actions",
+    "header",
+    "footer",
+  ],
+  base: {
+    group: {
+      display: "flex",
+      w: "full",
+      flexDirection: "column",
+      gap: "4",
+      "&:has([data-size=sm])": { gap: "2.5" },
+      "&:has([data-size=xs])": { gap: "2" },
+    },
+    separator: { my: "2" },
+    root: {
+      display: "flex",
+      w: "full",
+      flexWrap: "wrap",
+      alignItems: "center",
+      rounded: "2xl",
+      borderWidth: "1px",
+      fontSize: "sm",
+      transitionProperty:
+        "color, background-color, border-color, text-decoration-color, fill, stroke",
+      transitionDuration: "100ms",
+      outline: "none",
+      _focusVisible: { borderColor: "ring", ringW: "3", ringC: "ring/50" },
+      "&:is(a)": {
+        transitionProperty:
+          "color, background-color, border-color, text-decoration-color, fill, stroke",
+        _hover: { bg: "muted" },
+      },
+    },
+    media: {
+      display: "flex",
+      flexShrink: "0",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: "2",
+      "[data-slot='item']:has([data-slot=item-description]) &": {
+        transform: "translateY(0.125rem)",
+        alignSelf: "flex-start",
+      },
+      "& svg": { pointerEvents: "none" },
+    },
+    content: {
+      display: "flex",
+      flex: "1",
+      flexDirection: "column",
+      gap: "1",
+      "[data-slot='item'][data-size='xs'] &": { gap: "0.5" },
+      "& + [data-slot=item-content]": { flex: "none" },
+    },
+    title: {
+      display: "flex",
+      w: "fit",
+      alignItems: "center",
+      gap: "2",
+      overflow: "hidden",
+      fontSize: "sm",
+      lineHeight: "snug",
+      fontWeight: "medium",
+      textUnderlineOffset: "4px",
+    },
+    description: {
+      lineClamp: "2",
+      textAlign: "left",
+      fontSize: "sm",
+      fontWeight: "normal",
+      color: "muted.foreground",
+      "& > a": { textDecoration: "underline", textUnderlineOffset: "4px" },
+      "& > a:hover": { color: "primary" },
+    },
+    actions: { display: "flex", alignItems: "center", gap: "2" },
+    header: {
+      display: "flex",
+      flexBasis: "full",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: "2",
+    },
+    footer: {
+      display: "flex",
+      flexBasis: "full",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: "2",
+    },
+  },
+  variants: {
+    variant: {
+      default: { root: { borderColor: "transparent" } },
+      outline: { root: { borderColor: "border" } },
+      muted: { root: { borderColor: "transparent", bg: "muted/50" } },
+    },
+    size: {
+      default: { root: { gap: "3.5", px: "4", py: "3.5" } },
+      sm: { root: { gap: "3.5", px: "3.5", py: "3" } },
+      xs: {
+        root: {
+          gap: "2",
+          px: "2.5",
+          py: "2",
+          "[data-slot=dropdown-menu-content] &": { p: "0" },
+        },
+      },
+    },
+    mediaVariant: {
+      default: { media: { bg: "transparent" } },
+      icon: { media: { "& svg:not([class*='size-'])": { size: "4" } } },
+      image: {
+        media: {
+          size: "10",
+          overflow: "hidden",
+          rounded: "xl",
+          "[data-slot='item'][data-size='sm'] &": { size: "8" },
+          "[data-slot='item'][data-size='xs'] &": { size: "6", rounded: "lg" },
+          "& img": { size: "full", objectFit: "cover" },
+        },
+      },
+    },
+  },
+  defaultVariants: {
+    variant: "default",
+    size: "default",
+    mediaVariant: "default",
+  },
+});
