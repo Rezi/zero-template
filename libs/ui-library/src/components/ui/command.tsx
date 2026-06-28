@@ -8,100 +8,11 @@ import { clsx } from "clsx";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./dialog";
 import { InputGroup, InputGroupAddon } from "./input-group";
 import { SearchIcon, CheckIcon } from "lucide-react";
-
-const commandStyles = css({
-  display: "flex",
-  size: "full",
-  flexDirection: "column",
-  overflow: "hidden",
-  rounded: "3xl",
-  bg: "popover",
-  p: "1",
-  color: "popover.foreground",
-});
-
-const commandDialogContentStyles = css({
-  top: "33.333333%",
-  transform: "translateX(-50%)!",
-  overflow: "hidden",
-  borderRadius: "3xl!",
-  p: "0",
-});
-
-const commandInputWrapperStyles = css({ p: "1", pb: "0" });
-const commandInputGroupStyles = css({ h: "8!", bg: "input/50" });
-const commandInputStyles = css({
-  w: "full",
-  fontSize: "sm",
-  outline: "none",
-  _disabled: { cursor: "not-allowed", opacity: "0.5" },
-});
-const commandInputIconStyles = css({ size: "4", flexShrink: "0", opacity: "0.5" });
-
-const commandListStyles = css({
-  maxH: "72",
-  scrollPaddingBlock: "1",
-  overflowX: "hidden",
-  overflowY: "auto",
-  outline: "none",
-});
-
-const commandEmptyStyles = css({ py: "6", textAlign: "center", fontSize: "sm" });
-
-const commandGroupStyles = css({
-  overflow: "hidden",
-  p: "1",
-  color: "foreground",
-  "& [cmdk-group-heading]": {
-    px: "2",
-    py: "1.5",
-    fontSize: "xs",
-    fontWeight: "medium",
-    color: "muted.foreground",
-  },
-});
-
-const commandSeparatorStyles = css({ my: "1", h: "1px", bg: "border/50" });
-
-const commandItemStyles = css({
-  position: "relative",
-  display: "flex",
-  minH: "7",
-  cursor: "default",
-  alignItems: "center",
-  gap: "2",
-  rounded: "xl",
-  px: "2",
-  py: "1.5",
-  fontSize: "sm",
-  outline: "none",
-  userSelect: "none",
-  "[data-slot=dialog-content] &": { rounded: "2xl" },
-  "&[data-disabled=true]": { pointerEvents: "none", opacity: "0.5" },
-  "&[data-selected='true']": { bg: "muted", color: "foreground" },
-  "& svg": { pointerEvents: "none", flexShrink: "0" },
-  "& svg:not([class*='size-'])": { size: "4" },
-  "&[data-selected='true'] > svg": { color: "foreground" },
-});
-
-const commandItemCheckStyles = css({
-  ml: "auto",
-  opacity: "0",
-  "[data-slot='command-item']:has([data-slot=command-shortcut]) &": { display: "none" },
-  "[data-slot='command-item'][data-checked=true] &": { opacity: "1" },
-});
-
-const commandShortcutStyles = css({
-  ml: "auto",
-  fontSize: "xs",
-  letterSpacing: "widest",
-  color: "muted.foreground",
-  "[data-slot='command-item'][data-selected='true'] &": { color: "foreground" },
-});
+import { command } from "@zero-app/styled-system/recipes";
 
 function Command({ className, ...props }: React.ComponentProps<typeof CommandPrimitive>) {
   return (
-    <CommandPrimitive data-slot="command" className={clsx(commandStyles, className)} {...props} />
+    <CommandPrimitive data-slot="command" className={clsx(command().root, className)} {...props} />
   );
 }
 
@@ -126,7 +37,7 @@ function CommandDialog({
         <DialogDescription>{description}</DialogDescription>
       </DialogHeader>
       <DialogContent
-        className={clsx(commandDialogContentStyles, className)}
+        className={clsx(command().dialogContent, className)}
         showCloseButton={showCloseButton}
       >
         {children}
@@ -140,15 +51,15 @@ function CommandInput({
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Input>) {
   return (
-    <div data-slot="command-input-wrapper" className={commandInputWrapperStyles}>
-      <InputGroup className={commandInputGroupStyles}>
+    <div data-slot="command-input-wrapper" className={command().inputWrapper}>
+      <InputGroup className={command().inputGroup}>
         <CommandPrimitive.Input
           data-slot="command-input"
-          className={clsx(commandInputStyles, className)}
+          className={clsx(command().input, className)}
           {...props}
         />
         <InputGroupAddon>
-          <SearchIcon className={commandInputIconStyles} />
+          <SearchIcon className={command().inputIcon} />
         </InputGroupAddon>
       </InputGroup>
     </div>
@@ -159,7 +70,7 @@ function CommandList({ className, ...props }: React.ComponentProps<typeof Comman
   return (
     <CommandPrimitive.List
       data-slot="command-list"
-      className={clsx("no-scrollbar", commandListStyles, className)}
+      className={clsx("no-scrollbar", command().list, className)}
       {...props}
     />
   );
@@ -172,7 +83,7 @@ function CommandEmpty({
   return (
     <CommandPrimitive.Empty
       data-slot="command-empty"
-      className={clsx(commandEmptyStyles, className)}
+      className={clsx(command().empty, className)}
       {...props}
     />
   );
@@ -185,7 +96,7 @@ function CommandGroup({
   return (
     <CommandPrimitive.Group
       data-slot="command-group"
-      className={clsx(commandGroupStyles, className)}
+      className={clsx(command().group, className)}
       {...props}
     />
   );
@@ -198,7 +109,7 @@ function CommandSeparator({
   return (
     <CommandPrimitive.Separator
       data-slot="command-separator"
-      className={clsx(commandSeparatorStyles, className)}
+      className={clsx(command().separator, className)}
       {...props}
     />
   );
@@ -212,11 +123,11 @@ function CommandItem({
   return (
     <CommandPrimitive.Item
       data-slot="command-item"
-      className={clsx(commandItemStyles, className)}
+      className={clsx(command().item, className)}
       {...props}
     >
       {children}
-      <CheckIcon className={commandItemCheckStyles} />
+      <CheckIcon className={command().itemCheck} />
     </CommandPrimitive.Item>
   );
 }
@@ -225,7 +136,7 @@ function CommandShortcut({ className, ...props }: React.ComponentProps<"span">) 
   return (
     <span
       data-slot="command-shortcut"
-      className={clsx(commandShortcutStyles, className)}
+      className={clsx(command().shortcut, className)}
       {...props}
     />
   );

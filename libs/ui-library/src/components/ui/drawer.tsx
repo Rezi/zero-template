@@ -2,104 +2,9 @@
 
 import * as React from "react";
 import { Drawer as DrawerPrimitive } from "vaul";
-import { css } from "@zero-app/styled-system/css";
+import { drawer } from "@zero-app/styled-system/recipes";
 
 import { clsx } from "clsx";
-
-const drawerOverlayStyles = css({
-  position: "fixed",
-  inset: "0",
-  zIndex: "50",
-  bg: "black/30",
-  "@supports ((backdrop-filter: blur(0)) or (-webkit-backdrop-filter: blur(0)))": {
-    backdropFilter: "blur(4px)",
-  },
-});
-
-const drawerContentStyles = css({
-  position: "fixed",
-  zIndex: "50",
-  display: "flex",
-  h: "auto",
-  flexDirection: "column",
-  bg: "transparent",
-  p: "4",
-  fontSize: "sm",
-  "&::before": {
-    content: '""',
-    position: "absolute",
-    inset: "2",
-    zIndex: "-10",
-    borderRadius: "min(var(--radius-4xl), 24px)",
-    borderWidth: "1px",
-    borderColor: "border",
-    bg: "popover",
-    boxShadow: "xl",
-  },
-  "&[data-vaul-drawer-direction='bottom']": {
-    insetInline: "0",
-    bottom: "0",
-    mt: "24",
-    maxH: "80vh",
-  },
-  "&[data-vaul-drawer-direction='left']": {
-    insetBlock: "0",
-    left: "0",
-    w: "75%",
-    sm: { maxW: "sm" },
-  },
-  "&[data-vaul-drawer-direction='right']": {
-    insetBlock: "0",
-    right: "0",
-    w: "75%",
-    sm: { maxW: "sm" },
-  },
-  "&[data-vaul-drawer-direction='top']": {
-    insetInline: "0",
-    top: "0",
-    mb: "24",
-    maxH: "80vh",
-  },
-});
-
-const drawerHandleStyles = css({
-  mx: "auto",
-  mt: "4",
-  display: "none",
-  h: "1.5",
-  w: "100px",
-  flexShrink: "0",
-  rounded: "full",
-  bg: "muted",
-  "[data-slot='drawer-content'][data-vaul-drawer-direction='bottom'] &": { display: "block" },
-});
-
-const drawerHeaderStyles = css({
-  display: "flex",
-  flexDirection: "column",
-  gap: "0.5",
-  p: "4",
-  md: { gap: "1.5", textAlign: "left" },
-  "[data-slot='drawer-content'][data-vaul-drawer-direction='bottom'] &": { textAlign: "center" },
-  "[data-slot='drawer-content'][data-vaul-drawer-direction='top'] &": { textAlign: "center" },
-});
-
-const drawerFooterStyles = css({
-  mt: "auto",
-  display: "flex",
-  flexDirection: "column",
-  gap: "2",
-  p: "4",
-});
-
-const drawerTitleStyles = css({
-  fontFamily: "var(--font-heading)",
-  fontSize: "1rem",
-  fontWeight: "medium",
-  color: "foreground",
-});
-
-const drawerDescriptionStyles = css({ fontSize: "sm", color: "muted.foreground" });
 
 function Drawer({ ...props }: React.ComponentProps<typeof DrawerPrimitive.Root>) {
   return <DrawerPrimitive.Root data-slot="drawer" {...props} />;
@@ -124,7 +29,7 @@ function DrawerOverlay({
   return (
     <DrawerPrimitive.Overlay
       data-slot="drawer-overlay"
-      className={clsx(drawerOverlayStyles, className)}
+      className={clsx(drawer().overlay, className)}
       {...props}
     />
   );
@@ -140,10 +45,10 @@ function DrawerContent({
       <DrawerOverlay />
       <DrawerPrimitive.Content
         data-slot="drawer-content"
-        className={clsx(drawerContentStyles, className)}
+        className={clsx(drawer().content, className)}
         {...props}
       >
-        <div className={drawerHandleStyles} />
+        <div className={drawer().handle} />
         {children}
       </DrawerPrimitive.Content>
     </DrawerPortal>
@@ -152,13 +57,13 @@ function DrawerContent({
 
 function DrawerHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <div data-slot="drawer-header" className={clsx(drawerHeaderStyles, className)} {...props} />
+    <div data-slot="drawer-header" className={clsx(drawer().header, className)} {...props} />
   );
 }
 
 function DrawerFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <div data-slot="drawer-footer" className={clsx(drawerFooterStyles, className)} {...props} />
+    <div data-slot="drawer-footer" className={clsx(drawer().footer, className)} {...props} />
   );
 }
 
@@ -166,7 +71,7 @@ function DrawerTitle({ className, ...props }: React.ComponentProps<typeof Drawer
   return (
     <DrawerPrimitive.Title
       data-slot="drawer-title"
-      className={clsx(drawerTitleStyles, className)}
+      className={clsx(drawer().title, className)}
       {...props}
     />
   );
@@ -179,7 +84,7 @@ function DrawerDescription({
   return (
     <DrawerPrimitive.Description
       data-slot="drawer-description"
-      className={clsx(drawerDescriptionStyles, className)}
+      className={clsx(drawer().description, className)}
       {...props}
     />
   );

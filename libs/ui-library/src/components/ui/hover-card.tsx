@@ -1,31 +1,9 @@
 "use client";
 
 import { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card";
-import { css } from "@zero-app/styled-system/css";
+import { hoverCard } from "@zero-app/styled-system/recipes";
 
 import { clsx } from "clsx";
-import { popoverAnimationStyles } from "../../lib/animations";
-
-const shadowLg = "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)";
-
-const hoverCardPositionerStyles = css({ isolation: "isolate", zIndex: "50" });
-
-const hoverCardContentStyles = css({
-  zIndex: "50",
-  w: "72",
-  transformOrigin: "var(--transform-origin)",
-  rounded: "3xl",
-  bg: "popover",
-  p: "4",
-  fontSize: "sm",
-  color: "popover.foreground",
-  // shadow-lg + ring-1 ring-foreground/5 composed into one box-shadow
-  boxShadow: `0 0 0 1px color-mix(in oklab, var(--foreground) 5%, transparent), ${shadowLg}`,
-  outline: "none",
-  _dark: {
-    boxShadow: `0 0 0 1px color-mix(in oklab, var(--foreground) 10%, transparent), ${shadowLg}`,
-  },
-});
 
 function HoverCard({ ...props }: PreviewCardPrimitive.Root.Props) {
   return <PreviewCardPrimitive.Root data-slot="hover-card" {...props} />;
@@ -51,11 +29,11 @@ function HoverCardContent({
         alignOffset={alignOffset}
         side={side}
         sideOffset={sideOffset}
-        className={hoverCardPositionerStyles}
+        className={hoverCard().positioner}
       >
         <PreviewCardPrimitive.Popup
           data-slot="hover-card-content"
-          className={clsx(hoverCardContentStyles, popoverAnimationStyles, className)}
+          className={clsx(hoverCard().content, className)}
           {...props}
         />
       </PreviewCardPrimitive.Positioner>

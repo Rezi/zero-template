@@ -1,0 +1,101 @@
+import { defineSlotRecipe } from "./define-recipe";
+
+export const drawerRecipe = defineSlotRecipe({
+  className: "drawer",
+  slots: ["overlay", "content", "handle", "header", "footer", "title", "description"],
+  base: {
+    overlay: {
+      position: "fixed",
+      inset: "0",
+      zIndex: "50",
+      bg: "black/30",
+      "@supports ((backdrop-filter: blur(0)) or (-webkit-backdrop-filter: blur(0)))": {
+        backdropFilter: "blur(4px)",
+      },
+    },
+    content: {
+      position: "fixed",
+      zIndex: "50",
+      display: "flex",
+      h: "auto",
+      flexDirection: "column",
+      bg: "transparent",
+      p: "4",
+      fontSize: "sm",
+      "&::before": {
+        content: '""',
+        position: "absolute",
+        inset: "2",
+        zIndex: "-10",
+        borderRadius: "min(var(--radius-4xl), 24px)",
+        borderWidth: "1px",
+        borderColor: "border",
+        bg: "popover",
+        boxShadow: "xl",
+      },
+      "&[data-vaul-drawer-direction='bottom']": {
+        insetInline: "0",
+        bottom: "0",
+        mt: "24",
+        maxH: "80vh",
+      },
+      "&[data-vaul-drawer-direction='left']": {
+        insetBlock: "0",
+        left: "0",
+        w: "75%",
+        sm: { maxW: "sm" },
+      },
+      "&[data-vaul-drawer-direction='right']": {
+        insetBlock: "0",
+        right: "0",
+        w: "75%",
+        sm: { maxW: "sm" },
+      },
+      "&[data-vaul-drawer-direction='top']": {
+        insetInline: "0",
+        top: "0",
+        mb: "24",
+        maxH: "80vh",
+      },
+    },
+    handle: {
+      mx: "auto",
+      mt: "4",
+      display: "none",
+      h: "1.5",
+      w: "100px",
+      flexShrink: "0",
+      rounded: "full",
+      bg: "muted",
+      "[data-slot='drawer-content'][data-vaul-drawer-direction='bottom'] &": { display: "block" },
+    },
+    header: {
+      display: "flex",
+      flexDirection: "column",
+      gap: "0.5",
+      p: "4",
+      md: { gap: "1.5", textAlign: "left" },
+      "[data-slot='drawer-content'][data-vaul-drawer-direction='bottom'] &": {
+        textAlign: "center",
+      },
+      "[data-slot='drawer-content'][data-vaul-drawer-direction='top'] &": { textAlign: "center" },
+    },
+    footer: {
+      mt: "auto",
+      display: "flex",
+      flexDirection: "column",
+      gap: "2",
+      p: "4",
+    },
+    title: {
+      fontFamily: "var(--font-heading)",
+      fontSize: "1rem",
+      fontWeight: "medium",
+      color: "foreground",
+    },
+    description: {
+      fontSize: "sm",
+      color: "muted.foreground",
+    },
+  },
+});

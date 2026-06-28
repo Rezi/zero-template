@@ -1,64 +1,8 @@
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
-import { css } from "@zero-app/styled-system/css";
+import { tooltip } from "@zero-app/styled-system/recipes";
 
 import { clsx } from "clsx";
 import { tooltipAnimationStyles } from "../../lib/animations";
-
-const tooltipPositionerStyles = css({ isolation: "isolate", zIndex: "50" });
-
-const tooltipContentStyles = css({
-  zIndex: "50",
-  display: "inline-flex",
-  w: "fit",
-  maxW: "xs",
-  transformOrigin: "var(--transform-origin)",
-  alignItems: "center",
-  gap: "1.5",
-  rounded: "xl",
-  bg: "foreground",
-  px: "3",
-  py: "1.5",
-  fontSize: "xs",
-  color: "background",
-  "&:has([data-slot=kbd])": { pr: "1.5" },
-  "& [data-slot=kbd]": {
-    position: "relative",
-    isolation: "isolate",
-    zIndex: "50",
-    rounded: "lg",
-  },
-});
-
-const tooltipArrowStyles = css({
-  zIndex: "50",
-  size: "2.5",
-  transform: "translateY(calc(-50% - 2px)) rotate(45deg)",
-  rounded: "2px",
-  bg: "foreground",
-  fill: "foreground",
-  "&[data-side='bottom']": { top: "1" },
-  "&[data-side='inline-end']": {
-    top: "50%!",
-    left: "-1",
-    transform: "translate(1.5px, -50%) rotate(45deg)",
-  },
-  "&[data-side='inline-start']": {
-    top: "50%!",
-    right: "-1",
-    transform: "translate(-1.5px, -50%) rotate(45deg)",
-  },
-  "&[data-side='left']": {
-    top: "50%!",
-    right: "-1",
-    transform: "translate(-1.5px, -50%) rotate(45deg)",
-  },
-  "&[data-side='right']": {
-    top: "50%!",
-    left: "-1",
-    transform: "translate(1.5px, -50%) rotate(45deg)",
-  },
-  "&[data-side='top']": { bottom: "-2.5" },
-});
 
 function TooltipProvider({ delay = 0, ...props }: TooltipPrimitive.Provider.Props) {
   return <TooltipPrimitive.Provider data-slot="tooltip-provider" delay={delay} {...props} />;
@@ -89,15 +33,15 @@ function TooltipContent({
         alignOffset={alignOffset}
         side={side}
         sideOffset={sideOffset}
-        className={tooltipPositionerStyles}
+        className={tooltip().positioner}
       >
         <TooltipPrimitive.Popup
           data-slot="tooltip-content"
-          className={clsx(tooltipContentStyles, tooltipAnimationStyles, className)}
+          className={clsx(tooltip().content, tooltipAnimationStyles, className)}
           {...props}
         >
           {children}
-          <TooltipPrimitive.Arrow className={tooltipArrowStyles} />
+          <TooltipPrimitive.Arrow className={tooltip().arrow} />
         </TooltipPrimitive.Popup>
       </TooltipPrimitive.Positioner>
     </TooltipPrimitive.Portal>

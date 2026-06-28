@@ -2,110 +2,11 @@
 
 import * as React from "react";
 import { AlertDialog as AlertDialogPrimitive } from "@base-ui/react/alert-dialog";
-import { css } from "@zero-app/styled-system/css";
+import { alertDialog } from "@zero-app/styled-system/recipes";
 
 import { clsx } from "clsx";
 import { contentAnimationStyles, overlayAnimationStyles } from "../../lib/animations";
 import { Button } from "./button";
-
-const shadowXl = "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)";
-
-const alertDialogOverlayStyles = css({
-  position: "fixed",
-  inset: "0",
-  isolation: "isolate",
-  zIndex: "50",
-  bg: "black/30",
-  "@supports ((backdrop-filter: blur(0)) or (-webkit-backdrop-filter: blur(0)))": {
-    backdropFilter: "blur(4px)",
-  },
-});
-
-const alertDialogContentStyles = css({
-  position: "fixed",
-  top: "50%",
-  left: "50%",
-  zIndex: "50",
-  display: "grid",
-  w: "full",
-  transform: "translate(-50%, -50%)",
-  gap: "6",
-  borderRadius: "min(var(--radius-4xl), 24px)",
-  bg: "popover",
-  p: "6",
-  color: "popover.foreground",
-  // shadow-xl + ring-1 ring-foreground/5 composed into one box-shadow
-  boxShadow: `0 0 0 1px color-mix(in oklab, var(--foreground) 5%, transparent), ${shadowXl}`,
-  outline: "none",
-  "&[data-size='default']": { maxW: "xs", sm: { maxW: "md" } },
-  "&[data-size='sm']": { maxW: "xs" },
-  _dark: {
-    boxShadow: `0 0 0 1px color-mix(in oklab, var(--foreground) 10%, transparent), ${shadowXl}`,
-  },
-});
-
-const alertDialogHeaderStyles = css({
-  display: "grid",
-  gridTemplateRows: "auto 1fr",
-  placeItems: "center",
-  gap: "1.5",
-  textAlign: "center",
-  "&:has([data-slot=alert-dialog-media])": {
-    gridTemplateRows: "auto auto 1fr",
-    columnGap: "6",
-  },
-  "[data-slot='alert-dialog-content'][data-size='default'] &": {
-    sm: {
-      placeItems: "start",
-      textAlign: "left",
-      "&:has([data-slot=alert-dialog-media])": { gridTemplateRows: "auto 1fr" },
-    },
-  },
-});
-
-const alertDialogFooterStyles = css({
-  display: "flex",
-  flexDirection: "column-reverse",
-  gap: "2",
-  sm: { flexDirection: "row", justifyContent: "flex-end" },
-  "[data-slot='alert-dialog-content'][data-size='sm'] &": {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-  },
-});
-
-const alertDialogMediaStyles = css({
-  mb: "2",
-  display: "inline-flex",
-  size: "16",
-  alignItems: "center",
-  justifyContent: "center",
-  rounded: "full",
-  bg: "muted",
-  "& > svg:not([class*='size-'])": { size: "8" },
-  "[data-slot='alert-dialog-content'][data-size='default'] &": {
-    sm: { gridRow: "span 2 / span 2" },
-  },
-});
-
-const alertDialogTitleStyles = css({
-  fontFamily: "var(--font-heading)",
-  fontSize: "lg",
-  fontWeight: "medium",
-  "[data-slot='alert-dialog-content'][data-size='default']:has([data-slot='alert-dialog-media']) &":
-    {
-      sm: { gridColumnStart: "2" },
-    },
-});
-
-const alertDialogDescriptionStyles = css({
-  fontSize: "sm",
-  textWrap: "balance",
-  color: "muted.foreground",
-  md: { textWrap: "pretty" },
-  "& > a": { textDecoration: "underline", textUnderlineOffset: "3px" },
-  "& > a:hover": { color: "foreground" },
-});
 
 function AlertDialog({ ...props }: AlertDialogPrimitive.Root.Props) {
   return <AlertDialogPrimitive.Root data-slot="alert-dialog" {...props} />;
@@ -123,7 +24,7 @@ function AlertDialogOverlay({ className, ...props }: AlertDialogPrimitive.Backdr
   return (
     <AlertDialogPrimitive.Backdrop
       data-slot="alert-dialog-overlay"
-      className={clsx(alertDialogOverlayStyles, overlayAnimationStyles, className)}
+      className={clsx(alertDialog().overlay, overlayAnimationStyles, className)}
       {...props}
     />
   );
@@ -142,7 +43,7 @@ function AlertDialogContent({
       <AlertDialogPrimitive.Popup
         data-slot="alert-dialog-content"
         data-size={size}
-        className={clsx(alertDialogContentStyles, contentAnimationStyles, className)}
+        className={clsx(alertDialog().content, contentAnimationStyles, className)}
         {...props}
       />
     </AlertDialogPortal>
@@ -153,7 +54,7 @@ function AlertDialogHeader({ className, ...props }: React.ComponentProps<"div">)
   return (
     <div
       data-slot="alert-dialog-header"
-      className={clsx(alertDialogHeaderStyles, className)}
+      className={clsx(alertDialog().header, className)}
       {...props}
     />
   );
@@ -163,7 +64,7 @@ function AlertDialogFooter({ className, ...props }: React.ComponentProps<"div">)
   return (
     <div
       data-slot="alert-dialog-footer"
-      className={clsx(alertDialogFooterStyles, className)}
+      className={clsx(alertDialog().footer, className)}
       {...props}
     />
   );
@@ -173,7 +74,7 @@ function AlertDialogMedia({ className, ...props }: React.ComponentProps<"div">) 
   return (
     <div
       data-slot="alert-dialog-media"
-      className={clsx(alertDialogMediaStyles, className)}
+      className={clsx(alertDialog().media, className)}
       {...props}
     />
   );
@@ -186,7 +87,7 @@ function AlertDialogTitle({
   return (
     <AlertDialogPrimitive.Title
       data-slot="alert-dialog-title"
-      className={clsx(alertDialogTitleStyles, className)}
+      className={clsx(alertDialog().title, className)}
       {...props}
     />
   );
@@ -199,7 +100,7 @@ function AlertDialogDescription({
   return (
     <AlertDialogPrimitive.Description
       data-slot="alert-dialog-description"
-      className={clsx(alertDialogDescriptionStyles, className)}
+      className={clsx(alertDialog().description, className)}
       {...props}
     />
   );

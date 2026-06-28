@@ -1,94 +1,49 @@
 "use client";
 
 import * as React from "react";
-import { css } from "@zero-app/styled-system/css";
+import { table } from "@zero-app/styled-system/recipes";
 
 import { clsx } from "clsx";
 
-const tableContainerStyles = css({ position: "relative", w: "full", overflowX: "auto" });
-
-const tableStyles = css({ w: "full", captionSide: "bottom", fontSize: "sm" });
-
-const tableHeaderStyles = css({ "& tr": { borderBottomWidth: "1px" } });
-
-const tableBodyStyles = css({ "& tr:last-child": { borderWidth: "0" } });
-
-const tableFooterStyles = css({
-  borderTopWidth: "1px",
-  bg: "muted/50",
-  fontWeight: "medium",
-  "& > tr:last-child": { borderBottomWidth: "0" },
-});
-
-const tableRowStyles = css({
-  borderBottomWidth: "1px",
-  transitionProperty: "color, background-color, border-color, text-decoration-color, fill, stroke",
-  transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
-  transitionDuration: "150ms",
-  _hover: { bg: "muted/50" },
-  "&:has([aria-expanded='true'])": { bg: "muted/50" },
-  "&[data-state='selected']": { bg: "muted" },
-});
-
-const tableHeadStyles = css({
-  h: "10",
-  px: "2",
-  textAlign: "left",
-  verticalAlign: "middle",
-  fontWeight: "medium",
-  whiteSpace: "nowrap",
-  color: "foreground",
-  "&:has([role=checkbox])": { pr: "0" },
-});
-
-const tableCellStyles = css({
-  p: "2",
-  verticalAlign: "middle",
-  whiteSpace: "nowrap",
-  "&:has([role=checkbox])": { pr: "0" },
-});
-
-const tableCaptionStyles = css({ mt: "4", fontSize: "sm", color: "muted.foreground" });
-
 function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (
-    <div data-slot="table-container" className={tableContainerStyles}>
-      <table data-slot="table" className={clsx(tableStyles, className)} {...props} />
+    <div data-slot="table-container" className={table().container}>
+      <table data-slot="table" className={clsx(table().root, className)} {...props} />
     </div>
   );
 }
 
 function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
   return (
-    <thead data-slot="table-header" className={clsx(tableHeaderStyles, className)} {...props} />
+    <thead data-slot="table-header" className={clsx(table().header, className)} {...props} />
   );
 }
 
 function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {
-  return <tbody data-slot="table-body" className={clsx(tableBodyStyles, className)} {...props} />;
+  return <tbody data-slot="table-body" className={clsx(table().body, className)} {...props} />;
 }
 
 function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
   return (
-    <tfoot data-slot="table-footer" className={clsx(tableFooterStyles, className)} {...props} />
+    <tfoot data-slot="table-footer" className={clsx(table().footer, className)} {...props} />
   );
 }
 
 function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
-  return <tr data-slot="table-row" className={clsx(tableRowStyles, className)} {...props} />;
+  return <tr data-slot="table-row" className={clsx(table().row, className)} {...props} />;
 }
 
 function TableHead({ className, ...props }: React.ComponentProps<"th">) {
-  return <th data-slot="table-head" className={clsx(tableHeadStyles, className)} {...props} />;
+  return <th data-slot="table-head" className={clsx(table().head, className)} {...props} />;
 }
 
 function TableCell({ className, ...props }: React.ComponentProps<"td">) {
-  return <td data-slot="table-cell" className={clsx(tableCellStyles, className)} {...props} />;
+  return <td data-slot="table-cell" className={clsx(table().cell, className)} {...props} />;
 }
 
 function TableCaption({ className, ...props }: React.ComponentProps<"caption">) {
   return (
-    <caption data-slot="table-caption" className={clsx(tableCaptionStyles, className)} {...props} />
+    <caption data-slot="table-caption" className={clsx(table().caption, className)} {...props} />
   );
 }
 

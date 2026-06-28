@@ -3,36 +3,11 @@
 import * as React from "react";
 import useEmblaCarousel, { type UseEmblaCarouselType } from "embla-carousel-react";
 import { css } from "@zero-app/styled-system/css";
+import { carousel } from "@zero-app/styled-system/recipes";
 
 import { clsx } from "clsx";
 import { Button } from "./button";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
-
-const carouselContentInner = css({ display: "flex" });
-const carouselContentHorizontal = css({ ml: "-4" });
-const carouselContentVertical = css({ mt: "-4", flexDirection: "column" });
-
-const carouselItemBase = css({ minW: "0", flexShrink: "0", flexGrow: "0", flexBasis: "full" });
-const carouselItemHorizontal = css({ pl: "4" });
-const carouselItemVertical = css({ pt: "4" });
-
-const carouselNavBase = css({
-  position: "absolute",
-  touchAction: "manipulation",
-  rounded: "2xl",
-});
-const carouselPrevHorizontal = css({ top: "50%", left: "-12", transform: "translateY(-50%)" });
-const carouselPrevVertical = css({
-  top: "-12",
-  left: "50%",
-  transform: "translateX(-50%) rotate(90deg)",
-});
-const carouselNextHorizontal = css({ top: "50%", right: "-12", transform: "translateY(-50%)" });
-const carouselNextVertical = css({
-  bottom: "-12",
-  left: "50%",
-  transform: "translateX(-50%) rotate(90deg)",
-});
 
 type CarouselApi = UseEmblaCarouselType[1];
 type UseCarouselParameters = Parameters<typeof useEmblaCarousel>;
@@ -144,7 +119,7 @@ function Carousel({
     >
       <div
         onKeyDownCapture={handleKeyDown}
-        className={clsx(css({ position: "relative" }), className)}
+        className={clsx(carousel({ orientation }).root, className)}
         role="region"
         aria-roledescription="carousel"
         data-slot="carousel"
@@ -160,13 +135,9 @@ function CarouselContent({ className, ...props }: React.ComponentProps<"div">) {
   const { carouselRef, orientation } = useCarousel();
 
   return (
-    <div ref={carouselRef} className={css({ overflow: "hidden" })} data-slot="carousel-content">
+    <div ref={carouselRef} className={carousel({ orientation }).contentWrapper} data-slot="carousel-content">
       <div
-        className={clsx(
-          carouselContentInner,
-          orientation === "horizontal" ? carouselContentHorizontal : carouselContentVertical,
-          className,
-        )}
+        className={clsx(carousel({ orientation }).content, className)}
         {...props}
       />
     </div>
@@ -181,11 +152,7 @@ function CarouselItem({ className, ...props }: React.ComponentProps<"div">) {
       role="group"
       aria-roledescription="slide"
       data-slot="carousel-item"
-      className={clsx(
-        carouselItemBase,
-        orientation === "horizontal" ? carouselItemHorizontal : carouselItemVertical,
-        className,
-      )}
+      className={clsx(carousel({ orientation }).item, className)}
       {...props}
     />
   );
@@ -204,11 +171,7 @@ function CarouselPrevious({
       data-slot="carousel-previous"
       variant={variant}
       size={size}
-      className={clsx(
-        carouselNavBase,
-        orientation === "horizontal" ? carouselPrevHorizontal : carouselPrevVertical,
-        className,
-      )}
+      className={clsx(carousel({ orientation }).previous, className)}
       disabled={!canScrollPrev}
       onClick={scrollPrev}
       {...props}
@@ -232,11 +195,7 @@ function CarouselNext({
       data-slot="carousel-next"
       variant={variant}
       size={size}
-      className={clsx(
-        carouselNavBase,
-        orientation === "horizontal" ? carouselNextHorizontal : carouselNextVertical,
-        className,
-      )}
+      className={clsx(carousel({ orientation }).next, className)}
       disabled={!canScrollNext}
       onClick={scrollNext}
       {...props}

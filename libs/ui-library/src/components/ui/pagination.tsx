@@ -4,20 +4,7 @@ import { css } from "@zero-app/styled-system/css";
 import { clsx } from "clsx";
 import { Button } from "./button";
 import { ChevronLeftIcon, ChevronRightIcon, MoreHorizontalIcon } from "lucide-react";
-
-const paginationStyles = css({ mx: "auto", display: "flex", w: "full", justifyContent: "center" });
-
-const paginationContentStyles = css({ display: "flex", alignItems: "center", gap: "1" });
-
-const paginationLabelStyles = css({ display: "none", sm: { display: "block" } });
-
-const paginationEllipsisStyles = css({
-  display: "flex",
-  size: "8",
-  alignItems: "center",
-  justifyContent: "center",
-  "& svg:not([class*='size-'])": { size: "4" },
-});
+import { pagination } from "@zero-app/styled-system/recipes";
 
 function Pagination({ className, ...props }: React.ComponentProps<"nav">) {
   return (
@@ -25,7 +12,7 @@ function Pagination({ className, ...props }: React.ComponentProps<"nav">) {
       role="navigation"
       aria-label="pagination"
       data-slot="pagination"
-      className={clsx(paginationStyles, className)}
+      className={clsx(pagination().root, className)}
       {...props}
     />
   );
@@ -35,7 +22,7 @@ function PaginationContent({ className, ...props }: React.ComponentProps<"ul">) 
   return (
     <ul
       data-slot="pagination-content"
-      className={clsx(paginationContentStyles, className)}
+      className={clsx(pagination().content, className)}
       {...props}
     />
   );
@@ -78,11 +65,11 @@ function PaginationPrevious({
     <PaginationLink
       aria-label="Go to previous page"
       size="default"
-      className={clsx(css({ pl: "1.5!" }), className)}
+      className={clsx(pagination().previous, className)}
       {...props}
     >
       <ChevronLeftIcon data-icon="inline-start" />
-      <span className={paginationLabelStyles}>{text}</span>
+      <span className={pagination().label}>{text}</span>
     </PaginationLink>
   );
 }
@@ -96,10 +83,10 @@ function PaginationNext({
     <PaginationLink
       aria-label="Go to next page"
       size="default"
-      className={clsx(css({ pr: "1.5!" }), className)}
+      className={clsx(pagination().next, className)}
       {...props}
     >
-      <span className={paginationLabelStyles}>{text}</span>
+      <span className={pagination().label}>{text}</span>
       <ChevronRightIcon data-icon="inline-end" />
     </PaginationLink>
   );
@@ -110,7 +97,7 @@ function PaginationEllipsis({ className, ...props }: React.ComponentProps<"span"
     <span
       aria-hidden
       data-slot="pagination-ellipsis"
-      className={clsx(paginationEllipsisStyles, className)}
+      className={clsx(pagination().ellipsis, className)}
       {...props}
     >
       <MoreHorizontalIcon />

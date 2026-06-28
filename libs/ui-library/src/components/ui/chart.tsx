@@ -1,74 +1,9 @@
 import * as React from "react";
 import * as RechartsPrimitive from "recharts";
 import type { TooltipValueType } from "recharts";
-import { css } from "@zero-app/styled-system/css";
+import { chart, type ChartVariantProps } from "@zero-app/styled-system/recipes";
 
 import { clsx } from "clsx";
-
-const shadowLg = "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)";
-
-const chartContainerStyles = css({
-  display: "flex",
-  aspectRatio: "16 / 9",
-  justifyContent: "center",
-  fontSize: "xs",
-  "& .recharts-cartesian-axis-tick text": { fill: "muted.foreground" },
-  "& .recharts-cartesian-grid line[stroke='#ccc']": { stroke: "border/50" },
-  "& .recharts-curve.recharts-tooltip-cursor": { stroke: "border" },
-  "& .recharts-dot[stroke='#fff']": { stroke: "transparent" },
-  "& .recharts-layer": { outline: "none" },
-  "& .recharts-polar-grid [stroke='#ccc']": { stroke: "border" },
-  "& .recharts-radial-bar-background-sector": { fill: "muted" },
-  "& .recharts-rectangle.recharts-tooltip-cursor": { fill: "muted" },
-  "& .recharts-reference-line [stroke='#ccc']": { stroke: "border" },
-  "& .recharts-sector": { outline: "none" },
-  "& .recharts-sector[stroke='#fff']": { stroke: "transparent" },
-  "& .recharts-surface": { outline: "none" },
-});
-
-const chartTooltipStyles = css({
-  display: "grid",
-  minW: "32",
-  alignItems: "flex-start",
-  gap: "1.5",
-  rounded: "xl",
-  bg: "popover",
-  px: "2.5",
-  py: "1.5",
-  fontSize: "xs",
-  color: "popover.foreground",
-  // shadow-lg + ring-1 ring-foreground/5 composed into one box-shadow
-  boxShadow: `0 0 0 1px color-mix(in oklab, var(--foreground) 5%, transparent), ${shadowLg}`,
-  _dark: {
-    boxShadow: `0 0 0 1px color-mix(in oklab, var(--foreground) 10%, transparent), ${shadowLg}`,
-  },
-});
-
-const chartTooltipListStyles = css({ display: "grid", gap: "1.5" });
-const chartLabelStyles = css({ fontWeight: "medium" });
-
-const chartTooltipRowStyles = css({
-  display: "flex",
-  w: "full",
-  flexWrap: "wrap",
-  alignItems: "stretch",
-  gap: "2",
-  "& > svg": { h: "2.5", w: "2.5", color: "muted.foreground" },
-});
-
-const chartIndicatorBaseStyles = css({
-  flexShrink: "0",
-  rounded: "2px",
-  borderColor: "var(--color-border)",
-  bg: "var(--color-bg)",
-});
-
-const chartLegendItemStyles = css({
-  display: "flex",
-  alignItems: "center",
-  gap: "1.5",
-  "& > svg": { h: "3", w: "3", color: "muted.foreground" },
-});
 
 // Format: { THEME_NAME: CSS_SELECTOR }
 const THEMES = { light: "", dark: ".dark" } as const;
@@ -126,7 +61,7 @@ function ChartContainer({
       <div
         data-slot="chart"
         data-chart={chartId}
-        className={clsx(chartContainerStyles, className)}
+        className={clsx(chart().container, className)}
         {...props}
       >
         <ChartStyle id={chartId} config={config} />
@@ -209,7 +144,7 @@ function ChartTooltipContent({
 
     if (labelFormatter) {
       return (
-        <div className={clsx(chartLabelStyles, labelClassName)}>
+        <div className={clsx(chart().label, labelClassName)}>
           {labelFormatter(value, payload)}
         </div>
       );
@@ -219,7 +154,7 @@ function ChartTooltipContent({
       return null;
     }
 
-    return <div className={clsx(chartLabelStyles, labelClassName)}>{value}</div>;
+    return <div className={clsx(chart().label, labelClassName)}>{value}</div>;
   }, [label, labelFormatter, payload, hideLabel, labelClassName, config, labelKey]);
 
   if (!active || !payload?.length) {
@@ -229,9 +164,9 @@ function ChartTooltipContent({
   const nestLabel = payload.length === 1 && indicator !== "dot";
 
   return (
-    <div className={clsx(chartTooltipStyles, className)}>
+    <div className={clsx(chart().tooltip, className)}>
       {!nestLabel ? tooltipLabel : null}
-      <div className={chartTooltipListStyles}>
+      <div className={chart().tooltipList}>
         {payload
           .filter((item) => item.type !== "none")
           .map((item, index) => {
@@ -242,10 +177,7 @@ function ChartTooltipContent({
             return (
               <div
                 key={index}
-                className={clsx(
-                  chartTooltipRowStyles,
-                  indicator === "dot" && css({ alignItems: "center" }),
-                )}
+                className={chart({ indicator, nestLabel: nestLabel || undefined }).tooltipRow}
               >
                 {formatter && item?.value !== undefined && item.name ? (
                   formatter(item.value, item.name, item, index, item.payload)
@@ -256,19 +188,10 @@ function ChartTooltipContent({
                     ) : (
                       !hideIndicator && (
                         <div
-                          className={clsx(
-                            chartIndicatorBaseStyles,
-                            indicator === "dot" && css({ h: "2.5", w: "2.5" }),
-                            indicator === "line" && css({ w: "1" }),
-                            indicator === "dashed" &&
-                              css({
-                                w: "0",
-                                borderWidth: "1.5px",
-                                borderStyle: "dashed",
-                                bg: "transparent",
-                              }),
-                            nestLabel && indicator === "dashed" && css({ my: "0.5" }),
-                          )}
+                          className={chart({
+                            indicator,
+                            nestLabel: nestLabel && indicator === "dashed" ? true : undefined,
+                          }).indicatorBase}
                           style={
                             {
                               "--color-bg": indicatorColor,
@@ -279,31 +202,16 @@ function ChartTooltipContent({
                       )
                     )}
                     <div
-                      className={clsx(
-                        css({
-                          display: "flex",
-                          flex: "1",
-                          justifyContent: "space-between",
-                          lineHeight: "none",
-                        }),
-                        nestLabel ? css({ alignItems: "flex-end" }) : css({ alignItems: "center" }),
-                      )}
+                      className={chart({ nestLabel: nestLabel || undefined }).valueRow}
                     >
-                      <div className={chartTooltipListStyles}>
+                      <div className={chart().tooltipList}>
                         {nestLabel ? tooltipLabel : null}
-                        <span className={css({ color: "muted.foreground" })}>
+                        <span className={chart().itemName}>
                           {itemConfig?.label ?? item.name}
                         </span>
                       </div>
                       {item.value != null && (
-                        <span
-                          className={css({
-                            fontFamily: "var(--font-mono)",
-                            fontWeight: "medium",
-                            color: "foreground",
-                            fontVariantNumeric: "tabular-nums",
-                          })}
-                        >
+                        <span className={chart().itemValue}>
                           {typeof item.value === "number"
                             ? item.value.toLocaleString()
                             : String(item.value)}
@@ -341,8 +249,7 @@ function ChartLegendContent({
   return (
     <div
       className={clsx(
-        css({ display: "flex", alignItems: "center", justifyContent: "center", gap: "4" }),
-        verticalAlign === "top" ? css({ pb: "3" }) : css({ pt: "3" }),
+        chart({ verticalAlign: verticalAlign as ChartVariantProps["verticalAlign"] }).legend,
         className,
       )}
     >
@@ -353,12 +260,12 @@ function ChartLegendContent({
           const itemConfig = getPayloadConfigFromPayload(config, item, key);
 
           return (
-            <div key={index} className={chartLegendItemStyles}>
+            <div key={index} className={chart().legendItem}>
               {itemConfig?.icon && !hideIcon ? (
                 <itemConfig.icon />
               ) : (
                 <div
-                  className={css({ h: "2", w: "2", flexShrink: "0", rounded: "2px" })}
+                  className={chart().legendIcon}
                   style={{
                     backgroundColor: item.color,
                   }}

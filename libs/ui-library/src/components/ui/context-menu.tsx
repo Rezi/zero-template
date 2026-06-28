@@ -2,125 +2,10 @@
 
 import * as React from "react";
 import { ContextMenu as ContextMenuPrimitive } from "@base-ui/react/context-menu";
-import { css } from "@zero-app/styled-system/css";
+import { contextMenu } from "@zero-app/styled-system/recipes";
 
 import { clsx } from "clsx";
-import { popoverAnimationStyles } from "../../lib/animations";
 import { ChevronRightIcon, CheckIcon } from "lucide-react";
-
-const shadowLg = "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)";
-
-const contextMenuTriggerStyles = css({ userSelect: "none" });
-const contextMenuPositionerStyles = css({ isolation: "isolate", zIndex: "50", outline: "none" });
-
-const contextMenuContentStyles = css({
-  zIndex: "50",
-  maxH: "var(--available-height)",
-  minW: "36",
-  transformOrigin: "var(--transform-origin)",
-  overflowX: "hidden",
-  overflowY: "auto",
-  rounded: "2xl",
-  bg: "popover",
-  p: "1",
-  color: "popover.foreground",
-  outline: "none",
-  boxShadow: `0 0 0 1px color-mix(in oklab, var(--foreground) 5%, transparent), ${shadowLg}`,
-  _dark: {
-    boxShadow: `0 0 0 1px color-mix(in oklab, var(--foreground) 10%, transparent), ${shadowLg}`,
-  },
-});
-
-const contextMenuLabelStyles = css({
-  px: "2",
-  py: "1",
-  fontSize: "xs",
-  color: "muted.foreground",
-  "&[data-inset]": { pl: "7" },
-});
-
-const contextMenuItemStyles = css({
-  position: "relative",
-  display: "flex",
-  minH: "7",
-  cursor: "default",
-  alignItems: "center",
-  gap: "2",
-  rounded: "xl",
-  px: "2",
-  py: "1.5",
-  fontSize: "sm",
-  outline: "none",
-  userSelect: "none",
-  _focus: { bg: "accent", color: "accent.foreground" },
-  "&[data-inset]": { pl: "7" },
-  "&[data-variant=destructive]": { color: "destructive" },
-  "&[data-variant=destructive]:focus": { bg: "destructive/10", color: "destructive" },
-  "&:where([data-disabled]:not([data-disabled='false']))": {
-    pointerEvents: "none",
-    opacity: "0.5",
-  },
-  "& svg": { pointerEvents: "none", flexShrink: "0" },
-  "& svg:not([class*='size-'])": { size: "4" },
-  "&:focus > svg": { color: "accent.foreground" },
-  "&[data-variant=destructive] > svg": { color: "destructive" },
-  _dark: { "&[data-variant=destructive]:focus": { bg: "destructive/20" } },
-});
-
-const contextMenuSubTriggerStyles = css({
-  display: "flex",
-  minH: "7",
-  cursor: "default",
-  alignItems: "center",
-  rounded: "xl",
-  px: "2",
-  py: "1.5",
-  fontSize: "sm",
-  outline: "none",
-  userSelect: "none",
-  _focus: { bg: "accent", color: "accent.foreground" },
-  "&[data-inset]": { pl: "7" },
-  "&:where([data-state='open'], [data-open]:not([data-open='false']))": {
-    bg: "accent",
-    color: "accent.foreground",
-  },
-  "& svg": { pointerEvents: "none", flexShrink: "0" },
-  "& svg:not([class*='size-'])": { size: "4" },
-});
-
-const contextMenuCheckRadioItemStyles = css({
-  position: "relative",
-  display: "flex",
-  minH: "7",
-  cursor: "default",
-  alignItems: "center",
-  gap: "2",
-  rounded: "xl",
-  py: "1.5",
-  pr: "8",
-  pl: "2",
-  fontSize: "sm",
-  outline: "none",
-  userSelect: "none",
-  _focus: { bg: "accent", color: "accent.foreground" },
-  "&[data-inset]": { pl: "7" },
-  "&:where([data-disabled]:not([data-disabled='false']))": {
-    pointerEvents: "none",
-    opacity: "0.5",
-  },
-  "& svg": { pointerEvents: "none", flexShrink: "0" },
-  "& svg:not([class*='size-'])": { size: "4" },
-});
-
-const contextMenuIndicatorStyles = css({ pointerEvents: "none", position: "absolute", right: "2" });
-const contextMenuSeparatorStyles = css({ mx: "-1", my: "1", h: "1px", bg: "border/50" });
-const contextMenuShortcutStyles = css({
-  ml: "auto",
-  fontSize: "xs",
-  letterSpacing: "widest",
-  color: "muted.foreground",
-  "[data-slot='context-menu-item']:focus &": { color: "accent.foreground" },
-});
 
 function ContextMenu({ ...props }: ContextMenuPrimitive.Root.Props) {
   return <ContextMenuPrimitive.Root data-slot="context-menu" {...props} />;
@@ -134,7 +19,7 @@ function ContextMenuTrigger({ className, ...props }: ContextMenuPrimitive.Trigge
   return (
     <ContextMenuPrimitive.Trigger
       data-slot="context-menu-trigger"
-      className={clsx(contextMenuTriggerStyles, className)}
+      className={clsx(contextMenu().trigger, className)}
       {...props}
     />
   );
@@ -152,7 +37,7 @@ function ContextMenuContent({
   return (
     <ContextMenuPrimitive.Portal>
       <ContextMenuPrimitive.Positioner
-        className={contextMenuPositionerStyles}
+        className={contextMenu().positioner}
         align={align}
         alignOffset={alignOffset}
         side={side}
@@ -160,7 +45,7 @@ function ContextMenuContent({
       >
         <ContextMenuPrimitive.Popup
           data-slot="context-menu-content"
-          className={clsx(contextMenuContentStyles, popoverAnimationStyles, className)}
+          className={clsx(contextMenu().content, className)}
           {...props}
         />
       </ContextMenuPrimitive.Positioner>
@@ -183,7 +68,7 @@ function ContextMenuLabel({
     <ContextMenuPrimitive.GroupLabel
       data-slot="context-menu-label"
       data-inset={inset}
-      className={clsx(contextMenuLabelStyles, className)}
+      className={clsx(contextMenu().label, className)}
       {...props}
     />
   );
@@ -203,7 +88,7 @@ function ContextMenuItem({
       data-slot="context-menu-item"
       data-inset={inset}
       data-variant={variant}
-      className={clsx(contextMenuItemStyles, className)}
+      className={clsx(contextMenu().item, className)}
       {...props}
     />
   );
@@ -225,11 +110,11 @@ function ContextMenuSubTrigger({
     <ContextMenuPrimitive.SubmenuTrigger
       data-slot="context-menu-sub-trigger"
       data-inset={inset}
-      className={clsx(contextMenuSubTriggerStyles, className)}
+      className={clsx(contextMenu().subTrigger, className)}
       {...props}
     >
       {children}
-      <ChevronRightIcon className={css({ ml: "auto" })} />
+      <ChevronRightIcon className={contextMenu().subTriggerIcon} />
     </ContextMenuPrimitive.SubmenuTrigger>
   );
 }
@@ -251,11 +136,11 @@ function ContextMenuCheckboxItem({
     <ContextMenuPrimitive.CheckboxItem
       data-slot="context-menu-checkbox-item"
       data-inset={inset}
-      className={clsx(contextMenuCheckRadioItemStyles, className)}
+      className={clsx(contextMenu().checkRadioItem, className)}
       checked={checked}
       {...props}
     >
-      <span className={contextMenuIndicatorStyles}>
+      <span className={contextMenu().indicator}>
         <ContextMenuPrimitive.CheckboxItemIndicator>
           <CheckIcon />
         </ContextMenuPrimitive.CheckboxItemIndicator>
@@ -281,10 +166,10 @@ function ContextMenuRadioItem({
     <ContextMenuPrimitive.RadioItem
       data-slot="context-menu-radio-item"
       data-inset={inset}
-      className={clsx(contextMenuCheckRadioItemStyles, className)}
+      className={clsx(contextMenu().checkRadioItem, className)}
       {...props}
     >
-      <span className={contextMenuIndicatorStyles}>
+      <span className={contextMenu().indicator}>
         <ContextMenuPrimitive.RadioItemIndicator>
           <CheckIcon />
         </ContextMenuPrimitive.RadioItemIndicator>
@@ -298,7 +183,7 @@ function ContextMenuSeparator({ className, ...props }: ContextMenuPrimitive.Sepa
   return (
     <ContextMenuPrimitive.Separator
       data-slot="context-menu-separator"
-      className={clsx(contextMenuSeparatorStyles, className)}
+      className={clsx(contextMenu().separator, className)}
       {...props}
     />
   );
@@ -308,7 +193,7 @@ function ContextMenuShortcut({ className, ...props }: React.ComponentProps<"span
   return (
     <span
       data-slot="context-menu-shortcut"
-      className={clsx(contextMenuShortcutStyles, className)}
+      className={clsx(contextMenu().shortcut, className)}
       {...props}
     />
   );

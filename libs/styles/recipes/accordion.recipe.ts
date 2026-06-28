@@ -1,0 +1,93 @@
+import { defineSlotRecipe } from "./define-recipe";
+
+export const accordionRecipe = defineSlotRecipe({
+  className: "accordion",
+  slots: [
+    "root",
+    "item",
+    "header",
+    "trigger",
+    "triggerIconDown",
+    "triggerIconUp",
+    "contentPanel",
+    "contentInner",
+  ],
+  base: {
+    root: {
+      display: "flex",
+      w: "full",
+      flexDirection: "column",
+      overflow: "hidden",
+      rounded: "2xl",
+      borderWidth: "1px",
+    },
+    item: {
+      "&:not(:last-child)": { borderBottomWidth: "1px" },
+      "&:where([data-state='open'], [data-open]:not([data-open='false']))": { bg: "muted/50" },
+    },
+    header: {
+      display: "flex",
+    },
+    trigger: {
+      position: "relative",
+      display: "flex",
+      flex: "1",
+      alignItems: "flex-start",
+      justifyContent: "space-between",
+      gap: "6",
+      borderWidth: "1px",
+      borderColor: "transparent",
+      p: "4",
+      textAlign: "left",
+      fontSize: "sm",
+      fontWeight: "medium",
+      transitionProperty: "all",
+      transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
+      transitionDuration: "150ms",
+      outline: "none",
+      _hover: { textDecoration: "underline" },
+      "&[aria-disabled='true']": { pointerEvents: "none", opacity: "0.5" },
+      "& [data-slot='accordion-trigger-icon']": {
+        ml: "auto",
+        size: "4",
+        color: "muted.foreground",
+      },
+    },
+    triggerIconDown: {
+      pointerEvents: "none",
+      flexShrink: "0",
+      "[data-slot='accordion-trigger'][aria-expanded='true'] &": { display: "none" },
+    },
+    triggerIconUp: {
+      pointerEvents: "none",
+      display: "none",
+      flexShrink: "0",
+      "[data-slot='accordion-trigger'][aria-expanded='true'] &": { display: "inline" },
+    },
+    contentPanel: {
+      overflow: "hidden",
+      px: "4",
+      fontSize: "sm",
+      "&[data-open]": {
+        animationName: "accordionDown",
+        animationDuration: "0.2s",
+        animationTimingFunction: "ease-out",
+      },
+      "&[data-closed]": {
+        animationName: "accordionUp",
+        animationDuration: "0.2s",
+        animationTimingFunction: "ease-out",
+      },
+    },
+    contentInner: {
+      height: "var(--accordion-panel-height)",
+      pt: "0",
+      pb: "4",
+      "&[data-ending-style]": { height: "0" },
+      "&[data-starting-style]": { height: "0" },
+      "& a": { textDecoration: "underline", textUnderlineOffset: "3px" },
+      "& a:hover": { color: "foreground" },
+      "& p:not(:last-child)": { mb: "4" },
+    },
+  },
+});

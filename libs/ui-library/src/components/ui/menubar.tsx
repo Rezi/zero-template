@@ -3,7 +3,7 @@
 import * as React from "react";
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import { Menubar as MenubarPrimitive } from "@base-ui/react/menubar";
-import { css } from "@zero-app/styled-system/css";
+import { menubar } from "@zero-app/styled-system/recipes";
 
 import { clsx } from "clsx";
 import {
@@ -23,127 +23,9 @@ import {
 } from "./dropdown-menu";
 import { CheckIcon } from "lucide-react";
 
-const menubarStyles = css({
-  display: "flex",
-  h: "8",
-  alignItems: "center",
-  rounded: "2xl",
-  borderWidth: "1px",
-  p: "3px",
-});
-
-const menubarTriggerStyles = css({
-  display: "flex",
-  alignItems: "center",
-  rounded: "2xl",
-  px: "1.5",
-  py: "2px",
-  fontSize: "sm",
-  fontWeight: "medium",
-  outline: "none",
-  userSelect: "none",
-  _hover: { bg: "muted" },
-  "&[aria-expanded='true']": { bg: "muted" },
-});
-
-// Overrides the dropdown content base (minW:32 → 36); `!important` beats the
-// non-important base value (Panda atomics don't twMerge-dedupe).
-const menubarContentStyles = css({ minW: "36!" });
-
-const menubarItemStyles = css({
-  minH: "7",
-  gap: "2",
-  rounded: "xl",
-  px: "2",
-  py: "1.5",
-  fontSize: "sm",
-  _focus: { bg: "accent", color: "accent.foreground" },
-  "&:not([data-variant=destructive]):focus *": { color: "accent.foreground" },
-  "&[data-inset]": { pl: "7" },
-  "&[data-variant=destructive]": { color: "destructive" },
-  "&[data-variant=destructive]:focus": { bg: "destructive/10", color: "destructive" },
-  "&:where([data-disabled]:not([data-disabled='false']))": { opacity: "0.5" },
-  "& svg:not([class*='size-'])": { size: "4" },
-  "&[data-variant=destructive] > svg": { color: "destructive!" },
-  _dark: { "&[data-variant=destructive]:focus": { bg: "destructive/20" } },
-});
-
-const menubarCheckboxItemStyles = css({
-  position: "relative",
-  display: "flex",
-  minH: "7",
-  cursor: "default",
-  alignItems: "center",
-  gap: "2",
-  rounded: "xl",
-  py: "1.5",
-  pr: "1.5",
-  pl: "7",
-  fontSize: "sm",
-  outline: "none",
-  userSelect: "none",
-  _focus: { bg: "accent", color: "accent.foreground" },
-  "&:focus *": { color: "accent.foreground" },
-  "&[data-inset]": { pl: "7" },
-  "&:where([data-disabled]:not([data-disabled='false']))": {
-    pointerEvents: "none",
-    opacity: "0.5",
-  },
-  "& svg": { pointerEvents: "none", flexShrink: "0" },
-});
-
-const menubarRadioItemStyles = css({
-  position: "relative",
-  display: "flex",
-  minH: "7",
-  cursor: "default",
-  alignItems: "center",
-  gap: "2",
-  rounded: "xl",
-  py: "1.5",
-  pr: "1.5",
-  pl: "7",
-  fontSize: "sm",
-  outline: "none",
-  userSelect: "none",
-  _focus: { bg: "accent", color: "accent.foreground" },
-  "&:focus *": { color: "accent.foreground" },
-  "&[data-inset]": { pl: "7" },
-  "&:where([data-disabled]:not([data-disabled='false']))": {
-    pointerEvents: "none",
-    opacity: "0.5",
-  },
-  "& svg": { pointerEvents: "none", flexShrink: "0" },
-  "& svg:not([class*='size-'])": { size: "4" },
-});
-
-const menubarIndicatorStyles = css({
-  pointerEvents: "none",
-  position: "absolute",
-  left: "1.5",
-  display: "flex",
-  size: "4",
-  alignItems: "center",
-  justifyContent: "center",
-  "& svg:not([class*='size-'])": { size: "4" },
-});
-
-const menubarLabelStyles = css({ fontSize: "sm!" });
-
-const menubarShortcutStyles = css({
-  "[data-slot='menubar-item']:focus &": { color: "accent.foreground" },
-});
-
-// Overrides the dropdown sub-content base (minW:96px! → 32). Needs the
-// data-slot self-selector so its `!important` beats the base's `!important`
-// (higher specificity wins among important declarations).
-const menubarSubContentStyles = css({
-  "&[data-slot='menubar-sub-content']": { minW: "32!" },
-});
-
 function Menubar({ className, ...props }: MenubarPrimitive.Props) {
   return (
-    <MenubarPrimitive data-slot="menubar" className={clsx(menubarStyles, className)} {...props} />
+    <MenubarPrimitive data-slot="menubar" className={clsx(menubar().root, className)} {...props} />
   );
 }
 
@@ -163,7 +45,7 @@ function MenubarTrigger({ className, ...props }: React.ComponentProps<typeof Dro
   return (
     <DropdownMenuTrigger
       data-slot="menubar-trigger"
-      className={clsx(menubarTriggerStyles, className)}
+      className={clsx(menubar().trigger, className)}
       {...props}
     />
   );
@@ -182,7 +64,7 @@ function MenubarContent({
       align={align}
       alignOffset={alignOffset}
       sideOffset={sideOffset}
-      className={clsx(menubarContentStyles, className)}
+      className={clsx(menubar().content, className)}
       {...props}
     />
   );
@@ -199,7 +81,7 @@ function MenubarItem({
       data-slot="menubar-item"
       data-inset={inset}
       data-variant={variant}
-      className={clsx(menubarItemStyles, className)}
+      className={clsx(menubar().item, className)}
       {...props}
     />
   );
@@ -218,11 +100,11 @@ function MenubarCheckboxItem({
     <MenuPrimitive.CheckboxItem
       data-slot="menubar-checkbox-item"
       data-inset={inset}
-      className={clsx(menubarCheckboxItemStyles, className)}
+      className={clsx(menubar().checkboxItem, className)}
       checked={checked}
       {...props}
     >
-      <span className={menubarIndicatorStyles}>
+      <span className={menubar().indicator}>
         <MenuPrimitive.CheckboxItemIndicator>
           <CheckIcon />
         </MenuPrimitive.CheckboxItemIndicator>
@@ -248,10 +130,10 @@ function MenubarRadioItem({
     <MenuPrimitive.RadioItem
       data-slot="menubar-radio-item"
       data-inset={inset}
-      className={clsx(menubarRadioItemStyles, className)}
+      className={clsx(menubar().radioItem, className)}
       {...props}
     >
-      <span className={menubarIndicatorStyles}>
+      <span className={menubar().indicator}>
         <MenuPrimitive.RadioItemIndicator>
           <CheckIcon />
         </MenuPrimitive.RadioItemIndicator>
@@ -272,7 +154,7 @@ function MenubarLabel({
     <DropdownMenuLabel
       data-slot="menubar-label"
       data-inset={inset}
-      className={clsx(menubarLabelStyles, className)}
+      className={clsx(menubar().label, className)}
       {...props}
     />
   );
@@ -294,7 +176,7 @@ function MenubarShortcut({
   return (
     <DropdownMenuShortcut
       data-slot="menubar-shortcut"
-      className={clsx(menubarShortcutStyles, className)}
+      className={clsx(menubar().shortcut, className)}
       {...props}
     />
   );
@@ -328,7 +210,7 @@ function MenubarSubContent({
   return (
     <DropdownMenuSubContent
       data-slot="menubar-sub-content"
-      className={clsx(menubarSubContentStyles, className)}
+      className={clsx(menubar().subContent, className)}
       {...props}
     />
   );
